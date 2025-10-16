@@ -1,0 +1,9 @@
+*.pyc
+brokers/.env
+brokers/.env.local
+brokers/*.pyc
+brokers/__pycache__/*
+assets/.env
+assets/.env.local
+assets/*.pyc
+assets/__pycache__/*
