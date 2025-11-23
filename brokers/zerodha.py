@@ -718,7 +718,16 @@ class ZerodhaWebSocket:
         """
         Run websocket forever.
         """
-        ws = websocket.WebSocketApp(f"wss://ws.kite.trade/?api_key={self._api_key}&access_token={self._access_token}", on_open=self.on_open, on_message=self.on_message, on_error=self.on_error, on_close=self.on_close, on_ping=self.on_ping, on_pong=self.on_pong)
+        ws = websocket.WebSocketApp(
+            f"wss://ws.kite.trade/?api_key={self._api_key}&access_token={self._access_token}", 
+            on_open=self.on_open, 
+            on_message=self.on_message, 
+            on_error=self.on_error, 
+            on_close=self.on_close, 
+            on_ping=self.on_ping, 
+            on_pong=self.on_pong
+        )
+
         ws.run_forever()
 
 class ZerodhaWebSocketServer:
