@@ -34,7 +34,7 @@ class Equity(TradeableInstrument):
         """
         Get holdings.
         """
-        holdings = self._rest_api.get(url="https://api.kite.trade/portfolio/holdings")['data']
+        holdings = self._zerodha_rest_api.get(url="https://api.kite.trade/portfolio/holdings")['data']
         if holdings is None or len(holdings) == 0:
             return None
 

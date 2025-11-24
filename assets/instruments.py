@@ -52,15 +52,15 @@ class Instrument:
         if self._zerodha_instrument is None:
             raise InstrumentException(message=f"Instrument not found in Zerodha instruments list: {self._id}")
         
-        if not self._cache.hexists('fyers_instruments', self._id):
-            raise InstrumentException(message=f"Instrument not found in Fyers instruments list: {self._id}")
+        # if not self._cache.hexists('fyers_instruments', self._id):
+        #     raise InstrumentException(message=f"Instrument not found in Fyers instruments list: {self._id}")
         
-        self._fyers_instrument = json.loads(self._cache.hget('fyers_instruments', self._id))
-        if self._fyers_instrument is None:
-            raise InstrumentException(message=f"Instrument not found in Fyers instruments list: {self._id}")
+        # self._fyers_instrument = json.loads(self._cache.hget('fyers_instruments', self._id))
+        # if self._fyers_instrument is None:
+        #     raise InstrumentException(message=f"Instrument not found in Fyers instruments list: {self._id}")
         
         self._zerodha_instrument = json.loads(self._cache.hget('zerodha_instruments', self._id))
-        self._fyers_instrument = json.loads(self._cache.hget('fyers_instruments', self._id))
+        # self._fyers_instrument = json.loads(self._cache.hget('fyers_instruments', self._id))
         
     def __repr__(self):
         """
@@ -231,7 +231,7 @@ class Instrument:
                     'continuous': 1 if continuous else 0,
                     'oi': 1 if open_interest else 0
                 }
-                price_data = self._rest_api.get(url=f"https://api.kite.trade/instruments/historical/{instrument_token}/{interval}", parameters=parameters)['data']
+                price_data = self._zerodha_rest_api.get(url=f"https://api.kite.trade/instruments/historical/{instrument_token}/{interval}", parameters=parameters)['data']
                 time.sleep(0.3)
             
                 if price_data is not None and 'candles' in price_data and len(price_data['candles']) > 0:
@@ -2849,6 +2849,19 @@ class TradeableInstrument(Instrument):
         - `id`: is the instrument id. It is of the format `exchange:tradingsymbol`.
         """
         super().__init__(id=id)
+        
+        self._EXCHANGE_MAP = {
+            "nse": 1,
+            "nfo": 2,
+            "cds": 3,
+            "bse": 4,
+            "bfo": 5,
+            "bcd": 6,
+            "mcx": 7,
+            "mcxsx": 8,
+            "indices": 9,
+            "bsecds": 6
+        }
 
         if self.segment == 'INDICES':
             raise TradeableInstrumentException(f"{id} is not a tradeable instrument.")
@@ -2865,9 +2878,42 @@ class TradeableInstrument(Instrument):
         """
         return f"TradeableInstrument(id=\"{self._id}\")"
 
-
+    def _unpack_int(self, bin, start, end, byte_format="I"):
+        """Unpack binary data as unsgined interger.
+        
+        - `bin`: Binary data.
+        - `start`: Start index.
+        - `end`: End index.
+        - `byte_format`: Byte format.
+        """
+        return struct.unpack(">" + byte_format, bin[start:end])[0]
+    
 
     # Streaming market quotes
+    def _get_segment(self, packet):
+        """
+        Get segment from packet.
+        
+        - `packet`: Binary data packet.
+        """
+        instrument_token = self._unpack_int(packet, 0, 4)
+        return instrument_token & 0xff
+
+    def _get_divisor(self, packet):
+        """
+        Get divisor from packet.
+        """
+        segment = self._get_segment(packet)
+
+        if segment == self._EXCHANGE_MAP["cds"]:
+            divisor = 10000000.0
+        elif segment == self._EXCHANGE_MAP["bcd"]:
+            divisor = 1000.0
+        else:
+            divisor = 100.0
+
+        return divisor
+
     @property
     def quote(self):
         """
@@ -2877,7 +2923,59 @@ class TradeableInstrument(Instrument):
             return None
                     
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        quote = self._market_data_decoder.get_quote(packet)
+        instrument_token = self._unpack_int(packet, 0, 4)
+        segment = instrument_token & 0xff
+
+        if segment == self._EXCHANGE_MAP["cds"]:
+            divisor = 10000000.0
+        elif segment == self._EXCHANGE_MAP["bcd"]:
+            divisor = 1000.0
+        else:
+            divisor = 100.0
+
+        tradeable = False if segment == self._EXCHANGE_MAP["indices"] else True
+
+        quote = {
+            "tradeable": tradeable,
+            "mode": "full",
+            "instrument_token": instrument_token,
+            "last_traded_price": self._unpack_int(packet, 4, 8) / divisor,
+            "last_traded_quantity": self._unpack_int(packet, 8, 12),
+            "average_traded_price": self._unpack_int(packet, 12, 16) / divisor,
+            "volume_traded_today": self._unpack_int(packet, 16, 20),
+            "total_bid_quantity": self._unpack_int(packet, 20, 24),
+            "total_offer_quantity": self._unpack_int(packet, 24, 28),
+            "ohlc": {
+                "open": self._unpack_int(packet, 28, 32) / divisor,
+                "high": self._unpack_int(packet, 32, 36) / divisor,
+                "low": self._unpack_int(packet, 36, 40) / divisor,
+                "close": self._unpack_int(packet, 40, 44) / divisor
+            },
+            "last_trade_time": datetime.fromtimestamp(self._unpack_int(packet, 44, 48)).strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "oi": self._unpack_int(packet, 48, 52),
+            "oi_day_high": self._unpack_int(packet, 52, 56),
+            "oi_day_low": self._unpack_int(packet, 56, 60),
+            "exchange_timestamp": datetime.fromtimestamp(self._unpack_int(packet, 60, 64)).strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "arrival_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+        }
+
+        quote["change"] = 0
+        if (quote["ohlc"]["close"] != 0):
+            quote["change"] = (quote["last_traded_price"] - quote["ohlc"]["close"]) * 100 / quote["ohlc"]["close"]
+
+        depth = {
+            "buy": [],
+            "sell": []
+        }
+
+        for i, p in enumerate(range(64, len(packet), 12)):
+            depth["sell" if i >= 5 else "buy"].append({
+                "quantity": self._unpack_int(packet, p, p + 4),
+                "price": self._unpack_int(packet, p + 4, p + 8) / divisor,
+                "orders": self._unpack_int(packet, p + 8, p + 10, byte_format="H")
+            })
+
+        quote["depth"] = depth
         return quote
 
     @property
@@ -2886,15 +2984,25 @@ class TradeableInstrument(Instrument):
         Returns True if the instrument is tradeable.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.is_tradeable(packet)
+        segment = self._get_segment(packet)
+        return False if segment == self._EXCHANGE_MAP["indices"] else True
     
+    @property
+    def mode(self):
+        """
+        Returns the mode.
+        """
+        return "full"
+
     @property
     def last_traded_price(self):
         """
         Returns the last traded price.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_last_traded_price(packet)
+        segment = self._get_segment(packet)
+        divisor = self._get_divisor(packet)        
+        return self._unpack_int(packet, 4, 8) / divisor
     
     @property
     def last_traded_quantity(self):
@@ -2902,7 +3010,7 @@ class TradeableInstrument(Instrument):
         Returns the last traded quantity.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_last_traded_quantity(packet)
+        return self._unpack_int(packet, 8, 12)
     
     @property
     def average_traded_price(self):
@@ -2910,7 +3018,9 @@ class TradeableInstrument(Instrument):
         Returns the average traded price.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_average_traded_price(packet)
+        segment = self._get_segment(packet)
+        divisor = self._get_divisor(packet)
+        return self._unpack_int(packet, 12, 16) / divisor
     
     @property
     def volume_traded_today(self):
@@ -2918,7 +3028,7 @@ class TradeableInstrument(Instrument):
         Returns the volume traded today.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_volume_traded_today(packet)
+        return self._unpack_int(packet, 16, 20)
     
     @property
     def total_bid_quantity(self):
@@ -2926,7 +3036,7 @@ class TradeableInstrument(Instrument):
         Returns the total bid quantity.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_total_bid_quantity(packet)
+        return self._unpack_int(packet, 20, 24)
     
     @property
     def total_offer_quantity(self):
@@ -2934,7 +3044,7 @@ class TradeableInstrument(Instrument):
         Returns the total offer quantity.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_total_offer_quantity(packet)
+        return self._unpack_int(packet, 24, 28)
     
     @property
     def ohlc(self):
@@ -2942,7 +3052,14 @@ class TradeableInstrument(Instrument):
         Returns the ohlc.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_ohlc(packet)
+        segment = self._get_segment(packet)
+        divisor = self._get_divisor(packet)
+        return {
+            "open": self._unpack_int(packet, 28, 32) / divisor,
+            "high": self._unpack_int(packet, 32, 36) / divisor,
+            "low": self._unpack_int(packet, 36, 40) / divisor,
+            "close": self._unpack_int(packet, 40, 44) / divisor
+        }
     
     @property
     def last_trade_time(self):
@@ -2950,7 +3067,7 @@ class TradeableInstrument(Instrument):
         Returns the last trade time.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_last_trade_time(packet)
+        return datetime.fromtimestamp(self._unpack_int(packet, 44, 48)).strftime("%Y-%m-%d %H:%M:%S.%f")
     
     @property
     def oi(self):
@@ -2958,7 +3075,7 @@ class TradeableInstrument(Instrument):
         Returns the oi.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_oi(packet)
+        return self._unpack_int(packet, 48, 52)
     
     @property
     def oi_day_high(self):
@@ -2966,7 +3083,7 @@ class TradeableInstrument(Instrument):
         Returns the oi day high.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_oi_day_high(packet)
+        return self._unpack_int(packet, 52, 56)
     
     @property
     def oi_day_low(self):
@@ -2974,7 +3091,7 @@ class TradeableInstrument(Instrument):
         Returns the oi day low.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_oi_day_low(packet)
+        return self._unpack_int(packet, 56, 60)
     
     @property
     def exchange_timestamp(self):
@@ -2982,7 +3099,7 @@ class TradeableInstrument(Instrument):
         Returns the exchange timestamp.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_exchange_timestamp(packet)
+        return datetime.fromtimestamp(self._unpack_int(packet, 60, 64)).strftime("%Y-%m-%d %H:%M:%S.%f")
     
     @property
     def change(self):
@@ -2990,7 +3107,8 @@ class TradeableInstrument(Instrument):
         Returns the change.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_change(packet)
+        quote = self.quote
+        return quote["change"]
     
     @property
     def market_depth(self):
@@ -2998,7 +3116,21 @@ class TradeableInstrument(Instrument):
         Returns the depth.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_market_depth(packet)
+        segment = self._get_segment(packet)
+        divisor = self._get_divisor(packet)
+        depth = {
+            "buy": [],
+            "sell": []
+        }
+
+        for i, p in enumerate(range(64, len(packet), 12)):
+            depth["sell" if i >= 5 else "buy"].append({
+                "quantity": self._unpack_int(packet, p, p + 4),
+                "price": self._unpack_int(packet, p + 4, p + 8) / divisor,
+                "orders": self._unpack_int(packet, p + 8, p + 10, byte_format="H")
+            })
+
+        return depth
     
     @property
     def bids(self):
@@ -3006,7 +3138,8 @@ class TradeableInstrument(Instrument):
         Returns the bids.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_bids(packet)
+        depth = self.market_depth
+        return depth["buy"]
     
     @property
     def offers(self):
@@ -3014,7 +3147,8 @@ class TradeableInstrument(Instrument):
         Returns the offers.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_offers(packet)
+        depth = self.market_depth
+        return depth["sell"]
     
     @property
     def best_bid(self):
@@ -3022,7 +3156,8 @@ class TradeableInstrument(Instrument):
         Returns the best bid.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_best_bid(packet)
+        bids = self.bids
+        return bids[0] if len(bids) > 0 else None
     
     @property
     def best_offer(self):
@@ -3030,7 +3165,8 @@ class TradeableInstrument(Instrument):
         Returns the best offer.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_best_offer(packet)
+        offers = self.offers
+        return offers[0] if len(offers) > 0 else None
     
     @property
     def bid_offer_spread(self):
@@ -3038,7 +3174,10 @@ class TradeableInstrument(Instrument):
         Returns the bid offer spread.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_bid_offer_spread(packet)
+        depth = self.market_depth
+        best_bid = depth["buy"][0] if len(depth["buy"]) > 0 else None
+        best_offer = depth["sell"][0] if len(depth["sell"]) > 0 else None
+        return best_offer["price"] - best_bid["price"] if best_bid and best_offer else None
     
     @property
     def mid_price(self):
@@ -3046,8 +3185,10 @@ class TradeableInstrument(Instrument):
         Returns the mid price.
         """
         packet = bytes.fromhex(self._cache.hget('market_data', self.id))
-        return self._market_data_decoder.get_mid_price(packet)
-
+        depth = self.market_depth
+        best_bid = depth["buy"][0] if len(depth["buy"]) > 0 else None
+        best_offer = depth["sell"][0] if len(depth["sell"]) > 0 else None
+        return (best_bid["price"] + best_offer["price"]) / 2 if best_bid and best_offer else None
 
 
     # order related methods
@@ -3056,7 +3197,7 @@ class TradeableInstrument(Instrument):
         """
         Returns orders placed during the day.
         """
-        data = self._rest_api.get(url="https://api.kite.trade/orders")['data']
+        data = self._zerodha_rest_api.get(url="https://api.kite.trade/orders")['data']
         if data is None or len(data) == 0:
             return None
         
@@ -3565,7 +3706,7 @@ class TradeableInstrument(Instrument):
         order_hist = []
         for index, row in orders.iterrows():
             order_id = row['order_id']
-            data = self._rest_api.get(url=f"https://api.kite.trade/orders/{order_id}")['data']
+            data = self._zerodha_rest_api.get(url=f"https://api.kite.trade/orders/{order_id}")['data']
             if data is None:
                 raise TradeableInstrumentException(f"Order {order_id} not found")            
             order_hist.append(pd.DataFrame(data))
@@ -3582,7 +3723,7 @@ class TradeableInstrument(Instrument):
         """
         Returns the list of trades for the instrument
         """
-        data = self._rest_api.get(url="https://api.kite.trade/trades")['data']
+        data = self._zerodha_rest_api.get(url="https://api.kite.trade/trades")['data']
         if data is None or len(data) == 0:
             return None
         
@@ -3655,7 +3796,7 @@ class TradeableInstrument(Instrument):
         if tag:
             data['tag'] = tag
 
-        order_id = self._rest_api.post(url=f"https://api.kite.trade/orders/{variety}", data=data)['data']['order_id']
+        order_id = self._zerodha_rest_api.post(url=f"https://api.kite.trade/orders/{variety}", data=data)['data']['order_id']
         return order_id
 
     def modify_order(self, order_id, variety='regular', parent_order_id=None, quantity=None, price=None, order_type=None, trigger_price=None, validity=None, disclosed_quantity=None):
@@ -3690,7 +3831,7 @@ class TradeableInstrument(Instrument):
         if disclosed_quantity:
             data['disclosed_quantity'] = disclosed_quantity
 
-        order_id = self._rest_api.put(url=f"https://api.kite.trade/orders/{variety}/{order_id}", data=data)['data']['order_id']        
+        order_id = self._zerodha_rest_api.put(url=f"https://api.kite.trade/orders/{variety}/{order_id}", data=data)['data']['order_id']        
         return order_id
 
     def cancel_order(self, order_id, parent_order_id=None):
@@ -3706,9 +3847,9 @@ class TradeableInstrument(Instrument):
 
         if parent_order_id is not None:
             data = {'parent_order_id': parent_order_id}
-            order_id = self._rest_api.delete(url=f"https://api.kite.trade/orders/{variety}/{order_id}", data=data)['data']['order_id']
+            order_id = self._zerodha_rest_api.delete(url=f"https://api.kite.trade/orders/{variety}/{order_id}", data=data)['data']['order_id']
         else:
-            order_id = self._rest_api.delete(url=f"https://api.kite.trade/orders/{variety}/{order_id}")['data']['order_id']        
+            order_id = self._zerodha_rest_api.delete(url=f"https://api.kite.trade/orders/{variety}/{order_id}")['data']['order_id']        
         return order_id
 
 
@@ -4114,7 +4255,7 @@ class TradeableInstrument(Instrument):
         """
         Get net position in this instrument.
         """
-        positions = self._rest_api.get(url='https://api.kite.trade/portfolio/positions')['data']
+        positions = self._zerodha_rest_api.get(url='https://api.kite.trade/portfolio/positions')['data']
         if positions is None or len(positions) == 0:
             return None
 
@@ -4135,7 +4276,7 @@ class TradeableInstrument(Instrument):
         """
         Get day positions.
         """
-        positions = self._rest_api.get(url='https://api.kite.trade/portfolio/positions')['data']
+        positions = self._zerodha_rest_api.get(url='https://api.kite.trade/portfolio/positions')['data']
         if positions is None or len(positions) == 0:
             return None
 
@@ -4551,7 +4692,7 @@ class NonTradeableInstrument(Instrument):
         Returns the last traded price.
         """
         # print(self.instrument)
-        ltp = self._rest_api.get(url=f"https://api.kite.trade/quote/ltp?i={self.instrument['instrument_token']}")
+        ltp = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ltp?i={self.instrument['instrument_token']}")
         return ltp['data'][str(self.instrument['instrument_token'])]['last_price']
     
     @property
@@ -4559,7 +4700,7 @@ class NonTradeableInstrument(Instrument):
         """
         Returns OHLC data.
         """
-        ohlc = self._rest_api.get(url=f"https://api.kite.trade/quote/ohlc?i={self.instrument['instrument_token']}")
+        ohlc = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ohlc?i={self.instrument['instrument_token']}")
         return ohlc['data'][str(self.instrument['instrument_token'])]
     
     @property
@@ -4567,7 +4708,7 @@ class NonTradeableInstrument(Instrument):
         """
         Returns quote data.
         """
-        quote = self._rest_api.get(url=f"https://api.kite.trade/quote?i={self.instrument['instrument_token']}")
+        quote = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote?i={self.instrument['instrument_token']}")
         return quote['data'][str(self.instrument['instrument_token'])]
 
     @property
