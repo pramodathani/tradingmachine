@@ -4692,24 +4692,24 @@ class NonTradeableInstrument(Instrument):
         Returns the last traded price.
         """
         # print(self.instrument)
-        ltp = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ltp?i={self.instrument['instrument_token']}")
-        return ltp['data'][str(self.instrument['instrument_token'])]['last_price']
+        ltp = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ltp?i={self.instrument_token}")
+        return ltp['data'][str(self.instrument_token)]['last_price']
     
     @property
     def ohlc(self):
         """
         Returns OHLC data.
         """
-        ohlc = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ohlc?i={self.instrument['instrument_token']}")
-        return ohlc['data'][str(self.instrument['instrument_token'])]
+        ohlc = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote/ohlc?i={self.instrument_token}")
+        return ohlc['data'][str(self.instrument_token)]['ohlc']
     
     @property
     def quote(self):
         """
         Returns quote data.
         """
-        quote = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote?i={self.instrument['instrument_token']}")
-        return quote['data'][str(self.instrument['instrument_token'])]
+        quote = self._zerodha_rest_api.get(url=f"https://api.kite.trade/quote?i={self.instrument_token}")
+        return quote['data'][str(self.instrument_token)]
 
     @property
     def change(self):
