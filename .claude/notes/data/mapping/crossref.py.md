@@ -29,3 +29,8 @@ The docstrings carry UBI's discovery history because these queries still depend 
 - `known_nse_etf_symbols`: the genuine-ETF discriminator is the plain-equity series within a fund tag, verified as an exact 349-symbol match across Dhan/Fyers/Kotak/Wisdom Capital, with Stoxkart adding two bond ETFs and Groww adding stray "-EQ" suffixes that get stripped.
 - `known_bse_etf_symbols`: union of the three brokers whose 'E' fund group carries only real ETFs (43 Gold/Silver rows) plus 2-of-N broker name-voting — a single broker's '%etf%' name match trips on real companies whose names contain "ETF" (Wisdom Capital's freight company), while every genuine 2-broker match carried an INF fund ISIN with zero exceptions.
 - `security_id_to_isin`: the exchange-assigned security-id scheme is shared across Dhan/Kotak/Fyers/Groww/Stoxkart/Wisdom Capital, confirmed live at 100% resolution of the ISIN-less brokers' fixed-income buckets; first-seen-wins on disagreement affects 21 of 35,628 entries, never a genuinely different security.
+## The date test, and why it is a range
+
+`equity_index_symbols` asks whether an index was known **as of** the mapping date, using `first_seen_date <= date <= last_seen_date`, rather than whether it was last seen exactly on it. The two are the same thing only while the mapping date is the most recent one mapped, which stops being true the moment any past date is re-run. Testing the last seen date alone made the helper return almost nothing for a past date, and the brokers that normalize their index names against it silently kept their own spellings instead of converging.
+
+The range test depends on the seen dates being right, which in turn depends on the upsert widening them rather than overwriting — see `base.py.md`.

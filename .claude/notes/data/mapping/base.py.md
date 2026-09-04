@@ -38,3 +38,12 @@ UBI v1 ran each segment's crosswalk as a fully independent, non-exclusive query,
 ## Deliberate porting choices
 
 The class is named `BrokerMappingAdapter` rather than UBI's `BrokerAdapter` so it cannot be confused with `data/instruments/base.py`'s `BrokerInstruments`, the raw-ingestion base class. The engine is created in `__init__` from `utilities/configuration` exactly as UBI did, rather than passed in, keeping each adapter self-contained for its `__main__` CLI. The transform dict is module-level and shared (`TRANSFORMS`, un-underscored, since rules YAMLs reference these names by string); broker-local transforms live in the owning adapter's `_field` override rather than being registered globally.
+## The seen dates must widen, not overwrite
+
+The first version of the upsert set `last_seen_date = EXCLUDED.last_seen_date` and left `first_seen_date` alone after the initial insert. That is correct only while dates are mapped strictly oldest-first and never revisited, which is not how this pipeline is actually used: a mapping fix is applied by re-running past dates, and the very first build mapped the latest date by hand before backfilling the history behind it.
+
+Both columns were wrong as a result. `first_seen_date` froze at whichever date happened to be written first, so 524,862 of 704,473 rows claimed a first sighting of 2026-09-04 when they had in fact been seen since 2026-08-07. And `last_seen_date` was dragged backwards whenever an older date was mapped after a newer one.
+
+The upsert now widens the range with `LEAST` and `GREATEST`, so both columns are independent of the order dates are mapped in. The stored rows were repaired from `instruments.broker_mappings`, which is the exact record of which instrument was seen on which date.
+
+This was not a cosmetic problem. `crossref.equity_index_symbols` selects the index rows known as of the mapping date, so wrong date ranges made it return almost nothing for past dates — 52 symbols for 2026-08-28 rather than 184 — and the brokers that normalize their index names against it quietly stopped converging on those dates.

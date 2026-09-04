@@ -484,6 +484,8 @@ def equity_index_symbols(connection, mapping_date):
 
     This replaces UBI's dependency on its v1 crosswalk output table for index normalization. It relies on the fixed processing order in the daily job: the index-listing brokers write their nse_equity_indices rows before the normalizing brokers read this set.
 
+    The date test asks whether an index was known as of the mapping date, rather than whether it was last seen on it. Those are the same thing only while the mapping date is the most recent one mapped. Testing last seen alone makes the answer depend on what has been mapped since, so re-running one broker over a past date would find nothing here and quietly stop normalizing its index names.
+
     Args:
         connection (sqlalchemy.engine.Connection): An open database connection.
         mapping_date (datetime.date): The mapping date whose master rows to draw from.
@@ -494,7 +496,8 @@ def equity_index_symbols(connection, mapping_date):
     rows = connection.execute(
         text(
             "SELECT symbol FROM instruments.master "
-            "WHERE segment = 'nse_equity_indices' AND last_seen_date = :d"
+            "WHERE segment = 'nse_equity_indices' "
+            "AND first_seen_date <= :d AND last_seen_date >= :d"
         ),
         {"d": mapping_date},
     ).all()

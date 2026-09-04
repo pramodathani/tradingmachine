@@ -593,6 +593,8 @@ class BrokerMappingAdapter:
 
         Both row lists are sorted by instrument id before the insert so concurrent writers acquire locks in the same order, which is the standard fix for the multi-writer deadlock this design was observed hitting when adapters ran in parallel.
 
+        The seen dates widen rather than overwrite, so they do not depend on the order dates happen to be mapped in. Assigning the run's date to the last seen date directly looks equivalent while a backfill walks forward, and is wrong the moment any older date is mapped afterwards: it drags the last seen date backwards, and leaves the first seen date frozen at whichever date was written first rather than the earliest the instrument was actually seen.
+
         Args:
             instrument_rows (dict): Mapping of instrument id to the instruments.master row.
             broker_rows (dict): Mapping of instrument id to the instruments.broker_mappings row.
@@ -622,7 +624,9 @@ class BrokerMappingAdapter:
                         VALUES
                             (:instrument_id, :exchange, :segment, :shape, :symbol, :underlying_symbol,
                              :expiry_date, :strike_price, :option_type, :first_seen_date, :last_seen_date)
-                        ON CONFLICT (instrument_id) DO UPDATE SET last_seen_date = EXCLUDED.last_seen_date
+                        ON CONFLICT (instrument_id) DO UPDATE SET
+                            first_seen_date = LEAST(master.first_seen_date, EXCLUDED.first_seen_date),
+                            last_seen_date = GREATEST(master.last_seen_date, EXCLUDED.last_seen_date)
                         """
                     ),
                     sorted_instruments,
