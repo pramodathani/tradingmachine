@@ -154,7 +154,7 @@ Confirmed on 2026-09-04, the first day loaded.
 | flattrade | 8 CSVs | 9 | 148,982 |
 | groww | 1 CSV | 21 | 134,335 |
 | zerodha | 1 CSV | 12 | 108,812 |
-| indmoney | 3 CSVs | not yet known | needs a token |
+| indmoney | 3 CSVs | 23 | 102,949 |
 
 ### Running it daily
 

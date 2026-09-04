@@ -16,10 +16,10 @@ Eleven of Kotak's columns arrive empty on every row. That was checked against Ko
 
 ## Hypertables
 
-Each table is a TimescaleDB hypertable partitioned on `download_date`, one chunk per month. Across all nine brokers a day's snapshot is roughly 1.8 million rows, so a monthly chunk holds a few tens of millions, which is a reasonable size for TimescaleDB.
+Each table is a TimescaleDB hypertable partitioned on `download_date`, one chunk per month. Across all ten brokers a day's snapshot is roughly 1.9 million rows, so a monthly chunk holds a few tens of millions, which is a reasonable size for TimescaleDB.
 
 The modern `by_range` form of `create_hypertable` is used rather than the older positional `time_column_name` signature. Both exist in TimescaleDB 2.29.1, but the older one is deprecated.
 
-## IND Money has no file yet
+## IND Money's file was written last
 
-`data/sql/ddl` holds nine broker tables, not ten. IND Money's master sits behind an access token, so its columns could not be observed and its DDL could not be written. Once a token is available, download the file, inspect the cleaned column list, and add `100_instruments_indmoney.sql` the same way the others were made.
+`100_instruments_indmoney.sql` was added after the other nine, on 2026-09-04, because IND Money's master sits behind an access token and its columns could not be observed until one was supplied. It was generated the same way as the others: from the cleaned column list of a live download, not from documentation. One of its columns, `delivery_unit`, arrives empty on every row, checked against the raw response body — same situation as Kotak's eleven empty columns.

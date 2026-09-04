@@ -74,9 +74,12 @@ class IndMoneyInstruments(BrokerInstruments):
             response = requests.get(
                 INSTRUMENTS_URL,
                 params={"source": source},
-                headers={"Authorization": self.access_token},
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": self.access_token,
+                },
                 timeout=DOWNLOAD_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
-            frames.append(pandas.read_csv(StringIO(response.json()["data"]), dtype=str))
+            frames.append(pandas.read_csv(StringIO(response.text), dtype=str))
         return pandas.concat(frames, ignore_index=True)
