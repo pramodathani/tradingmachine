@@ -108,6 +108,24 @@ def unix_epoch_date(value):
     return pd.to_datetime(float(value), unit="s", utc=True).date()
 
 
+def day_month_name_year_date(value):
+    """
+    Parse a broker's ``DD-MON-YYYY`` expiry text, such as "26-SEP-2026", into a date.
+
+    Args:
+        value: Raw expiry text from a broker table row, or None.
+
+    Returns:
+        datetime.date | None: The expiry date, or None when the input is None, empty, or unparseable.
+    """
+    if value is None or pd.isna(value):
+        return None
+    try:
+        return pd.to_datetime(value, format="%d-%b-%Y").date()
+    except (ValueError, TypeError):
+        return None
+
+
 def kotak_expiry_epoch(value):
     """
     Convert Kotak's expiry timestamps, which count seconds from 1980-01-01 rather than the 1970 Unix epoch.
@@ -143,6 +161,7 @@ TRANSFORMS = {
     "divide_by_10_thousand": divide_by_10_thousand,
     "divide_by_10_million": divide_by_10_million,
     "day_month_year_date": day_month_year_date,
+    "day_month_name_year_date": day_month_name_year_date,
     "unix_epoch_date": unix_epoch_date,
     "kotak_expiry_epoch": kotak_expiry_epoch,
     "strip_exchange_prefix": strip_exchange_prefix,
@@ -455,6 +474,28 @@ class BrokerMappingAdapter:
             )
         return fallback
 
+    def read_raw_rows(self, connection, mapping_date):
+        """
+        Read the broker's raw rows for one date.
+
+        Adapters override this where the fetch itself is part of the mapping: to impose a row order the classification depends on, or to bring in rows the plain query would miss.
+
+        Args:
+            connection: An open SQLAlchemy connection.
+            mapping_date (datetime.date): The raw snapshot date to read.
+
+        Returns:
+            pandas.DataFrame: The raw rows for that date.
+        """
+        raw_table = self.config["raw_table"]
+        return pd.read_sql(
+            text(f"SELECT * FROM {raw_table} WHERE download_date = :d"),
+            connection,
+            params={
+                "d": mapping_date,
+            },
+        )
+
     def run(self, mapping_date):
         """
         Classify every raw row for one date and write the mapped tables.
@@ -465,32 +506,28 @@ class BrokerMappingAdapter:
             mapping_date (datetime.date): The raw snapshot date to map.
 
         Returns:
-            dict: Summary with keys "broker", "mapping_date", "raw_rows", "matched", "uncategorised", "instruments_upserted", and "errors", where "errors" is a list of (segment, message) pairs.
+            dict: Summary with keys "broker", "mapping_date", "raw_rows", "matched", "uncategorised", "memberships", "instruments_upserted", and "errors". "matched" and "uncategorised" count raw rows and together equal "raw_rows"; "memberships" counts the rows written, which is higher wherever a row belongs to more than one segment. "errors" is a list of (segment, message) pairs.
         """
-        raw_table = self.config["raw_table"]
         with self.engine.connect() as connection:
-            raw = pd.read_sql(
-                text(f"SELECT * FROM {raw_table} WHERE download_date = :d"),
-                connection,
-                params={
-                    "d": mapping_date,
-                },
-            )
+            raw = self.read_raw_rows(connection, mapping_date)
 
         instrument_rows = {}
-        broker_rows = []
+        broker_rows = {}
         errors = []
         matched = 0
         uncategorised = 0
+        memberships = 0
 
         for raw_row in raw.to_dict("records"):
             segment_configuration = self.classify(raw_row)
             if segment_configuration is None:
                 segment_configurations = [self._uncategorised_config(raw_row)]
                 was_uncategorised = True
+                uncategorised += 1
             else:
                 segment_configurations = [segment_configuration] + self.classify_extra(raw_row)
                 was_uncategorised = False
+                matched += 1
             for one_segment_configuration in segment_configurations:
                 try:
                     identity = self.to_identity(raw_row, one_segment_configuration)
@@ -502,9 +539,7 @@ class BrokerMappingAdapter:
                     symbol = identity.get("symbol")
                     if symbol is None or str(symbol).strip() == "":
                         identity["symbol"] = broker_fields["broker_token"]
-                    uncategorised += 1
-                else:
-                    matched += 1
+                memberships += 1
 
                 exchange = one_segment_configuration["exchange"]
                 segment = one_segment_configuration["segment"]
@@ -523,17 +558,15 @@ class BrokerMappingAdapter:
                     "first_seen_date": mapping_date,
                     "last_seen_date": mapping_date,
                 }
-                broker_rows.append(
-                    {
-                        "instrument_id": computed_id,
-                        "broker": self.BROKER_NAME,
-                        "mapping_date": mapping_date,
-                        "broker_token": broker_fields["broker_token"],
-                        "broker_symbol": broker_fields["broker_symbol"],
-                        "lot_size": broker_fields["lot_size"],
-                        "tick_size": broker_fields["tick_size"],
-                    }
-                )
+                broker_rows[computed_id] = {
+                    "instrument_id": computed_id,
+                    "broker": self.BROKER_NAME,
+                    "mapping_date": mapping_date,
+                    "broker_token": broker_fields["broker_token"],
+                    "broker_symbol": broker_fields["broker_symbol"],
+                    "lot_size": broker_fields["lot_size"],
+                    "tick_size": broker_fields["tick_size"],
+                }
 
         self._write_results(instrument_rows, broker_rows, mapping_date)
 
@@ -543,13 +576,14 @@ class BrokerMappingAdapter:
             "raw_rows": len(raw),
             "matched": matched,
             "uncategorised": uncategorised,
+            "memberships": memberships,
             "instruments_upserted": len(instrument_rows),
             "errors": errors,
         }
         print(
             f"{self.BROKER_NAME}: {matched}/{len(raw)} raw row(s) classified, "
-            f"{uncategorised} uncategorised, {len(instrument_rows)} distinct instrument(s), "
-            f"{len(errors)} error(s)."
+            f"{uncategorised} uncategorised, {memberships} segment membership(s), "
+            f"{len(instrument_rows)} distinct instrument(s), {len(errors)} error(s)."
         )
         return summary
 
@@ -561,11 +595,11 @@ class BrokerMappingAdapter:
 
         Args:
             instrument_rows (dict): Mapping of instrument id to the instruments.master row.
-            broker_rows (list[dict]): The instruments.broker_mappings rows.
+            broker_rows (dict): Mapping of instrument id to the instruments.broker_mappings row.
             mapping_date (datetime.date): The mapping date the run covers.
         """
         sorted_instruments = sorted(instrument_rows.values(), key=lambda row: row["instrument_id"])
-        sorted_brokers = sorted(broker_rows, key=lambda row: row["instrument_id"])
+        sorted_brokers = sorted(broker_rows.values(), key=lambda row: row["instrument_id"])
 
         with self.engine.begin() as connection:
             connection.execute(
