@@ -139,55 +139,38 @@ class FlattradeMappingAdapter(BrokerMappingAdapter):
 
     def read_raw_rows(self, connection, mapping_date):
         """
-        Read Flattrade's rows in the order the classification depends on, with the blank-exchange rows recovered.
+        Read Flattrade's rows in the order the classification depends on, marking the blank-exchange rows that can be recovered.
 
-        The EQ rows are read last so they win the collapse over a same-symbol BE row, and the recovered blank-exchange rows are placed first so a real row for the same symbol wins over the recovered one.
+        Two orderings are imposed at once. The EQ rows come last, so they win the collapse over a same-symbol BE row. The blank-exchange rows come first, so a real row for the same symbol wins over a recovered one.
+
+        The recovery marks rows in place rather than reading them a second time. Reading them twice puts each blank-exchange row through the classification twice, once recovered and once not, and the second pass files a duplicate into the uncategorised bucket.
 
         Args:
             connection: An open SQLAlchemy connection.
             mapping_date (datetime.date): The raw snapshot date to read.
 
         Returns:
-            pandas.DataFrame: The raw rows, ordered and augmented.
+            pandas.DataFrame: The raw rows, ordered, with a flag column marking the recovered ones.
         """
         raw = pd.read_sql(
             text(
                 "SELECT * FROM instruments.flattrade WHERE download_date = :d "
-                "ORDER BY (instrument = 'EQ') ASC"
+                "ORDER BY (exchange IS NULL OR exchange = '') DESC, (instrument = 'EQ') ASC"
             ),
             connection,
             params={
                 "d": mapping_date,
             },
         )
+        if raw.empty:
+            return raw
 
         tokens = bse_equity_tokens(connection, mapping_date)
-        if not tokens:
-            return raw
-
-        recovered = pd.read_sql(
-            text(
-                "SELECT * FROM instruments.flattrade WHERE download_date = :d "
-                "AND (exchange IS NULL OR exchange = '') AND token = ANY(:tokens)"
-            ),
-            connection,
-            params={
-                "d": mapping_date,
-                "tokens": list(tokens),
-            },
-        )
-        if recovered.empty:
-            return raw
-
-        recovered = recovered.copy()
-        recovered[RECOVERED_BSE_EQUITY_FLAG] = True
-        return pd.concat(
-            [
-                recovered,
-                raw,
-            ],
-            ignore_index=True,
-        )
+        recovered_flags = []
+        for exchange, token in zip(raw["exchange"], raw["token"]):
+            is_blank = exchange is None or pd.isna(exchange) or str(exchange).strip() == ""
+            recovered_flags.append(is_blank and str(token) in tokens)
+        return raw.assign(**{RECOVERED_BSE_EQUITY_FLAG: recovered_flags})
 
     def classify(self, raw_row):
         """

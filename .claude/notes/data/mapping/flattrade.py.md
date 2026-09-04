@@ -21,3 +21,11 @@ BSE option rows mis-round half-point strikes: a real 102.5 is reported as 103.0.
 ## Verified counts
 
 On the 2026-09-04 snapshot this adapter classified 148,867 of 149,081 raw rows into 148,183 distinct instruments — the difference being the EQ and BE duplicates collapsing — with 214 uncategorised and no errors. Its BSE equity count of 4,898 sits above the roughly 4,725 the other brokers report, which is the recovered rows showing up.
+
+## The recovery bug that reading twice caused
+
+The first version of `read_raw_rows` read the blank-exchange rows a second time as their own frame, tagged that copy, and concatenated it in front of the main one — the shape UBI used. That puts every blank-exchange row through the classification **twice**: once as the tagged copy, which recovers correctly into `bse_equities`, and once as the untagged original still sitting in the main frame, which has no exchange and therefore falls into the plain `uncategorised` bucket. UBI never saw it because it dropped unclassified rows silently; here they were written and counted, and the verification report's uncategorised profile is what surfaced them.
+
+The fix marks rows in place instead of reading them twice, so each row is classified exactly once. The ordering guarantee that made the concatenation attractive is kept in SQL: blank-exchange rows sort first, then non-EQ rows, then EQ rows last.
+
+Verified on the 2026-09-04 snapshot after the fix: 148,982 raw rows produce exactly 148,982 segment memberships, uncategorised falls from 214 to 115, `bse_equities` still holds all 4,898 rows including the recovered ones, and the plain `uncategorised` bucket holds the 2 blank-exchange rows whose token genuinely is not in the other brokers' BSE token space — 99 of the 101 recovered, which is what UBI reported too.
