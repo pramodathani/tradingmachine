@@ -19,3 +19,17 @@ Each check would explain a failure in the one after it, so reading top to bottom
 **6. Backfill sanity.** Per-date instrument counts across the whole history, with the change from the previous date, plus the first and last seen extremes. A sudden drop on one date usually means a truncated broker file upstream rather than a mapping fault, which is why the broker count per date is printed beside it.
 
 **7. Uncategorised profile.** Where each broker's unclassified rows landed. This is the alarm that keeps the catch-all buckets honest: a bucket that suddenly grows is a rules gap, and without this check it would look like success. Expectations are per broker, not global — Stoxkart legitimately runs near 7% because it publishes spreads and duplicate rows that no other broker does, while Shoonya runs near 0.05%.
+
+## What the first full run found, on 2026-09-04
+
+Every finding turned out to be the brokers' own data rather than a mapping fault, and the checks were sharpened afterwards so that the report says which is which rather than leaving a large number unexplained.
+
+**Coverage** reconciled for all ten brokers. Uncategorised share ranged from 0.06% (Shoonya) to 1.61% (Stoxkart), with the run summaries reconciling row for row.
+
+**Convergence** put 39,982 instruments under all ten brokers and 64,889 under nine. RELIANCE and HDFCBANK resolved to ten brokers each, NIFTY and BANKNIFTY to nine — Wisdom Capital does not publish NSE index spot rows — and SENSEX to seven.
+
+**Duplicate tokens** looked alarming at 68,394 pairs until the check was split by cause. A broker's token space is per exchange segment rather than global, so 16,887 of those are one number meaning different things on different markets, and 51,232 more span two segments, which is the dual membership the design deliberately keeps. That leaves 275 inside a single segment, all Flattrade, and those are company renames: its file carries both the old and the new symbol against one token, so "GMRINFRA" and "GMRAIRPORT" are both listed. Name-based identity necessarily gives those two identities, and only the current name converges with the other brokers. That is a fact about the data, not something the mapping can fix.
+
+**Index names** showed no normalized name with two spellings, which is the alias tables and the processing order working.
+
+**Round-trips** matched 1,000 of 1,000 in the identity-to-token direction. Thirty-nine of 1,000 came back naming a different instrument in the other direction, and after adding a follow-up query, all thirty-nine were on tokens the broker genuinely reuses — none unexplained. That follow-up is now part of the check: a backward miss on a token that is *not* reused has no innocent explanation and is reported separately.

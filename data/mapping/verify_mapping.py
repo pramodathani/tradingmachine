@@ -142,7 +142,9 @@ def check_convergence(engine, mapping_date):
 
 def check_duplicates(engine, mapping_date):
     """
-    Report tokens that point at more than one instrument on the same date.
+    Report tokens that point at more than one instrument, split by how far apart those instruments are.
+
+    A broker's token space is per exchange segment, not global, so the same number legitimately means one thing on the cash market and another on the currency derivatives market. Those cases are expected and are counted separately from the ones worth looking at.
 
     Args:
         engine: A SQLAlchemy engine for the black_box database.
@@ -153,37 +155,68 @@ def check_duplicates(engine, mapping_date):
     """
     print_heading(f"3. tokens mapping to more than one instrument on {mapping_date}")
     with engine.connect() as connection:
+        totals = connection.execute(
+            text(
+                "WITH duplicated AS ("
+                "  SELECT b.broker, b.broker_token, "
+                "         count(DISTINCT b.instrument_id) AS instruments, "
+                "         count(DISTINCT m.exchange) AS exchanges, "
+                "         count(DISTINCT m.segment) AS segments "
+                "  FROM instruments.broker_mappings b "
+                "  JOIN instruments.master m ON m.instrument_id = b.instrument_id "
+                "  WHERE b.mapping_date = :d "
+                "  GROUP BY 1, 2 HAVING count(DISTINCT b.instrument_id) > 1"
+                ") "
+                "SELECT count(*) AS total, "
+                "       count(*) FILTER (WHERE exchanges > 1) AS across_exchanges, "
+                "       count(*) FILTER (WHERE exchanges = 1 AND segments > 1) AS across_segments, "
+                "       count(*) FILTER (WHERE exchanges = 1 AND segments = 1) AS within_one_segment "
+                "FROM duplicated"
+            ),
+            {
+                "d": mapping_date,
+            },
+        ).one()
+
+    if totals.total == 0:
+        print("no token points at more than one instrument.")
+        return
+
+    print(f"{totals.total} (broker, token) pair(s) point at more than one instrument:")
+    print(f"  {totals.across_exchanges:>8} span more than one exchange       expected: token spaces are per exchange")
+    print(f"  {totals.across_segments:>8} span more than one segment        expected where a row has two memberships")
+    print(f"  {totals.within_one_segment:>8} sit inside one segment            worth looking at")
+
+    if totals.within_one_segment == 0:
+        return
+
+    with engine.connect() as connection:
         rows = connection.execute(
             text(
-                "SELECT broker, broker_token, count(DISTINCT instrument_id) AS instruments "
-                "FROM instruments.broker_mappings WHERE mapping_date = :d "
-                "GROUP BY 1, 2 HAVING count(DISTINCT instrument_id) > 1 "
+                "WITH duplicated AS ("
+                "  SELECT b.broker, b.broker_token, m.segment, "
+                "         count(DISTINCT b.instrument_id) AS instruments, "
+                "         count(DISTINCT m.exchange) AS exchanges, "
+                "         count(DISTINCT m.segment) AS segments, "
+                "         string_agg(DISTINCT coalesce(m.symbol, m.underlying_symbol), ' | ') AS names "
+                "  FROM instruments.broker_mappings b "
+                "  JOIN instruments.master m ON m.instrument_id = b.instrument_id "
+                "  WHERE b.mapping_date = :d "
+                "  GROUP BY 1, 2, 3 HAVING count(DISTINCT b.instrument_id) > 1"
+                ") "
+                "SELECT broker, broker_token, segment, instruments, names FROM duplicated "
+                "WHERE exchanges = 1 AND segments = 1 "
                 "ORDER BY instruments DESC, broker, broker_token LIMIT 20"
             ),
             {
                 "d": mapping_date,
             },
         ).all()
-        total = connection.execute(
-            text(
-                "SELECT count(*) AS c FROM ("
-                "  SELECT broker, broker_token FROM instruments.broker_mappings WHERE mapping_date = :d "
-                "  GROUP BY 1, 2 HAVING count(DISTINCT instrument_id) > 1"
-                ") AS duplicated"
-            ),
-            {
-                "d": mapping_date,
-            },
-        ).one().c
-    if total == 0:
-        print("none.")
-        return
-    print(f"{total} (broker, token) pair(s) point at more than one instrument. First 20:")
-    for row in rows:
-        print(f"  {row.broker:<16} {row.broker_token:<20} {row.instruments} instrument(s)")
+
     print("")
-    print("A duplicate here is usually a broker listing one token under two segments, which is")
-    print("expected where a row genuinely has two memberships, and a bug otherwise.")
+    print("first 20 inside one segment:")
+    for row in rows:
+        print(f"  {row.broker:<16} {row.broker_token:<20} {row.segment:<26} {row.instruments}: {row.names}")
 
 
 def check_index_names(engine, mapping_date):
@@ -265,16 +298,52 @@ def check_round_trips(engine, mapping_date):
         if resolved is None or resolved["instrument_id"] != str(row.instrument_id):
             backward_failures.append((row.broker, row.broker_token, row.segment))
 
+    unexplained = unexplained_backward_misses(engine, backward_failures, mapping_date)
+
     print(f"sampled {len(sample)} stored mapping(s).")
     print(f"identity to token:  {len(sample) - len(forward_failures)} matched, {len(forward_failures)} failed.")
-    print(f"token to identity:  {len(sample) - len(backward_failures)} matched, {len(backward_failures)} failed.")
+    print(f"token to identity:  {len(sample) - len(backward_failures)} matched, {len(backward_failures)} answered "
+          f"with a different instrument, of which {len(unexplained)} unexplained.")
     for broker, token, segment in forward_failures[:10]:
         print(f"  forward miss: {broker} {token} {segment}")
-    for broker, token, segment in backward_failures[:10]:
-        print(f"  backward miss: {broker} {token} {segment}")
+    for broker, token, segment in unexplained[:10]:
+        print(f"  unexplained backward miss: {broker} {token} {segment}")
     print("")
-    print("A backward miss is expected where a broker reuses one token across instruments: the")
-    print("look-up answers with one of them by design. A forward miss is always a bug.")
+    print("A backward answer that names a different instrument is expected on a token the broker")
+    print("reuses: the look-up returns one of them by design. Such a miss on a token that is not")
+    print("reused is a bug, and so is any forward miss.")
+
+
+def unexplained_backward_misses(engine, backward_failures, mapping_date):
+    """
+    Narrow a list of backward misses down to the ones the broker's own duplicate tokens do not explain.
+
+    Args:
+        engine: A SQLAlchemy engine for the black_box database.
+        backward_failures (list[tuple]): The (broker, token, segment) triples that resolved to another instrument.
+        mapping_date (datetime.date): The date the sample came from.
+
+    Returns:
+        list[tuple]: The subset whose token points at exactly one instrument, which means the miss has no innocent explanation.
+    """
+    unexplained = []
+    with engine.connect() as connection:
+        for broker, token, segment in backward_failures:
+            count = connection.execute(
+                text(
+                    "SELECT count(DISTINCT instrument_id) AS instruments "
+                    "FROM instruments.broker_mappings "
+                    "WHERE broker = :b AND broker_token = :t AND mapping_date = :d"
+                ),
+                {
+                    "b": broker,
+                    "t": token,
+                    "d": mapping_date,
+                },
+            ).one().instruments
+            if count <= 1:
+                unexplained.append((broker, token, segment))
+    return unexplained
 
 
 def identity_for_shape(row):
