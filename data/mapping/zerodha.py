@@ -131,6 +131,11 @@ MCX_INDEX_ALIASES = {
 
 MISLABELLED_COMMODITY_NAME = "ADITYA BIRLA SUN LIFE SILVER ETF"
 
+FIXED_INCOME_SEGMENTS = (
+    "nse_fixed_income",
+    "bse_fixed_income",
+)
+
 BROKER_SYMBOL_FALLBACK_SEGMENTS = (
     "nse_mutual_funds",
     "nse_fixed_income",
@@ -200,7 +205,27 @@ class ZerodhaMappingAdapter(BrokerMappingAdapter):
 
     def classify(self, raw_row):
         """
-        Classify a raw row by dispatching on its exchange, segment, and instrument type together.
+        Classify a raw row, then check that a bond row can actually be identified.
+
+        Both fixed income segments take their identity from the shared security identifier map, so a row that map cannot resolve has no identity to be written under. It is left for the uncategorised bucket rather than dropped, which keeps the run's coverage reconciling: on a date where only this broker was downloaded, the map is empty and every bond row lands there.
+
+        Args:
+            raw_row (dict): One raw row from instruments.zerodha.
+
+        Returns:
+            dict | None: The matched segment configuration, or None when no segment matches or a bond row cannot be identified.
+        """
+        segment_configuration = self._classify_by_exchange(raw_row)
+        if segment_configuration is None:
+            return None
+        if segment_configuration["segment"] in FIXED_INCOME_SEGMENTS:
+            if str(raw_row.get("exchange_token")) not in self.isin_by_token:
+                return None
+        return segment_configuration
+
+    def _classify_by_exchange(self, raw_row):
+        """
+        Dispatch a raw row on its exchange, segment, and instrument type together.
 
         Args:
             raw_row (dict): One raw row from instruments.zerodha.
