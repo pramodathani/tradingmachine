@@ -124,10 +124,10 @@ This applies every file under `data/sql/ddl` in filename order. Each statement i
 python3 -m data.instruments.download                     all ten brokers
 python3 -m data.instruments.download --broker zerodha    just one
 python3 -m data.instruments.download --date 2026-09-04   override the recorded date
-python3 -m data.instruments.download --bootstrap         re-ingest a date already stored
+python3 -m data.instruments.download --bootstrap         replace a date already stored
 ```
 
-One broker failing is reported and does not stop the others. Re-running for a date already stored is a no-op unless `--bootstrap` is given, so the daily job is safe to run twice.
+One broker failing is reported and does not stop the others. Re-running for a date already stored is a no-op, so the daily job is safe to run twice. With `--bootstrap` that date's rows are deleted and replaced rather than appended to, so a re-ingest never doubles a day's snapshot.
 
 `--date` changes the date recorded against the rows; it does not fetch an older file. Nine brokers publish only their current master, and Kotak's date-stamped URL serves only today, so a genuine backfill is not possible from these sources.
 

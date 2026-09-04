@@ -32,7 +32,9 @@ Reading as text removes all of it at the source. Kotak genuinely publishes `6.16
 
 ## Re-running is safe
 
-`ingest` checks `has_data_for` first and skips a date already stored, so the daily cron job can run twice without doubling the snapshot. `--bootstrap` overrides that when a day genuinely needs re-ingesting.
+`ingest` checks `has_data_for` first and skips a date already stored, so the daily cron job can run twice without doubling the snapshot.
+
+`--bootstrap` re-ingests a day that is already stored. It deletes that date's existing rows before writing, rather than appending to them. Appending would silently double the day's snapshot, which is worse than the skip it was meant to override, so the delete is what makes the flag safe to use.
 
 ## The row count deviation check
 

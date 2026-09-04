@@ -221,7 +221,7 @@ class BrokerInstruments:
 
         Args:
             download_date (datetime.date | None): Snapshot date to record. Defaults to today.
-            bootstrap (bool): When True, ingest even though that date is already present.
+            bootstrap (bool): When True, replace that date's stored rows rather than skipping.
 
         Returns:
             int: The number of rows written.
@@ -230,7 +230,8 @@ class BrokerInstruments:
             ValueError: If the broker's file carries a column the table does not have, which would otherwise lose data silently.
         """
         download_date = download_date or pandas.Timestamp.today().date()
-        if not bootstrap and self.has_data_for(download_date):
+        already_stored = self.has_data_for(download_date)
+        if already_stored and not bootstrap:
             print(f"{self.BROKER_NAME}: already ingested for {download_date}, skipping.")
             return 0
 
@@ -249,6 +250,14 @@ class BrokerInstruments:
                 f"{self.BROKER_NAME}: the downloaded file carries column(s) {unknown_columns} that "
                 f"{SCHEMA_NAME}.{self.BROKER_NAME} does not have. Add them to the DDL rather than dropping them."
             )
+
+        if already_stored:
+            with self.engine.begin() as connection:
+                deleted = connection.execute(
+                    text(f"DELETE FROM {SCHEMA_NAME}.{self.BROKER_NAME} WHERE download_date = :download_date"),
+                    {"download_date": download_date},
+                ).rowcount
+            print(f"{self.BROKER_NAME}: removed {deleted} existing row(s) for {download_date} before re-ingesting.")
 
         frame.to_sql(self.BROKER_NAME, self.engine, schema=SCHEMA_NAME, if_exists="append", index=False, chunksize=10000)
         print(f"{self.BROKER_NAME}: ingested {len(frame)} row(s) for {download_date}.")
