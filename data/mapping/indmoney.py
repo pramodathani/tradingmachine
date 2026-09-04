@@ -9,7 +9,7 @@ The second is that neither derivative segment has an underlying symbol column. I
 
 The third is the expiry format, ``MM/DD/YYYY HH:MM``, which is month-first and needs an explicit parse.
 
-This project's IND Money download captures the ``isin`` column, which UBI's did not, and every cash-market row carries one. That replaces three of the cross-broker lookups UBI needed here: fixed income is identified and named by the row's own ISIN rather than by a shared security identifier map, and fund contamination in the equity segments is detected by the ISIN's own INF prefix rather than by a cross-broker name allowlist. The two exchange traded fund allowlists are still needed, because an ISIN says that a row is a fund but not whether it is a listed exchange traded fund or a mutual fund scheme.
+This project's IND Money download captures an ``isin`` column, which UBI's did not, but only from 2026-09-02 onwards: every earlier snapshot has it empty. So the ISIN is read from the row where the row has one, and resolved through the cross-broker security identifier map where it does not. Both fixed income identity and fund detection in the equity segments go through that one resolution, which makes the adapter behave the same way on every stored date rather than only on the recent ones. The two exchange traded fund allowlists are still needed, because an ISIN says that a row is a fund but not whether it is a listed exchange traded fund or a mutual fund scheme.
 """
 
 import re
@@ -22,6 +22,7 @@ from data.mapping.crossref import (
     equity_index_symbols,
     known_bse_etf_symbols,
     known_nse_etf_symbols,
+    security_id_to_isin,
 )
 
 FUTURES_UNDERLYING_PATTERN = re.compile(r"^(.+)-\d{0,2}[A-Za-z]{3}\d{4}-FUT$")
@@ -223,7 +224,7 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
 
     def run(self, mapping_date):
         """
-        Map IND Money's raw rows for one date, precomputing the two exchange traded fund allowlists and the NSE index lookup first.
+        Map IND Money's raw rows for one date, precomputing the two exchange traded fund allowlists, the shared security identifier map and the NSE index lookup first.
 
         Args:
             mapping_date (datetime.date): The raw snapshot date to map.
@@ -234,6 +235,7 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
         with self.engine.connect() as connection:
             self.nse_etf_symbols = known_nse_etf_symbols(connection, mapping_date)
             self.bse_etf_symbols = known_bse_etf_symbols(connection, mapping_date)
+            self.isin_by_security_id = security_id_to_isin(connection, mapping_date)
             index_symbols = equity_index_symbols(connection, mapping_date)
 
         self.nse_index_master_lookup = {}
@@ -270,6 +272,23 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
                     return None
         return super()._field(raw_row, specification)
 
+    def resolved_isin(self, raw_row):
+        """
+        Read a row's ISIN, falling back to the cross-broker security identifier map where the row carries none.
+
+        IND Money only began publishing an ISIN column on 2026-09-02, so every earlier snapshot needs the fallback. Without it the bond segments cannot be identified at all on those dates and their rows land in the uncategorised buckets.
+
+        Args:
+            raw_row (dict): One raw row from instruments.indmoney.
+
+        Returns:
+            str | None: The ISIN, or None when neither the row nor the shared map has one.
+        """
+        isin = raw_row.get("isin")
+        if isin is not None and not pd.isna(isin) and str(isin).strip() != "":
+            return str(isin).strip()
+        return self.isin_by_security_id.get(str(raw_row.get("security_id")))
+
     def classify(self, raw_row):
         """
         Classify a raw row, running the rules first and then the three code-driven checks for the segments no rule can express.
@@ -294,12 +313,12 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
         if segment == "nse_equities":
             if raw_row.get("trading_symbol") in self.nse_etf_symbols:
                 return self.segment_config("nse_exchange_traded_funds")
-            if isin_is_fund(raw_row.get("isin")):
+            if isin_is_fund(self.resolved_isin(raw_row)):
                 return None
         if segment == "bse_equities":
             if raw_row.get("trading_symbol") in self.bse_etf_symbols:
                 return self.segment_config("bse_exchange_traded_funds")
-            if isin_is_fund(raw_row.get("isin")):
+            if isin_is_fund(self.resolved_isin(raw_row)):
                 return None
         if segment == "nse_mutual_funds" and raw_row.get("trading_symbol") in self.nse_etf_symbols:
             return None
@@ -363,7 +382,7 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
         """
         if raw_row.get("segment") != "E" or raw_row.get("instrument_name") != "EQUITY":
             return None
-        if not isin_valid_non_fund(raw_row.get("isin")):
+        if not isin_valid_non_fund(self.resolved_isin(raw_row)):
             return None
 
         exchange = raw_row.get("exch")
@@ -406,8 +425,13 @@ class IndMoneyMappingAdapter(BrokerMappingAdapter):
         Raises:
             ValueError: If an expiry value is numeric with no explicit transform.
         """
-        identity = super().to_identity(raw_row, segment_configuration)
         segment = segment_configuration["segment"]
+        if segment in ("nse_fixed_income", "bse_fixed_income"):
+            return {
+                "symbol": self.resolved_isin(raw_row),
+            }
+
+        identity = super().to_identity(raw_row, segment_configuration)
 
         if segment in NSE_FUTURES_SEGMENTS or segment in NSE_OPTIONS_SEGMENTS:
             if segment in NSE_FUTURES_SEGMENTS:
