@@ -1,6 +1,6 @@
-# util/configuration.py
+# utilities/configuration.py
 
-Environment-derived configuration for the data layer, read once at import time and exposed as one dictionary per datastore. This follows the house pattern from `tradingmachine/util/config.py` and `unified_broker_interface/utils/config.py`: module-level dictionaries, so that code elsewhere does `from util.configuration import *` rather than reading `os.environ` directly.
+Environment-derived configuration for the data layer, read once at import time and exposed as one dictionary per datastore. This follows the house pattern from `tradingmachine/util/config.py` and `unified_broker_interface/utils/config.py`: module-level dictionaries, so that code elsewhere does `from utilities.configuration import *` rather than reading `os.environ` directly.
 
 Of the two siblings, `tradingmachine`'s version was the model, because it builds each `connection_string` from the dictionary it just created rather than re-reading `os.environ` a dozen times as UBI's does.
 
@@ -16,7 +16,7 @@ There is no `BLACK_BOX_ENV` variable and no `.env.dev`, `.env.uat`, or `.env.pro
 
 ### `__all__` is defined
 
-Without it, `from util.configuration import *` also exports `os`, `load_dotenv`, and `quote_plus`, which then silently shadow those names in the importing module. The siblings have this problem. Verified that `import *` now leaks nothing.
+Without it, `from utilities.configuration import *` also exports `os`, `load_dotenv`, and `quote_plus`, which then silently shadow those names in the importing module. The siblings have this problem. Verified that `import *` now leaks nothing.
 
 ### Credentials are percent-encoded
 
@@ -32,7 +32,7 @@ Chroma removed server-side authentication entirely in version 1.0.0, so there is
 
 Identifiers here are spelled out in full, per the project-wide convention. The dictionaries are named `redis_configuration` rather than `redis_config`, and the key holding the database name is `database` rather than `db`, including in the matching `BLACK_BOX_*_DATABASE` environment variables. This diverges from both sibling projects, which use `*_config` and `db` throughout.
 
-The module is `configuration.py` rather than `config.py` for the same reason, so the import is `from util.configuration import *`.
+The package directory is `utilities/` rather than `util/`, and the module is `configuration.py` rather than `config.py`, for the same reason, so the import is `from utilities.configuration import *`. The sibling projects use `util/config.py` and `utils/config.py` respectively.
 
 Two names are set by libraries and cannot follow the convention: redis-py's client takes a `db=` keyword argument, and the TimescaleDB and MongoDB images own `POSTGRES_DB`, `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD`.
 

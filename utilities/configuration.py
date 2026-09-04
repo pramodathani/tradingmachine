@@ -1,7 +1,7 @@
 """
 Environment-derived configuration for the black_box data layer.
 
-Reads the process environment once at import time and exposes one dictionary per datastore. Code elsewhere does `from util.configuration import *` rather than reading os.environ directly.
+Reads the process environment once at import time and exposes one dictionary per datastore. Code elsewhere does `from utilities.configuration import *` rather than reading os.environ directly.
 """
 
 import os
