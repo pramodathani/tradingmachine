@@ -7,6 +7,7 @@ Run without arguments to fetch every broker. One broker failing is reported and 
     python3 -m data.instruments.download --broker zerodha
     python3 -m data.instruments.download --date 2026-09-04
     python3 -m data.instruments.download --bootstrap
+    python3 -m data.instruments.download --broker indmoney --indmoney-access-token TOKEN
 """
 
 import argparse
@@ -38,20 +39,24 @@ BROKER_CLASSES = {
 }
 
 
-def download_one(broker_name, download_date, bootstrap):
+def download_one(broker_name, download_date, bootstrap, indmoney_access_token=None):
     """
     Download and store one broker's instrument master, then check its row count.
 
     Args:
         broker_name (str): Key into BROKER_CLASSES.
         download_date (datetime.date): Snapshot date to record.
-        bootstrap (bool): When True, ingest even though that date is already present.
+        bootstrap (bool): When True, replace that date's stored rows rather than skipping.
+        indmoney_access_token (str | None): Token for IND Money, the one broker needing authentication. Ignored for every other broker.
 
     Returns:
         dict: Keys 'broker', 'rows' and 'error', where 'error' is None on success.
     """
     print(f"--- {broker_name} ---")
-    ingester = BROKER_CLASSES[broker_name]()
+    if broker_name == "indmoney":
+        ingester = IndMoneyInstruments(access_token=indmoney_access_token)
+    else:
+        ingester = BROKER_CLASSES[broker_name]()
     try:
         rows = ingester.ingest(download_date=download_date, bootstrap=bootstrap)
         ingester.check_row_count_deviation(download_date)
@@ -62,14 +67,15 @@ def download_one(broker_name, download_date, bootstrap):
         return {"broker": broker_name, "rows": 0, "error": f"{type(error).__name__}: {error}"}
 
 
-def run(broker_name=None, download_date=None, bootstrap=False):
+def run(broker_name=None, download_date=None, bootstrap=False, indmoney_access_token=None):
     """
     Download and store the instrument masters for one broker or for all of them.
 
     Args:
         broker_name (str | None): A single broker to run. None runs every broker.
         download_date (datetime.date | None): Snapshot date to record. Defaults to today.
-        bootstrap (bool): When True, ingest even though that date is already present.
+        bootstrap (bool): When True, replace that date's stored rows rather than skipping.
+        indmoney_access_token (str | None): Token for IND Money. When omitted, the token configured in the environment is used.
 
     Returns:
         list[dict]: One result dictionary per broker attempted.
@@ -79,7 +85,7 @@ def run(broker_name=None, download_date=None, bootstrap=False):
 
     results = []
     for name in broker_names:
-        results.append(download_one(name, download_date, bootstrap))
+        results.append(download_one(name, download_date, bootstrap, indmoney_access_token))
 
     print("")
     print(f"=== summary for {download_date} ===")
@@ -102,11 +108,17 @@ def main():
     parser = argparse.ArgumentParser(description="Download the brokers' daily instrument masters into TimescaleDB.")
     parser.add_argument("--broker", choices=sorted(BROKER_CLASSES), help="Run a single broker instead of all of them.")
     parser.add_argument("--date", help="Snapshot date to record, as YYYY-MM-DD. Defaults to today.")
-    parser.add_argument("--bootstrap", action="store_true", help="Ingest even though this date is already stored.")
+    parser.add_argument("--bootstrap", action="store_true", help="Replace this date's stored rows rather than skipping.")
+    parser.add_argument("--indmoney-access-token", help="Access token for IND Money. Overrides BLACK_BOX_INDMONEY_ACCESS_TOKEN.")
     arguments = parser.parse_args()
 
     download_date = datetime.date.fromisoformat(arguments.date) if arguments.date else None
-    return run(broker_name=arguments.broker, download_date=download_date, bootstrap=arguments.bootstrap)
+    return run(
+        broker_name=arguments.broker,
+        download_date=download_date,
+        bootstrap=arguments.bootstrap,
+        indmoney_access_token=arguments.indmoney_access_token,
+    )
 
 
 if __name__ == "__main__":

@@ -12,4 +12,6 @@ Each broker runs inside its own `try`, and a failure is recorded and printed rat
 
 ## IND Money is expected to fail without a token
 
-IND Money is the only broker needing credentials, and its access token expires every twenty-four hours. A run with no token configured reports a clear `ValueError` naming the environment variable and continues with the other nine.
+IND Money is the only broker needing credentials, and its access token expires every twenty-four hours. A run with no token configured reports a clear `ValueError` naming the environment variable and the command line flag, then continues with the other nine.
+
+The token reaches the ingester two ways: `BLACK_BOX_INDMONEY_ACCESS_TOKEN` in `.env`, or `--indmoney-access-token` on the command line, which wins when both are set. `download_one` constructs the IND Money ingester specially, passing the token through, while every other broker is constructed with no arguments. The command line flag exists because a shell history is easier to clear than a file: the token is short-lived and sensitive, and putting it in `.env` means it lingers there after it has expired.
