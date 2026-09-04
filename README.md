@@ -96,6 +96,8 @@ transaction_cost_models/         expected cost of trading into those positions
 execution_models/                order placement and execution
 data/                            market and reference data
   instruments/                   the brokers' daily instrument masters
+  mapping/                       one cross-broker instrument identity
+    rules/                       per-broker classification rules
   sql/ddl/                       table definitions, one file per table
 research/                        research notebooks and backtests
 utilities/                       environment-derived configuration
@@ -165,6 +167,56 @@ Confirmed on 2026-09-04, the first day loaded.
 ```
 
 It must run on the day whose files it wants, because Kotak's URL is stamped with the current date.
+
+
+## Instrument mapping
+
+The raw tables answer "what does this broker list". They cannot answer "is Zerodha's `19037442` the same contract as Shoonya's `74365`", because nothing joins them. `data/mapping/` adds that: one identity per real-world instrument, and one row per instrument per broker per day.
+
+### The identity
+
+An instrument's identity is its exchange, segment, shape and identity fields together — a security is its symbol, a future its underlying and expiry, an option those plus strike and option type. Each broker's adapter hashes that tuple into a UUID independently, so the same instrument seen through any broker produces the same identifier and the writes converge on one row. There is no matching step, no scoring and no registry: two brokers agree because they compute the same number, or they do not agree at all.
+
+ISINs, tokens and tickers are used to work out *which* segment a row belongs to. None of them is the identity. Tickers do not reconcile across brokers, and four of the ten brokers publish no ISIN at all.
+
+### Segments
+
+Every row is classified into one canonical segment, named `{exchange}_{segment}` — `nse_equities`, `bse_equity_options`, `mcx_commodity_futures`. The vocabulary in `data/mapping/segments.py` is ordered by asset class (fixed income, equities, currencies, commodities) and within each by instrument kind (simple, futures, options, indices, index futures, index options), followed by mutual funds, exchange traded funds, investment trusts and the uncategorised buckets. Each broker's rules file must list its segments in that order, which is checked when the adapter loads.
+
+A row no rule matches is not dropped. It goes to that exchange's `*_uncategorised` bucket, or to the plain `uncategorised` one when even the exchange cannot be determined. That keeps coverage measurable: raw rows must equal classified plus uncategorised, exactly.
+
+### Running it
+
+```
+python3 -m data.mapping.run_mapping                     all ten brokers, today
+python3 -m data.mapping.run_mapping --broker zerodha    just one
+python3 -m data.mapping.run_mapping --date 2026-09-04   a stored snapshot date
+python3 -m data.mapping.run_mapping --backfill          every stored date, oldest first
+```
+
+The broker order is fixed, not alphabetical: several adapters resolve index names against the index rows already written for the same date, so the brokers publishing a clean index vocabulary run first. The mapping also runs after *every* download rather than after each one, because the cross-broker classification aids pool the whole day's files — a broker with no ISIN column borrows bond identities from brokers that have one. `run_daily_download.sh` does both in that order.
+
+### Asking it questions
+
+```python
+from data.mapping.resolution import resolve_broker_tokens, resolve_identity, resolve_raw_row
+
+resolve_broker_tokens(engine, "nse", "nse_equities", "security", {"symbol": "RELIANCE"}, as_of_date)
+resolve_identity(engine, "zerodha", ["738561"], as_of_date)
+resolve_raw_row(engine, "fyers", "101126092974365", as_of_date)
+```
+
+The first two are the two directions an order or a position needs. The third exists because a broker's own endpoint sometimes wants an identifier the mapped tables have no column for: Fyers stores a description rather than a tradeable ticker, and its real symbol lives in the raw row. Since the stored token is each broker's join key into its own table, that row is always one lookup away.
+
+Every lookup takes an as-of date and uses the latest mapping on or before it, so a question about a past date gets the answer that was true then.
+
+### Verifying it
+
+```
+python3 -m data.mapping.verify_mapping --date 2026-09-04
+```
+
+Seven checks, ordered so that a failure in one explains a failure in the next: coverage per broker, identity convergence across brokers, duplicate tokens, index name convergence, resolution round-trips, backfill sanity and the uncategorised profile. It only reports; nothing raises.
 
 
 ## Conventions
