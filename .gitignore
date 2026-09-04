@@ -12,6 +12,9 @@ venv/
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 
+# Logs
+logs/
+
 # Editor
 .vscode/launch.json
 

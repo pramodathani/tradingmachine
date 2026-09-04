@@ -95,12 +95,77 @@ portfolio_construction_models/   signals and constraints to target positions
 transaction_cost_models/         expected cost of trading into those positions
 execution_models/                order placement and execution
 data/                            market and reference data
+  instruments/                   the brokers' daily instrument masters
+  sql/ddl/                       table definitions, one file per table
 research/                        research notebooks and backtests
 utilities/                       environment-derived configuration
 .claude/notes/                   commentary, one note per source file
 ```
 
 The model directories are empty scaffolding at this point.
+
+## Instrument masters
+
+Ten brokers each publish a daily list of the instruments they will trade. `data/instruments/` downloads all ten and stores them raw in TimescaleDB, one table per broker under the `instruments` schema, one snapshot per day.
+
+Nine of the ten are public files needing no authentication. IND Money is the exception: it wants an `Authorization` header carrying an access token, generated separately from `https://api.indstocks.com/generate/token` and valid for twenty-four hours. Put a current token in `BLACK_BOX_INDMONEY_ACCESS_TOKEN`; without one that broker is skipped and the other nine still run.
+
+### Creating the tables
+
+```
+python3 -m data.create_tables
+```
+
+This applies every file under `data/sql/ddl` in filename order. Each statement is safe to run again, so the same command picks up a later change to a table.
+
+### Downloading
+
+```
+python3 -m data.instruments.download                     all ten brokers
+python3 -m data.instruments.download --broker zerodha    just one
+python3 -m data.instruments.download --date 2026-09-04   override the recorded date
+python3 -m data.instruments.download --bootstrap         re-ingest a date already stored
+```
+
+One broker failing is reported and does not stop the others. Re-running for a date already stored is a no-op unless `--bootstrap` is given, so the daily job is safe to run twice.
+
+`--date` changes the date recorded against the rows; it does not fetch an older file. Nine brokers publish only their current master, and Kotak's date-stamped URL serves only today, so a genuine backfill is not possible from these sources.
+
+### What is stored
+
+Every broker column is `TEXT`, and only `download_date` is typed. Files are read as text so that nothing is coerced on the way in, which means the same value cannot arrive as `2` one day and `2.0` the next, and an unexpected value can never fail a day's load. Kotak publishes `6.16e+06` as a strike price and Fyers publishes `-1.0`; both are stored exactly as published. Typing and interpretation belong to a later stage.
+
+The processing is deliberately light: column names are normalised, text values trimmed, empty artifact columns from trailing delimiters dropped, exchange test scrips removed, and rows repeating a broker's own natural key de-duplicated. There is no classification into segments and no cross-broker instrument identity.
+
+After each broker loads, its row count is compared against the average of every earlier day and reported as `OK` or `ALARM`. A deviation is a signal to investigate, not a failure, so it never aborts the run.
+
+### Row counts
+
+Confirmed on 2026-09-04, the first day loaded.
+
+| Broker | Files | Columns | Rows |
+|---|---|---|---|
+| stoxkart | 1 CSV | 13 | 464,383 |
+| wisdom_capital | 9 POST calls | 28 | 209,385 |
+| dhan | 1 CSV | 32 | 199,540 |
+| kotak | 7 CSVs | 80 | 187,397 |
+| shoonya | 7 ZIPs | 13 | 162,247 |
+| fyers | 7 CSVs | 21 | 158,943 |
+| flattrade | 8 CSVs | 9 | 148,982 |
+| groww | 1 CSV | 21 | 134,335 |
+| zerodha | 1 CSV | 12 | 108,812 |
+| indmoney | 3 CSVs | not yet known | needs a token |
+
+### Running it daily
+
+`data/instruments/run_daily_download.sh` activates the virtual environment and appends its output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
+
+```
+30 7 * * 1-5 /home/pramod/Projects/black_box/data/instruments/run_daily_download.sh
+```
+
+It must run on the day whose files it wants, because Kotak's URL is stamped with the current date.
+
 
 ## Conventions
 
