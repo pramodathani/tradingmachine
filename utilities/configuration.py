@@ -16,6 +16,7 @@ __all__ = [
     "mongodb_configuration",
     "postgres_configuration",
     "chromadb_configuration",
+    "indmoney_configuration",
 ]
 
 redis_configuration = {
@@ -60,3 +61,7 @@ chromadb_configuration = {
 chromadb_configuration["connection_string"] = (
     f"http://{chromadb_configuration['host']}:{chromadb_configuration['port']}"
 )
+
+indmoney_configuration = {
+    "access_token": os.environ.get("BLACK_BOX_INDMONEY_ACCESS_TOKEN"),
+}
