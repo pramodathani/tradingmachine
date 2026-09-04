@@ -45,6 +45,21 @@ def divide_by_100(value):
     return float(value) / 100
 
 
+def divide_by_10_thousand(value):
+    """
+    Convert a value expressed in ten-thousandths into its plain form, used for the commodity option strikes that report a scale of four decimal places.
+
+    Args:
+        value: Raw value from a broker table row, or None.
+
+    Returns:
+        float | None: The value divided by 10000, or None when the input is None or empty.
+    """
+    if value is None or pd.isna(value):
+        return None
+    return float(value) / 10000
+
+
 def divide_by_10_million(value):
     """
     Convert a value expressed in ten-millionths into its plain form, used for the currency and fixed income derivative segments that report strikes and ticks scaled by 10**7.
@@ -76,6 +91,21 @@ def day_month_year_date(value):
         return pd.to_datetime(value, format="%d-%m-%Y").date()
     except (ValueError, TypeError):
         return None
+
+
+def unix_epoch_date(value):
+    """
+    Convert a broker's expiry timestamp expressed as seconds since the 1970 Unix epoch into a date.
+
+    Args:
+        value: Raw seconds value from a broker table row, or None.
+
+    Returns:
+        datetime.date | None: The expiry date, or None when the input is None or empty.
+    """
+    if value is None or pd.isna(value):
+        return None
+    return pd.to_datetime(float(value), unit="s", utc=True).date()
 
 
 def kotak_expiry_epoch(value):
@@ -110,8 +140,10 @@ def strip_exchange_prefix(value):
 
 TRANSFORMS = {
     "divide_by_100": divide_by_100,
+    "divide_by_10_thousand": divide_by_10_thousand,
     "divide_by_10_million": divide_by_10_million,
     "day_month_year_date": day_month_year_date,
+    "unix_epoch_date": unix_epoch_date,
     "kotak_expiry_epoch": kotak_expiry_epoch,
     "strip_exchange_prefix": strip_exchange_prefix,
 }
