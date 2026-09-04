@@ -1,0 +1,53 @@
+# util/configuration.py
+
+Environment-derived configuration for the data layer, read once at import time and exposed as one dictionary per datastore. This follows the house pattern from `tradingmachine/util/config.py` and `unified_broker_interface/utils/config.py`: module-level dictionaries, so that code elsewhere does `from util.configuration import *` rather than reading `os.environ` directly.
+
+Of the two siblings, `tradingmachine`'s version was the model, because it builds each `connection_string` from the dictionary it just created rather than re-reading `os.environ` a dozen times as UBI's does.
+
+## Hosts are localhost by design
+
+black_box always runs on the host, and only its databases are containers. So the hosts here are `localhost` and the ports are the host-side published ports, not the container-internal ones. Inside the Docker network those same stores answer to `redis:6379`, `mongodb:27017`, `timescaledb:5432`, and `chroma:8000` instead.
+
+## No environment tiers
+
+There is no `BLACK_BOX_ENV` variable and no `.env.dev`, `.env.uat`, or `.env.prod`. This project deliberately has no tier system, so the bare `.env` that `load_dotenv()` finds is the whole configuration. The sibling projects require `set -a; source .env.dev; set +a` to select a variant; nothing equivalent is needed here.
+
+## Three departures from the sibling modules
+
+### `__all__` is defined
+
+Without it, `from util.configuration import *` also exports `os`, `load_dotenv`, and `quote_plus`, which then silently shadow those names in the importing module. The siblings have this problem. Verified that `import *` now leaks nothing.
+
+### Credentials are percent-encoded
+
+`unified_broker_interface`'s config module imports `quote_plus` and then never applies it. That is latent breakage rather than a present bug, because the current password is alphanumeric. Credentials sit in the userinfo component of the connection URL, so a rotated password containing `@`, `:`, or `/` would be parsed as a delimiter and would silently produce a connection string pointing somewhere else.
+
+Verified with the password `p@ss:w/rd#1`, which encodes to `p%40ss%3Aw%2Frd%231` and leaves the host, port, and database name still parsing correctly.
+
+### chromadb_configuration carries no credentials
+
+Chroma removed server-side authentication entirely in version 1.0.0, so there is nothing to authenticate with. The sibling modules carry `username` and `password` keys for Chroma that can only ever be `None`. Pass `host` and `port` to `chromadb.HttpClient()`. The `connection_string` key is there for anything that wants the base URL directly.
+
+## Naming
+
+Identifiers here are spelled out in full, per the project-wide convention. The dictionaries are named `redis_configuration` rather than `redis_config`, and the key holding the database name is `database` rather than `db`, including in the matching `BLACK_BOX_*_DATABASE` environment variables. This diverges from both sibling projects, which use `*_config` and `db` throughout.
+
+The module is `configuration.py` rather than `config.py` for the same reason, so the import is `from util.configuration import *`.
+
+Two names are set by libraries and cannot follow the convention: redis-py's client takes a `db=` keyword argument, and the TimescaleDB and MongoDB images own `POSTGRES_DB`, `MONGO_INITDB_ROOT_USERNAME` and `MONGO_INITDB_ROOT_PASSWORD`.
+
+## postgres_configuration serves both roles
+
+One container serves both the relational and the timeseries workload, because TimescaleDB is a Postgres extension rather than a separate server. Hypertables and ordinary relational tables live in the same database. The dictionary is still named `postgres_configuration` for parity with the sibling projects.
+
+The connection string uses the bare `postgresql://` scheme rather than `postgresql+psycopg2://`, matching the siblings. SQLAlchemy resolves it to psycopg2, the pinned driver, by default.
+
+## Known rough edge, inherited from the siblings
+
+With no `.env` present and no `BLACK_BOX_*` variables set, `postgres_configuration["connection_string"]` evaluates to `postgresql://:@localhost:1003/None` rather than raising a clear error. Both sibling modules behave the same way, and worse, producing `None:None@`. It only bites if the module is imported with no configuration at all, which would fail at connection time regardless, though with a more confusing message. Left matching house behaviour rather than adding validation that was not requested.
+
+## Verification
+
+All four clients were driven purely from these dictionaries against the running containers: Redis `ping` returned true, SQLAlchemy through `postgres_configuration["connection_string"]` reported `current_database()` as `black_box` with TimescaleDB 2.29.1, `MongoClient` built from the Mongo connection string answered `{'ok': 1.0}`, and `chromadb.HttpClient` returned a heartbeat.
+
+The host and port defaults were verified separately, from an isolated copy of the module with no `.env` reachable anywhere up the tree. An earlier attempt at this check was invalid, because the defaults are deliberately identical to the `.env` values and so could not distinguish a default being applied from `.env` being reloaded.

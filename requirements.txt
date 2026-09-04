@@ -1,0 +1,15 @@
+redis==7.4.0
+psycopg2-binary==2.9.12
+SQLAlchemy==2.0.50
+pymongo==4.17.0
+chromadb-client==1.5.9
+numpy==2.4.6
+pandas==3.0.3
+TA-Lib==0.6.8
+backtesting==0.6.5
+matplotlib==3.10.9
+seaborn==0.13.2
+pyarrow==25.0.1
+yfinance==1.4.0
+python-dotenv==1.2.3
+requests==2.34.2
