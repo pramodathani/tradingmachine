@@ -149,7 +149,7 @@ Confirmed on 2026-09-04, the first day loaded.
 | wisdom_capital | 9 POST calls | 28 | 209,385 |
 | dhan | 1 CSV | 32 | 199,540 |
 | kotak | 7 CSVs | 80 | 187,397 |
-| shoonya | 7 ZIPs | 13 | 162,247 |
+| shoonya | 7 ZIPs | 15 | 162,247 |
 | fyers | 7 CSVs | 21 | 158,943 |
 | flattrade | 8 CSVs | 9 | 148,982 |
 | groww | 1 CSV | 21 | 134,335 |

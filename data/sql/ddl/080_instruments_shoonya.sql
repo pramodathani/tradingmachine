@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS instruments.shoonya (
     "precision" TEXT,
     "multiplier" TEXT,
     "gngd" TEXT,
+    "source_zip_url" TEXT,
+    "source_file_name" TEXT,
     "download_date" DATE NOT NULL
 );
 
@@ -20,3 +22,6 @@ SELECT create_hypertable(
     by_range('download_date', INTERVAL '1 month'),
     if_not_exists => TRUE
 );
+
+ALTER TABLE instruments.shoonya ADD COLUMN IF NOT EXISTS "source_zip_url" TEXT;
+ALTER TABLE instruments.shoonya ADD COLUMN IF NOT EXISTS "source_file_name" TEXT;

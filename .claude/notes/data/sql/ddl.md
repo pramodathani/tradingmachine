@@ -8,6 +8,8 @@ Only `download_date` is typed, as `DATE NOT NULL`. The reasoning is in `.claude/
 
 Column names are quoted in the DDL so they match exactly what `BrokerInstruments.normalize_columns` produces, without depending on Postgres folding case the same way.
 
+`080_instruments_shoonya.sql` also carries two `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements after its `CREATE TABLE`. The `CREATE TABLE` only runs when the table does not exist yet, so a column added later would never reach an already-created table; the `ALTER` statements are idempotent either way, no-ops on a fresh database and the delivery mechanism on the existing one. The two columns, Shoonya's `source_zip_url` and `source_file_name`, were added when historical snapshots imported from `unified_broker_interface`'s database arrived carrying them.
+
 ## These files were generated from the real files
 
 The column lists were taken by downloading each broker's actual master on 2026-09-04 and running it through the cleaning steps, rather than transcribed from documentation. That is why Kotak has 80 columns rather than the 79 its FO files carry: its two `transformed-v1` cash files add `surveillanceMessage`, and stacking the seven files produces the union.

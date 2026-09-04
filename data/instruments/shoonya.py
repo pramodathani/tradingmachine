@@ -64,7 +64,10 @@ class ShoonyaInstruments(BrokerInstruments):
                     if not member_name.lower().endswith((".csv", ".txt")):
                         continue
                     text_content = archive.read(member_name).decode("latin-1")
-                    frames.append(pandas.read_csv(StringIO(text_content), dtype=str))
+                    frame = pandas.read_csv(StringIO(text_content), dtype=str)
+                    frame["source_zip_url"] = url
+                    frame["source_file_name"] = member_name
+                    frames.append(frame)
         if not frames:
             raise ValueError("Shoonya's archives downloaded but held no readable instrument data.")
         return pandas.concat(frames, ignore_index=True)
