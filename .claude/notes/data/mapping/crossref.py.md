@@ -31,6 +31,14 @@ The docstrings carry UBI's discovery history because these queries still depend 
 - `security_id_to_isin`: the exchange-assigned security-id scheme is shared across Dhan/Kotak/Fyers/Groww/Stoxkart/Wisdom Capital, confirmed live at 100% resolution of the ISIN-less brokers' fixed-income buckets; first-seen-wins on disagreement affects 21 of 35,628 entries, never a genuinely different security.
 ## The date test, and why it is a range
 
-`equity_index_symbols` asks whether an index was known **as of** the mapping date, using `first_seen_date <= date <= last_seen_date`, rather than whether it was last seen exactly on it. The two are the same thing only while the mapping date is the most recent one mapped, which stops being true the moment any past date is re-run. Testing the last seen date alone made the helper return almost nothing for a past date, and the brokers that normalize their index names against it silently kept their own spellings instead of converging.
+`equity_index_lookup` asks whether an index was known **as of** the mapping date, using `first_seen_date <= date <= last_seen_date`, rather than whether it was last seen exactly on it. The two are the same thing only while the mapping date is the most recent one mapped, which stops being true the moment any past date is re-run. Testing the last seen date alone made the helper return almost nothing for a past date, and the brokers that normalize their index names against it silently kept their own spellings instead of converging.
 
 The range test depends on the seen dates being right, which in turn depends on the upsert widening them rather than overwriting — see `base.py.md`.
+
+## Why the helper returns the map rather than the names
+
+Widening the date test brought a second problem with it. Once rows from several dates are in scope, one normalized name can have two spellings behind it — "NIFTY 100" and "NIFTY100" both existed — and something has to choose between them.
+
+Each adapter used to build that choice itself, by iterating the returned set and keeping whichever spelling came last. Set iteration order is arbitrary, so the winner varied between runs and between brokers, and seven index names ended up carrying two identities on a single date. The verification report's index check is what caught it.
+
+The helper now returns the finished map, ordered by the earliest established spelling with ties broken on the name itself, so every adapter gets the same answer and gets it deterministically. Seven near-identical dict-building loops disappeared from the adapters as a side effect, which is the smaller benefit but a real one.

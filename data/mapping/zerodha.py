@@ -17,7 +17,7 @@ import pandas as pd
 
 from data.mapping.base import BrokerMappingAdapter
 from data.mapping.crossref import (
-    equity_index_symbols,
+    equity_index_lookup,
     known_bse_etf_symbols,
     known_bse_fixed_income_symbols,
     known_bse_fund_symbols,
@@ -195,11 +195,8 @@ class ZerodhaMappingAdapter(BrokerMappingAdapter):
             self.bse_fixed_income_symbols = known_bse_fixed_income_symbols(connection, mapping_date)
             self.bse_etf_symbols = known_bse_etf_symbols(connection, mapping_date)
             self.isin_by_token = security_id_to_isin(connection, mapping_date)
-            index_symbols = equity_index_symbols(connection, mapping_date)
+            self.nse_index_master_lookup = equity_index_lookup(connection, mapping_date)
 
-        self.nse_index_master_lookup = {}
-        for symbol in index_symbols:
-            self.nse_index_master_lookup[normalize_index_name(symbol)] = symbol
 
         return super().run(mapping_date)
 

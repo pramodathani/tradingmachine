@@ -22,7 +22,7 @@ import pandas as pd
 
 from data.mapping.base import BrokerMappingAdapter
 from data.mapping.crossref import (
-    equity_index_symbols,
+    equity_index_lookup,
     known_bse_etf_symbols,
     known_bse_investment_trust_symbols,
     known_nse_investment_trust_symbols,
@@ -166,11 +166,8 @@ class FyersMappingAdapter(BrokerMappingAdapter):
             self.nse_investment_trust_symbols = known_nse_investment_trust_symbols(connection, mapping_date)
             self.bse_investment_trust_symbols = known_bse_investment_trust_symbols(connection, mapping_date)
             self.bse_etf_symbols = known_bse_etf_symbols(connection, mapping_date)
-            index_symbols = equity_index_symbols(connection, mapping_date)
+            self.nse_index_master_lookup = equity_index_lookup(connection, mapping_date)
 
-        self.nse_index_master_lookup = {}
-        for symbol in index_symbols:
-            self.nse_index_master_lookup[normalize_index_name(symbol)] = symbol
 
         return super().run(mapping_date)
 

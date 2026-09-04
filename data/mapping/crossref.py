@@ -8,6 +8,8 @@ This is a deliberate, narrow exception to keeping each broker's adapter fully in
 Every function here is ported from `unified_broker_interface`'s `back_office/instruments/crosswalk/crossref.py`, with the table paths changed to this project's `instruments.<broker>` tables. The live-verification history in the docstrings is UBI's, carried over unchanged because these queries still depend on it.
 """
 
+import re
+
 from sqlalchemy import text
 
 
@@ -478,31 +480,50 @@ def security_id_to_isin(connection, mapping_date):
     return mapping
 
 
-def equity_index_symbols(connection, mapping_date):
+def normalize_index_name(name):
     """
-    Gather the index symbols already written to instruments.master for the mapping date, used by the later adapters to normalize index names against the brokers that listed them first.
+    Reduce an index name to uppercase alphanumerics, so that two brokers spelling one index differently collide.
 
-    This replaces UBI's dependency on its v1 crosswalk output table for index normalization. It relies on the fixed processing order in the daily job: the index-listing brokers write their nse_equity_indices rows before the normalizing brokers read this set.
+    Args:
+        name (str): The raw index name from a broker table.
+
+    Returns:
+        str: The name with every non-alphanumeric character removed and uppercased.
+    """
+    return re.sub(r"[^A-Z0-9]", "", str(name or "").upper())
+
+
+def equity_index_lookup(connection, mapping_date):
+    """
+    Build the map from a normalized NSE equity index name to the canonical spelling to store it under.
+
+    This replaces UBI's dependency on its v1 crosswalk output table for index normalization. It relies on the fixed processing order in the daily job: the index-listing brokers write their nse_equity_indices rows before the normalizing brokers read this map.
 
     The date test asks whether an index was known as of the mapping date, rather than whether it was last seen on it. Those are the same thing only while the mapping date is the most recent one mapped. Testing last seen alone makes the answer depend on what has been mapped since, so re-running one broker over a past date would find nothing here and quietly stop normalizing its index names.
+
+    Widening that test brings a second requirement with it. Once rows from several dates are in scope, one normalized name can have more than one spelling behind it, and the map has to choose. It takes the earliest established spelling, breaking ties on the spelling itself, so the answer is the same every run rather than depending on the order the database happens to return rows in. Building this map here rather than in each adapter is what makes that guarantee hold for all of them at once.
 
     Args:
         connection (sqlalchemy.engine.Connection): An open database connection.
         mapping_date (datetime.date): The mapping date whose master rows to draw from.
 
     Returns:
-        set[str]: Index symbols in the nse_equity_indices segment as of the mapping date.
+        dict[str, str]: Normalized index name to the canonical symbol.
     """
     rows = connection.execute(
         text(
             "SELECT symbol FROM instruments.master "
             "WHERE segment = 'nse_equity_indices' "
-            "AND first_seen_date <= :d AND last_seen_date >= :d"
+            "AND first_seen_date <= :d AND last_seen_date >= :d "
+            "ORDER BY first_seen_date ASC, symbol ASC"
         ),
         {"d": mapping_date},
     ).all()
-    symbols = set()
+    lookup = {}
     for row in rows:
-        if row.symbol:
-            symbols.add(row.symbol)
-    return symbols
+        if not row.symbol:
+            continue
+        key = normalize_index_name(row.symbol)
+        if key not in lookup:
+            lookup[key] = row.symbol
+    return lookup

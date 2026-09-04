@@ -20,7 +20,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from data.mapping.base import BrokerMappingAdapter
-from data.mapping.crossref import equity_index_symbols, known_bse_etf_symbols
+from data.mapping.crossref import equity_index_lookup, known_bse_etf_symbols
 
 NSE_EQUITIES_SERIES_PRIORITY = (
     "EQ",
@@ -254,11 +254,8 @@ class StoxkartMappingAdapter(BrokerMappingAdapter):
                 },
             )
             self.bse_etf_symbols = known_bse_etf_symbols(connection, mapping_date)
-            index_symbols = equity_index_symbols(connection, mapping_date)
+            self.nse_index_master_lookup = equity_index_lookup(connection, mapping_date)
 
-        self.nse_index_master_lookup = {}
-        for symbol in index_symbols:
-            self.nse_index_master_lookup[normalize_index_name(symbol)] = symbol
 
         raw_rows = raw.to_dict("records")
         self.nse_equities_winning_tokens = self._nse_equities_winners(raw_rows)

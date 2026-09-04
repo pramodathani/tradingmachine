@@ -17,7 +17,7 @@ from datetime import date as date_class
 import pandas as pd
 
 from data.mapping.base import BrokerMappingAdapter
-from data.mapping.crossref import equity_index_symbols, known_bse_etf_symbols
+from data.mapping.crossref import equity_index_lookup, known_bse_etf_symbols
 
 NSE_INDEX_UNDERLYINGS = (
     "BANKNIFTY",
@@ -107,10 +107,7 @@ class GrowwMappingAdapter(BrokerMappingAdapter):
         """
         with self.engine.connect() as connection:
             self.bse_etf_symbols = known_bse_etf_symbols(connection, mapping_date)
-            index_symbols = equity_index_symbols(connection, mapping_date)
-        self.nse_index_master_lookup = {
-            normalize_index_name(symbol): symbol for symbol in index_symbols
-        }
+            self.nse_index_master_lookup = equity_index_lookup(connection, mapping_date)
         return super().run(mapping_date)
 
     def classify(self, raw_row):
