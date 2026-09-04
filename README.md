@@ -95,7 +95,7 @@ portfolio_construction_models/   signals and constraints to target positions
 transaction_cost_models/         expected cost of trading into those positions
 execution_models/                order placement and execution
 data/                            market and reference data
-  instruments/                   the brokers' daily instrument masters
+  instruments/                   downloading the brokers' daily masters, and the daily job
   mapping/                       one cross-broker instrument identity
     rules/                       per-broker classification rules
   sql/ddl/                       table definitions, one file per table
@@ -123,10 +123,11 @@ This applies every file under `data/sql/ddl` in filename order. Each statement i
 ### Downloading
 
 ```
-python3 -m data.instruments.download                     all ten brokers
-python3 -m data.instruments.download --broker zerodha    just one
-python3 -m data.instruments.download --date 2026-09-04   override the recorded date
-python3 -m data.instruments.download --bootstrap         replace a date already stored
+python3 -m data.instruments.download_and_map                     download all ten, then map them
+python3 -m data.instruments.download_and_map --broker zerodha    just one broker, both stages
+python3 -m data.instruments.download_and_map --date 2026-09-04   override the recorded date
+python3 -m data.instruments.download_and_map --bootstrap         replace a date already stored
+python3 -m data.instruments.download_and_map --skip-mapping      download without mapping
 ```
 
 One broker failing is reported and does not stop the others. Re-running for a date already stored is a no-op, so the daily job is safe to run twice. With `--bootstrap` that date's rows are deleted and replaced rather than appended to, so a re-ingest never doubles a day's snapshot.
@@ -160,10 +161,10 @@ Confirmed on 2026-09-04, the first day loaded.
 
 ### Running it daily
 
-`data/instruments/run_daily_download.sh` activates the virtual environment and appends its output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
+`data/instruments/run_daily_download_and_map.sh` activates the virtual environment, runs both stages and appends the output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
 
 ```
-30 7 * * 1-5 /home/pramod/Projects/black_box/data/instruments/run_daily_download.sh
+30 7 * * 1-5 /home/pramod/Projects/black_box/data/instruments/run_daily_download_and_map.sh
 ```
 
 It must run on the day whose files it wants, because Kotak's URL is stamped with the current date.
@@ -188,13 +189,15 @@ A row no rule matches is not dropped. It goes to that exchange's `*_uncategorise
 ### Running it
 
 ```
-python3 -m data.mapping.run_mapping                     all ten brokers, today
-python3 -m data.mapping.run_mapping --broker zerodha    just one
-python3 -m data.mapping.run_mapping --date 2026-09-04   a stored snapshot date
-python3 -m data.mapping.run_mapping --backfill          every stored date, oldest first
+python3 -m data.instruments.download_and_map                                    download, then map
+python3 -m data.instruments.download_and_map --mapping-only                    map today without downloading
+python3 -m data.instruments.download_and_map --mapping-only --date 2026-09-04  map one stored date
+python3 -m data.instruments.download_and_map --backfill                        map every stored date, oldest first
 ```
 
-The broker order is fixed, not alphabetical: several adapters resolve index names against the index rows already written for the same date, so the brokers publishing a clean index vocabulary run first. The mapping also runs after *every* download rather than after each one, because the cross-broker classification aids pool the whole day's files — a broker with no ISIN column borrows bond identities from brokers that have one. `run_daily_download.sh` does both in that order.
+Downloading and mapping are one command because they are one job, but either stage can be run alone, and that matters: a download can only ever fetch today's file, since the brokers publish no history, while the mapping can be re-run over any stored date. A mapping fix is therefore applied by re-running the mapping, never by downloading again.
+
+The broker order within the mapping is fixed, not alphabetical: several adapters resolve index names against the index rows already written for the same date, so the brokers publishing a clean index vocabulary run first. The mapping also runs after *every* download rather than after each one, because the cross-broker classification aids pool the whole day's files — a broker with no ISIN column borrows bond identities from brokers that have one.
 
 ### Asking it questions
 

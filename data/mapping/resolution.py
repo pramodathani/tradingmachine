@@ -150,7 +150,7 @@ def resolve_raw_row(engine, broker, broker_token, as_of_date):
     Raises:
         ValueError: If the broker name is not one of the mapped brokers, since the name is interpolated into the table name.
     """
-    from data.mapping.run_mapping import PROCESSING_ORDER
+    from data.instruments.download_and_map import PROCESSING_ORDER
 
     if broker not in PROCESSING_ORDER:
         raise ValueError(f"{broker!r} is not one of the mapped brokers: {PROCESSING_ORDER}")

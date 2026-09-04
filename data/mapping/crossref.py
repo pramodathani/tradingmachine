@@ -482,7 +482,7 @@ def equity_index_symbols(connection, mapping_date):
     """
     Gather the index symbols already written to instruments.master for the mapping date, used by the later adapters to normalize index names against the brokers that listed them first.
 
-    This replaces UBI's dependency on its v1 crosswalk output table for index normalization. It relies on the fixed processing order in run_mapping: the index-listing brokers write their nse_equity_indices rows before the normalizing brokers read this set.
+    This replaces UBI's dependency on its v1 crosswalk output table for index normalization. It relies on the fixed processing order in the daily job: the index-listing brokers write their nse_equity_indices rows before the normalizing brokers read this set.
 
     Args:
         connection (sqlalchemy.engine.Connection): An open database connection.

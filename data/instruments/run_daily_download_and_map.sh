@@ -8,5 +8,4 @@ mkdir -p "${LOG_DIRECTORY}"
 cd "${PROJECT_DIRECTORY}"
 
 source .venv/bin/activate
-python3 -m data.instruments.download >> "${LOG_DIRECTORY}/instruments_$(date +%Y-%m).log" 2>&1
-python3 -m data.mapping.run_mapping >> "${LOG_DIRECTORY}/instruments_mapping_$(date +%Y-%m).log" 2>&1
+python3 -m data.instruments.download_and_map >> "${LOG_DIRECTORY}/instruments_$(date +%Y-%m).log" 2>&1

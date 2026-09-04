@@ -1,6 +1,8 @@
-# data/instruments/run_daily_download.sh
+# data/instruments/run_daily_download_and_map.sh
 
-A thin cron wrapper. It activates the virtual environment, changes into the project directory so that `python3 -m data.instruments.download` resolves, and appends both streams to a monthly log file under `logs/`.
+A thin cron wrapper. It activates the virtual environment, changes into the project directory so that `python3 -m data.instruments.download_and_map` resolves, and appends both streams to a monthly log file under `logs/`.
+
+It runs one command, not two. Downloading and mapping were briefly two lines here; folding them into one entry point put the broker list, the failure handling and the stage order in one place, and left this file with nothing to decide.
 
 `logs/` is gitignored. The directory is created by the script rather than committed, so a fresh clone needs no setup step.
 

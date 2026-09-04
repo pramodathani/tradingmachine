@@ -16,7 +16,7 @@ Three things differ from the UBI source, all forced by this project's raw tables
 
 ## The one UBI dependency replaced
 
-UBI's adapters normalized index names against `master.nse_equity_indices`, a v1 crosswalk output table that does not exist here. The replacement is the new `equity_index_symbols()` helper, which reads this project's own `instruments.master` for `nse_equity_indices` rows with `last_seen_date` equal to the mapping date. It only works because `run_mapping` processes brokers in a fixed order — the index-listing brokers (Dhan first) write their master rows before Zerodha, Shoonya, and Flattrade normalize names against them.
+UBI's adapters normalized index names against `master.nse_equity_indices`, a v1 crosswalk output table that does not exist here. The replacement is the new `equity_index_symbols()` helper, which reads this project's own `instruments.master` for `nse_equity_indices` rows with `last_seen_date` equal to the mapping date. It only works because `download_and_map` processes brokers in a fixed order — the index-listing brokers (Dhan first) write their master rows before Zerodha, Shoonya, and Flattrade normalize names against them.
 
 ## The live-verification history, from UBI
 

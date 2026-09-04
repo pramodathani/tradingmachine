@@ -24,7 +24,7 @@ import random
 from sqlalchemy import create_engine, text
 
 from data.mapping.resolution import resolve_broker_tokens, resolve_identity
-from data.mapping.run_mapping import PROCESSING_ORDER
+from data.instruments.download_and_map import PROCESSING_ORDER
 from utilities.configuration import postgres_configuration
 
 SPOT_CHECKS = [
