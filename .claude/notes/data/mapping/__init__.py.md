@@ -1,0 +1,5 @@
+# data/mapping/__init__.py
+
+This package is the mapping stage of the instruments pipeline, deliberately separate from `data/instruments/` (the raw download stage). Raw ingestion writes one all-TEXT landing table per broker and never looks across brokers; mapping reads those tables, classifies every row into the canonical segment vocabulary, and writes the unified `instruments.master` and `instruments.broker_mappings` tables where the same real-world instrument from any broker converges on one row.
+
+The design is ported from `unified_broker_interface`'s `back_office/instruments_v2/` (its adapters, rules YAMLs, and crossref helpers), which the user pointed at as the reference. Only the crosswalk stage was ported — UBI v2's order/quote/portfolio translation third was left out entirely, because this project's mapping is a data layer only.
