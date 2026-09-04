@@ -51,7 +51,7 @@ Four containers run on a single bridge network, `black_box_network`.
 
 | Service | Image | Host port | Container port |
 |---|---|---|---|
-| Redis | `redis:trixie` | 10001 | 6379 |
+| Redis | `redis:trixie` | 1001 | 6379 |
 | MongoDB | `mongo:8.0.4` | 1002 | 27017 |
 | TimescaleDB | `timescale/timescaledb:latest-pg18` | 1003 | 5432 |
 | ChromaDB | `chromadb/chroma:1.5.9` | 1004 | 8000 |

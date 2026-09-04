@@ -14,12 +14,12 @@ These containers are black_box's own. Following the rule stated in `tradingmachi
 
 | Store | Host port | Container port |
 |---|---|---|
-| Redis | 10001 | 6379 |
+| Redis | 1001 | 6379 |
 | MongoDB | 1002 | 27017 |
 | TimescaleDB | 1003 | 5432 |
 | ChromaDB | 1004 | 8000 |
 
-Ports 1002, 1003, and 1004 fall below 1024, in the IANA system range. This was raised with the user and confirmed as intended. The Docker daemon runs as root and can bind privileged ports, and the host-side Python client needs no privileges to connect to them. A rootless Docker setup would refuse these bindings without a `net.ipv4.ip_unprivileged_port_start` change, which is not the case on this machine.
+All four ports fall below 1024, in the IANA system range. This was raised with the user and confirmed as intended. The Docker daemon runs as root and can bind privileged ports, and the host-side Python client needs no privileges to connect to them. A rootless Docker setup would refuse these bindings without a `net.ipv4.ip_unprivileged_port_start` change, which is not the case on this machine.
 
 None of these collide with the running sibling containers on 5432, 5434, 6379, 6381, 27017, 27019, 8002, and 8890, nor with the tier bands `unified_broker_interface` reserves for its own UAT and prod on 5433, 6380, 8000, 8001, 27018, 8888, and 8889.
 

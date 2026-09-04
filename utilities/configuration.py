@@ -20,7 +20,7 @@ __all__ = [
 
 redis_configuration = {
     "host": os.environ.get("BLACK_BOX_REDIS_HOST", "localhost"),
-    "port": int(os.environ.get("BLACK_BOX_REDIS_PORT", "10001")),
+    "port": int(os.environ.get("BLACK_BOX_REDIS_PORT", "1001")),
     "database": int(os.environ.get("BLACK_BOX_REDIS_DATABASE", "0")),
     "username": os.environ.get("BLACK_BOX_REDIS_USERNAME"),
     "password": os.environ.get("BLACK_BOX_REDIS_PASSWORD"),
