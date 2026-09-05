@@ -51,3 +51,19 @@ With no `.env` present and no `BLACK_BOX_*` variables set, `postgres_configurati
 All four clients were driven purely from these dictionaries against the running containers: Redis `ping` returned true, SQLAlchemy through `postgres_configuration["connection_string"]` reported `current_database()` as `black_box` with TimescaleDB 2.29.1, `MongoClient` built from the Mongo connection string answered `{'ok': 1.0}`, and `chromadb.HttpClient` returned a heartbeat.
 
 The host and port defaults were verified separately, from an isolated copy of the module with no `.env` reachable anywhere up the tree. An earlier attempt at this check was invalid, because the defaults are deliberately identical to the `.env` values and so could not distinguish a default being applied from `.env` being reloaded.
+
+## stream_configuration and the market data subsystem
+
+The market data stream added a fifth dictionary. It breaks the "one dictionary per datastore" description of this module, because it is not a datastore: it is the set of tunables for the streaming processes, covering where the raw archive is written, how often it is flushed and rotated, how long ticks are buffered before each Redis flush, how large a batch the TimescaleDB writer accumulates, and how many websocket connections the supervisor may open.
+
+They live here rather than in the streaming package for the same reason the datastore settings do. Everything that reads the environment reads it in one place, so there is one file to look at when asking what a running process was configured with, and `__all__` still controls what a star import brings in.
+
+Two of these values are worth singling out. `archive_directory` defaults to `/data/black_box_archive`, which is a dedicated ext4 filesystem on its own NVMe rather than a directory under the project, because the archive is expected to grow by tens of gigabytes a day and must not be able to fill the root filesystem. `timescale_queue_rows` bounds the in-memory queue in front of the database writer, and it is the value that decides how long a database outage can last before ticks start being dropped from the queue; they are never lost, because the archive has them and the replay tool can put them back.
+
+## broker_stream_setting exists because brokers differ
+
+Every value in `stream_configuration` can be overridden for a single broker by putting the broker name into the variable, so `BLACK_BOX_STREAM_ZERODHA_SEED_CONNECTION_COUNT` overrides `seed_connection_count` for Zerodha alone and leaves every other broker on the shared default.
+
+This exists because the numbers that matter most are the ones brokers disagree about. Zerodha documents three websocket connections per API key and three thousand instruments on each, and in practice accepts far more; another broker will have entirely different real limits. Without the override, adding a second broker whose limits differ would mean either changing the shared default and disturbing the first broker, or adding code. With it, a broker's limits are deployment configuration.
+
+The function converts the override to the type of the shared value, so a setting that defaults to an integer stays an integer. The check for `bool` comes before the check for `int` deliberately, since `bool` is a subclass of `int` in Python and the order would otherwise turn a boolean setting into `0` or `1`.
