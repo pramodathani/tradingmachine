@@ -12,7 +12,7 @@ import argparse
 import struct
 from datetime import datetime
 
-from stream.dhan import depth_packets
+from stream.dhan import connection, depth_packets, packets
 from stream.dhan.packets import (
     HEADER_LENGTH,
     PAISE_PER_RUPEE,
@@ -700,26 +700,26 @@ def check_frame_packet_count():
 
 def check_segment_tables_agree():
     """
-    The two decoders' segment tables must cover exactly the segments Dhan documents.
+    The decoders' and the connection's segment tables must cover exactly the segments Dhan documents.
 
-    The tables are duplicated because the decoders are standalone by design, so this check is what keeps them from drifting apart.
+    The segment name tables are duplicated between the two decoders and the connection owns the wire's spelled-out names, so this check is what keeps the three from drifting apart.
 
     Returns:
         tuple: A (name, passed, detail) triple.
     """
-    from stream.dhan import packets
-
     documented_segments = {0, 1, 2, 3, 4, 5, 7, 8}
     problems = []
     if set(packets.SEGMENT_NAMES) != documented_segments:
         problems.append(f"live feed table {sorted(packets.SEGMENT_NAMES)}")
     if set(depth_packets.SEGMENT_NAMES) != documented_segments:
         problems.append(f"depth table {sorted(depth_packets.SEGMENT_NAMES)}")
+    if set(connection.EXCHANGE_SEGMENT_NAMES) != documented_segments:
+        problems.append(f"connection table {sorted(connection.EXCHANGE_SEGMENT_NAMES)}")
     if packets.SEGMENT_NAMES != depth_packets.SEGMENT_NAMES:
-        problems.append("the two tables disagree on names")
+        problems.append("the two decoder tables disagree on names")
 
     passed = not problems
-    return ("segment name tables agree", passed, "; ".join(problems) or f"both tables cover {sorted(documented_segments)}")
+    return ("segment name tables agree", passed, "; ".join(problems) or f"all three tables cover {sorted(documented_segments)}")
 
 
 SYNTHETIC_CHECKS = [
