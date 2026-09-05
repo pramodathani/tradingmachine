@@ -28,7 +28,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities.configuration import mongodb_configuration
 
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = 90
 PAGE_LOAD_PAUSE_SECONDS = 2
 REDIRECT_WAIT_SECONDS = 30
 
