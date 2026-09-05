@@ -10,6 +10,9 @@ backtesting==0.6.5
 matplotlib==3.10.9
 seaborn==0.13.2
 pyarrow==25.0.1
+httpx==0.28.1
+pyotp==2.9.0
+selenium==4.44.0
 yfinance==1.4.0
 python-dotenv==1.2.3
 requests==2.34.2

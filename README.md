@@ -106,6 +106,31 @@ utilities/                       environment-derived configuration
 
 The model directories are empty scaffolding at this point.
 
+## Broker logins
+
+Every broker issues an access token that expires at the end of the trading day. `utilities/broker_login.py` logs in to all ten and writes each token to the MongoDB `last_login` collection, one document per broker.
+
+Credentials come from the MongoDB `settings` collection, also one document per broker, keyed on `broker_name`. Each broker wants a different set: an API key and secret, a username and password, an MPIN or a login PIN, a TOTP secret, a UCC code. Seven brokers log in over their API; Zerodha, Shoonya and Stoxkart have no login endpoint and are driven through headless Chrome.
+
+```
+python3 -m utilities.broker_login                              all ten brokers
+python3 -m utilities.broker_login --brokers zerodha            just one
+python3 -m utilities.broker_login --brokers dhan groww kotak   several
+python3 -m utilities.broker_login --force                      log in again even if today's token exists
+```
+
+A broker whose stored token was issued today is skipped unless `--force` is given, because IND Money revokes the previous token when it issues a new one. One broker failing is reported and does not stop the others, and the exit status is 1 if any failed.
+
+### Running it daily
+
+`utilities/run_daily_broker_login.sh` activates the virtual environment and appends its output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
+
+```
+0 7 * * 1-5 /home/pramod/Projects/black_box/utilities/run_daily_broker_login.sh
+```
+
+It runs at 07:00 so the day's tokens are in place before the instrument download at 07:30.
+
 ## Instrument masters
 
 Ten brokers each publish a daily list of the instruments they will trade. `data/instruments/` downloads all ten and stores them raw in TimescaleDB, one table per broker under the `instruments` schema, one snapshot per day.
