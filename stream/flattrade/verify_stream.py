@@ -13,7 +13,7 @@ from datetime import datetime
 
 import orjson
 
-from stream.flattrade import packets
+from stream.flattrade import connection, packets
 from stream.flattrade.packets import (
     ASK_ORDER_KEYS,
     ASK_PRICE_KEYS,
@@ -547,6 +547,44 @@ def check_assembler_keys_do_not_cross():
     return ("assembler keys do not cross", passed, f"{len(assembler.known_instruments())} instruments held separately")
 
 
+def check_connection_message_builders():
+    """
+    The connection's outgoing messages must be spelled exactly as the wire expects.
+
+    The connection builds the messages the server reads, and the decoder reads the messages the server sends, so the two halves of the protocol never touch the same code path. This check pins the builders' JSON to their literal field names and values, so a renamed field cannot pass the decoder checks unnoticed.
+
+    Returns:
+        tuple: A (name, passed, detail) triple.
+    """
+    connect_message = orjson.loads(connection.connect_message("FT0000", "token123"))
+    touchline_subscribe = orjson.loads(connection.subscribe_message("touchline", ["NSE|22", "BSE|508123"]))
+    depth_subscribe = orjson.loads(connection.subscribe_message("depth", ["NSE|22"]))
+    touchline_unsubscribe = orjson.loads(connection.unsubscribe_message("touchline", ["NSE|22"]))
+    depth_unsubscribe = orjson.loads(connection.unsubscribe_message("depth", ["NSE|22"]))
+    heartbeat = orjson.loads(connection.heartbeat_message())
+
+    problems = []
+    if connect_message != {"ta": "a", "uid": "FT0000", "actid": "FT0000", "source": "API", "accesstoken": "token123"}:
+        problems.append(f"connect message {connect_message}")
+    if touchline_subscribe != {"t": "t", "k": "NSE|22#BSE|508123"}:
+        problems.append(f"touchline subscribe {touchline_subscribe}")
+    if depth_subscribe != {"t": "d", "k": "NSE|22"}:
+        problems.append(f"depth subscribe {depth_subscribe}")
+    if touchline_unsubscribe != {"t": "u", "k": "NSE|22"}:
+        problems.append(f"touchline unsubscribe {touchline_unsubscribe}")
+    if depth_unsubscribe != {"t": "ud", "k": "NSE|22"}:
+        problems.append(f"depth unsubscribe {depth_unsubscribe}")
+    if heartbeat != {"t": "h"}:
+        problems.append(f"heartbeat {heartbeat}")
+    if connection.WEBSOCKET_ROOT != "wss://piconnect.flattrade.in/PiConnectWSAPI/":
+        problems.append(f"websocket root {connection.WEBSOCKET_ROOT}")
+    if connection.HEARTBEAT_INTERVAL_SECONDS != 30.0:
+        problems.append(f"heartbeat interval {connection.HEARTBEAT_INTERVAL_SECONDS}")
+
+    passed = not problems
+    return ("connection message builders pinned", passed, "; ".join(problems) or "connect, subscribe, unsubscribe and heartbeat messages match their documented literals")
+
+
 SYNTHETIC_CHECKS = [
     check_short_frames_decode_to_nothing,
     check_touchline_ack_fields,
@@ -557,6 +595,7 @@ SYNTHETIC_CHECKS = [
     check_frame_packet_count,
     check_wire_message_type_strings,
     check_assembler_keys_do_not_cross,
+    check_connection_message_builders,
 ]
 
 
