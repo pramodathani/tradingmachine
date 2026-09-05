@@ -135,7 +135,7 @@ It runs at 07:00 so the day's tokens are in place before the instrument download
 
 Ten brokers each publish a daily list of the instruments they will trade. `data/instruments/` downloads all ten and stores them raw in TimescaleDB, one table per broker under the `instruments` schema, one snapshot per day.
 
-Nine of the ten are public files needing no authentication. IND Money is the exception: it wants an `Authorization` header carrying an access token, generated separately from `https://api.indstocks.com/generate/token` and valid for twenty-four hours. Put a current token in `BLACK_BOX_INDMONEY_ACCESS_TOKEN`; without one that broker is skipped and the other nine still run.
+Nine of the ten are public files needing no authentication. IND Money is the exception: it wants an `Authorization` header carrying an access token that lasts twenty-four hours. That token comes from the daily broker login, which stores it in MongoDB's `last_login` collection, so run the login before the download. Without a token issued today that broker fails and the other nine still run; `--indmoney-access-token` overrides the stored one.
 
 ### Creating the tables
 

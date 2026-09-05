@@ -1,16 +1,20 @@
 """
 IND Money instrument master ingestion.
 
-IND Money is the only broker here whose master is not public. It serves three CSV files behind an Authorization header carrying an access token, which is generated separately and lasts twenty-four hours. The token is read from configuration rather than generated here, so this module needs no login flow.
+IND Money is the only broker here whose master is not public. It serves three CSV files behind an Authorization header carrying an access token, which lasts twenty-four hours.
+
+The token is read from the MongoDB ``last_login`` collection, where the daily broker login job records it, so this module needs no login flow of its own and no second copy of the token in the environment. A token issued on an earlier day is rejected rather than sent, because IND Money would only answer it with an authentication error that says nothing about the cause.
 """
 
+from datetime import datetime
 from io import StringIO
 
 import pandas
+import pymongo
 import requests
 
 from data.instruments.base import BrokerInstruments
-from utilities.configuration import indmoney_configuration
+from utilities.configuration import mongodb_configuration
 
 INSTRUMENTS_URL = "https://api.indstocks.com/market/instruments"
 
@@ -21,6 +25,30 @@ SOURCES = [
 ]
 
 DOWNLOAD_TIMEOUT_SECONDS = 120
+
+
+def stored_access_token():
+    """
+    Read today's IND Money access token from the MongoDB last_login collection.
+
+    The daily broker login job writes one document per broker there, holding the token it received and the moment it received it. A token from an earlier day is not returned: IND Money's tokens last twenty-four hours, and sending a stale one produces an authentication error that says nothing about why.
+
+    Returns:
+        str | None: The token issued today, or None when there is no document, no token in it, or the token was issued on an earlier date.
+    """
+    client = pymongo.MongoClient(mongodb_configuration["connection_string"])
+    try:
+        database = client[mongodb_configuration["database"]]
+        document = database["last_login"].find_one({"broker_name": "indmoney"})
+    finally:
+        client.close()
+
+    if document is None:
+        return None
+    last_login = document.get("last_login")
+    if not last_login or last_login[:10] != datetime.now().strftime("%Y-%m-%d"):
+        return None
+    return document.get("access_token")
 
 
 class IndMoneyInstruments(BrokerInstruments):
@@ -46,10 +74,10 @@ class IndMoneyInstruments(BrokerInstruments):
         Build the IND Money ingester.
 
         Args:
-            access_token (str | None): Token to authenticate with. When omitted, the token configured in the environment is used.
+            access_token (str | None): Token to authenticate with. When omitted, today's token is read from the MongoDB last_login collection.
         """
         super().__init__()
-        self.access_token = access_token or indmoney_configuration["access_token"]
+        self.access_token = access_token or stored_access_token()
 
     def download(self):
         """
@@ -64,9 +92,10 @@ class IndMoneyInstruments(BrokerInstruments):
         """
         if not self.access_token:
             raise ValueError(
-                "No IND Money access token available. Set BLACK_BOX_INDMONEY_ACCESS_TOKEN in .env, "
-                "or pass --indmoney-access-token on the command line. "
-                "A token is generated from https://api.indstocks.com/generate/token and lasts twenty-four hours."
+                "No IND Money access token available. Run the daily broker login "
+                "(python3 -m utilities.broker_login) to store today's token in the last_login "
+                "collection, or pass --indmoney-access-token on the command line. "
+                "IND Money's token lasts twenty-four hours."
             )
 
         frames = []

@@ -24,7 +24,7 @@ Unlike `unified_broker_interface`, nothing is written to Redis. That project cac
 
 An earlier draft of this script wrote `BLACK_BOX_<BROKER>_ACCESS_TOKEN` variables into `.env`. That was dropped in favour of MongoDB. A secret that rotates daily does not belong in a file that is read once at process start, and `.env` has no room for Kotak's extra session fields.
 
-The `BLACK_BOX_INDMONEY_ACCESS_TOKEN` variable in `.env` is left alone, because `data/instruments/indmoney.py` still reads it through `indmoney_configuration`. That ingester could take its token from `last_login` instead, which would remove the last hand-managed token in the project.
+`data/instruments/indmoney.py` now takes its token from `last_login` rather than from `.env`, and the `BLACK_BOX_INDMONEY_ACCESS_TOKEN` variable, its configuration entry and its `.env.example` line were removed with that change. This job is therefore the only thing that issues or stores broker tokens, and there is no hand-managed token left in the project.
 
 ## Why the flows are written out one per broker
 

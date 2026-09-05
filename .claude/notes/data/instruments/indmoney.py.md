@@ -16,6 +16,14 @@ Two null patterns are worth knowing when reading the table. `isin` is null on th
 
 ## No API wrapper
 
-The token reaches this module two ways, and the constructor takes an optional `access_token` argument so both work. `data/instruments/download.py` passes its `--indmoney-access-token` value through, and when that is omitted the constructor falls back to `indmoney_configuration["access_token"]`, which comes from `BLACK_BOX_INDMONEY_ACCESS_TOKEN` in `.env`. In both cases the token is passed straight to `requests`. This module deliberately builds no login flow and no broker client class: generating a token needs an API key, an MPIN and a TOTP secret, and that machinery is out of proportion to fetching a file once a day.
+The token reaches this module two ways, and the constructor takes an optional `access_token` argument so both work. `data/instruments/download_and_map.py` passes its `--indmoney-access-token` value through, and when that is omitted the constructor reads today's token from the MongoDB `last_login` collection, where `utilities/broker_login.py` records it. In both cases the token is passed straight to `requests`. This module deliberately builds no login flow of its own: generating a token needs an API key, an MPIN and a TOTP secret, and that machinery already exists in the login job.
+
+## Why the token is not read from `.env` any more
+
+It used to be, through `indmoney_configuration`, which meant the same secret lived in two places once the login job started writing it to MongoDB. Two sources for one credential is how they drift: the login job refreshes one of them daily and nothing refreshes the other, so the `.env` copy silently becomes a stale token that produces an authentication error with no explanation. The environment variable, its configuration entry and its `.env.example` line were all removed in the same change, so nothing points at the dead path.
+
+## Why a stale token is rejected here rather than sent
+
+`stored_access_token` returns nothing unless the stored token was issued today, using the same date comparison `broker_login.logged_in_today` uses. IND Money's tokens last twenty-four hours, and sending an expired one gets an authentication failure that says nothing about the cause. Failing early instead names the actual problem and the command that fixes it, which is the difference between a one-line log entry and a debugging session.
 
 A token is generated separately from `https://api.indstocks.com/generate/token` and lasts twenty-four hours. Generating a new one revokes the previous one, so a token in use elsewhere should not be regenerated casually.

@@ -337,7 +337,7 @@ def main():
     parser.add_argument("--broker", choices=sorted(BROKER_CLASSES), help="Run a single broker instead of all of them.")
     parser.add_argument("--date", help="Snapshot date to record and map, as YYYY-MM-DD. Defaults to today.")
     parser.add_argument("--bootstrap", action="store_true", help="Replace this date's stored rows rather than skipping.")
-    parser.add_argument("--indmoney-access-token", help="Access token for IND Money. Overrides BLACK_BOX_INDMONEY_ACCESS_TOKEN.")
+    parser.add_argument("--indmoney-access-token", help="Access token for IND Money. Overrides the token stored by the daily broker login.")
     parser.add_argument("--skip-mapping", action="store_true", help="Download without mapping.")
     parser.add_argument("--mapping-only", action="store_true", help="Map what is already stored without downloading.")
     parser.add_argument("--backfill", action="store_true", help="Map every stored snapshot date, oldest first, without downloading.")
