@@ -60,6 +60,10 @@ The exchange sends zero when it has nothing to report and occasionally sends a v
 
 Note that the column guarded here is not the partitioning column. `arrival_time` is recorded by the shard from its own clock and is always sound; these are the exchange's own timestamps, which are stored but not partitioned on, precisely because they cannot be trusted.
 
+## frame_packet_count, and why counting lives here
+
+The archive's manifest records how many packets the sealed frames claimed to carry, as a reconciliation check. The archive itself must not interpret broker frames, so it takes a counter callable from its constructor and each broker's parser supplies its own. `frame_packet_count` reads the same two byte big endian prefix that `decode_frame` reads, so the two can never disagree about what a frame claims. Dhan's parser has the equivalent function for its own wire format, and the two are deliberately not shared, for the same reason the two decoders are not.
+
 ## Malformed frames stop the loop rather than raising
 
 `decode_frame` returns an empty list for anything shorter than two bytes, which is how the one byte heartbeat is handled. Within the loop, both the length prefix and the packet body are bounds checked against the frame, and a frame that ends mid packet returns the packets read so far.

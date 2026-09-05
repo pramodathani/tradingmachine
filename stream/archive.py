@@ -20,12 +20,12 @@ ARCHIVE_FORMAT_VERSION = 1
 
 FILE_HEADER_STRUCT = struct.Struct(">4sHHHHQ")
 RECORD_HEADER_STRUCT = struct.Struct(">QI")
-PACKET_COUNT_STRUCT = struct.Struct(">H")
 
 MANIFEST_FILE_NAME = "manifest.jsonl"
 
 BROKER_CODES = {
     "zerodha": 1,
+    "dhan": 2,
 }
 
 
@@ -102,7 +102,7 @@ class ArchiveWriter:
         compressed_bytes (int): Bytes actually written to the current file.
     """
 
-    def __init__(self, archive_directory, broker_name, trading_date, shard_number, compression_level, rotation_seconds, rotation_bytes, sync_seconds):
+    def __init__(self, archive_directory, broker_name, trading_date, shard_number, compression_level, rotation_seconds, rotation_bytes, sync_seconds, frame_packet_counter=None):
         """
         Prepare a writer and open its first file.
 
@@ -115,6 +115,7 @@ class ArchiveWriter:
             rotation_seconds (int): Seal the current file once it is this old.
             rotation_bytes (int): Seal the current file once it has this many compressed bytes.
             sync_seconds (float): Flush and fsync at least this often.
+            frame_packet_counter (callable | None): A function from frame bytes to the number of packets the frame carries, supplied by the broker's own parser, or None to count no packets at all.
 
         Returns:
             None.
@@ -130,6 +131,7 @@ class ArchiveWriter:
         self.rotation_seconds = rotation_seconds
         self.rotation_bytes = rotation_bytes
         self.sync_seconds = sync_seconds
+        self.frame_packet_counter = frame_packet_counter
 
         self.directory = shard_directory(archive_directory, broker_name, trading_date, shard_number)
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -223,7 +225,7 @@ class ArchiveWriter:
         """
         Append one websocket frame to the archive.
 
-        The frame is stored exactly as it arrived, including its packet count prefix, so what comes back out of the archive is what came off the socket rather than anything this project decided about it.
+        The frame is stored exactly as it arrived, so what comes back out of the archive is what came off the socket rather than anything this project decided about it. Counting the packets inside the frame is the broker parser's job, supplied as frame_packet_counter, because the archive does not know any broker's wire format.
 
         Args:
             arrival_time_nanoseconds (int): The value of time.time_ns() when the frame was read off the socket.
@@ -240,8 +242,8 @@ class ArchiveWriter:
 
         self.frame_count = self.frame_count + 1
         self.uncompressed_bytes = self.uncompressed_bytes + len(frame)
-        if len(frame) >= 2:
-            self.packet_count = self.packet_count + PACKET_COUNT_STRUCT.unpack_from(frame, 0)[0]
+        if self.frame_packet_counter is not None:
+            self.packet_count = self.packet_count + self.frame_packet_counter(frame)
         if self.first_arrival_nanoseconds is None:
             self.first_arrival_nanoseconds = arrival_time_nanoseconds
         self.last_arrival_nanoseconds = arrival_time_nanoseconds
