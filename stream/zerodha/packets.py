@@ -302,6 +302,23 @@ def decode_tradable_packet(frame, offset, packet_length, arrival_time):
     return tick
 
 
+def frame_packet_count(frame):
+    """
+    Count the packets one websocket frame carries, for the archive manifest.
+
+    The archive is broker agnostic and must not interpret broker frames itself, so the counting decision lives in each broker's parser and the archive calls the function it is given. This reads the same two byte big endian packet count that decode_frame reads, so the two can never disagree about what a frame claims.
+
+    Args:
+        frame (bytes): One binary websocket frame as received.
+
+    Returns:
+        int: The packet count from the frame's prefix, which is zero for a frame too short to carry it.
+    """
+    if len(frame) < 2:
+        return 0
+    return PACKET_COUNT_STRUCT.unpack_from(frame, 0)[0]
+
+
 def decode_frame(frame, arrival_time):
     """
     Decode every packet in one binary websocket frame.

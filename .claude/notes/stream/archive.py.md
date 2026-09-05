@@ -42,7 +42,13 @@ A shard that is restarted part way through a trading day opens a new file whose 
 
 The file header carries a numeric broker code as well as the shard number. A replay tool reading a file has to know which broker's decoder to apply to the frames inside it, and while the directory path also says so, the path can be renamed or the file moved. Putting it in the bytes makes the file self-describing.
 
-Adding a broker means adding an entry to `BROKER_CODES`. Codes are never reused or renumbered, because old archive files keep the code they were written with.
+Adding a broker means adding an entry to `BROKER_CODES`. Codes are never reused or renumbered, because old archive files keep the code they were written with. Zerodha is 1 and Dhan is 2, Dhan being the second broker the streaming subsystem learned to carry.
+
+## Packet counting is the broker parser's job
+
+The manifest records how many packets the sealed frames claimed to carry, which serves as a reconciliation check against what the shard logged and what reached the database. The writer itself has no idea how to count packets, though: Zerodha frames begin with a two byte big endian count, while Dhan frames begin with an eight byte little endian header whose second field is a message length that means something different. Reading a Dhan frame with Zerodha's unpack produces garbage counts, and garbage in a reconciliation check is worse than no check, because it looks like a real signal.
+
+So the writer takes a `frame_packet_counter` callable from its constructor, supplied by the broker's own parser, and calls it on every frame. Each broker's `packets` module owns the counting decision, exactly as it owns the decoding decision, and the archive stays ignorant of every wire format. A writer constructed without a counter records zero packets, which no shard should do in production; the parameter is not optional in spirit, only in signature, because nothing constructs an `ArchiveWriter` yet and the first shard will pass its broker's counter.
 
 ## Threading
 
