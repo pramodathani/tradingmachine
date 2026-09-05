@@ -28,6 +28,12 @@ Both probes stop at the first refusal rather than probing around it. The stored 
 
 `--no-store` exists for the same reason: a truncated run must not overwrite a good measurement. The stored document is only written by a run that measured both limits properly.
 
+## What the measurement does and does not establish
+
+The 108,431 figure is the largest subscription Zerodha *accepted and snapshotted in full* on a closed market. It is not evidence that one connection can *sustain* the whole universe while it ticks. Under live load the failure modes are quieter than a handshake refusal: throttled delivery, frames arriving slower than the market produces them, or the same silent partial service that this probe watches for. The weekend number should be read as an upper bound on acceptance, with the operationally meaningful number — instruments per connection under real tick load — left for a deliberate market-hours measurement.
+
+That re-measurement belongs to the health counters rather than to another probe. A full-universe session on Monday will show directly whether delivery keeps pace, through `last_frame_age_seconds`, `packets_per_second` and `decode_microseconds_per_frame`; if it cannot, the stored `instruments_per_connection` comes down and the shortfall is covered by more connections, which the measured 25-connection limit has room for.
+
 ## Why the first authentication failure is raised, not recorded
 
 A `ZerodhaAuthenticationError` propagates out of the probe rather than being counted as evidence. A bad API key or a stale token is refused at the very first handshake, with the same status code an over-limit connection gets at the twenty-sixth. Recording it would write "the account allows nothing" over a perfectly good measurement; raising it keeps the authentication failure visible as what it is, and `credentials.py` already refuses to hand over a token that was not issued today so the common case never reaches here.
