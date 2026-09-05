@@ -6,14 +6,26 @@ The synthetic checks in this module build messages field by field from known val
 Each check targets a specific way this decoder could be wrong rather than simply exercising the happy path. The wire string check pins the literal message types and field names, because the builders and the decoder share one module's constants and would otherwise agree with themselves about a renamed key, and the depth check pins that the five arrays stay five long and keep their zeros, because trimming empty levels would be an easy and wrong convenience.
 
 Run with: python3 -m stream.flattrade.verify_stream --synthetic
+
+The --against-rest mode is the oracle check: it captures live websocket ticks for a spread of instruments, asks Flattrade's own REST quote endpoint what the same instruments are worth, and compares every value the two share. It also measures the implied price scale exchange by exchange, because the wire's `pp` price precision is read off the messages themselves and this is what settles whether the decoder read it right.
+
+Run with: python3 -m stream.flattrade.verify_stream --against-rest --per-exchange 3 --seconds 12
 """
 
 import argparse
+import asyncio
+import json
+import statistics
+import time
 from datetime import datetime
 
 import orjson
+import requests
+from sqlalchemy import create_engine, text as sql_text
 
 from stream.flattrade import connection, packets
+from stream.flattrade.connection import FlattradeConnection
+from stream.flattrade.credentials import websocket_credentials
 from stream.flattrade.packets import (
     ASK_ORDER_KEYS,
     ASK_PRICE_KEYS,
@@ -33,11 +45,17 @@ from stream.flattrade.packets import (
     MESSAGE_TYPE_TOUCHLINE_UPDATE,
     MESSAGE_TYPE_UNSUBSCRIBE_DEPTH_ACK,
     MESSAGE_TYPE_UNSUBSCRIBE_TOUCHLINE_ACK,
+    TickAssembler,
     decode_frame,
     frame_packet_count,
 )
+from utilities.configuration import postgres_configuration
 
 ARRIVAL_TIME = datetime(2026, 9, 6, 10, 30, 0)
+
+QUOTE_ENDPOINT = "https://piconnect.flattrade.in/PiConnectAPI/GetQuotes"
+QUOTE_REQUEST_PAUSE_SECONDS = 1.0
+VERIFICATION_TOLERANCE = 0.011
 
 EXCHANGE = "NSE"
 TOKEN = "22"
@@ -585,6 +603,134 @@ def check_connection_message_builders():
     return ("connection message builders pinned", passed, "; ".join(problems) or "connect, subscribe, unsubscribe and heartbeat messages match their documented literals")
 
 
+def check_exchange_code_translation():
+    """
+    The master segment to Flattrade exchange code translation must cover every tradable segment and skip the rest.
+
+    Returns:
+        tuple: A (name, passed, detail) triple.
+    """
+    problems = []
+    expected = [
+        ("nse", "nse_equities", "NSE"),
+        ("nse", "nse_equity_indices", "NSE"),
+        ("nse", "nse_equity_futures", "NFO"),
+        ("nse", "nse_equity_options", "NFO"),
+        ("nse", "nse_equity_index_futures", "NFO"),
+        ("nse", "nse_equity_index_options", "NFO"),
+        ("nse", "nse_currency_futures", "CDS"),
+        ("nse", "nse_currency_options", "CDS"),
+        ("bse", "bse_equities", "BSE"),
+        ("bse", "bse_equity_indices", "BSE"),
+        ("bse", "bse_equity_futures", "BFO"),
+        ("bse", "bse_equity_options", "BFO"),
+        ("bse", "bse_equity_index_futures", "BFO"),
+        ("bse", "bse_equity_index_options", "BFO"),
+        ("mcx", "mcx_commodity_futures", "MCX"),
+        ("mcx", "mcx_commodity_options", "MCX"),
+        ("mcx", "mcx_commodity_index_futures", "MCX"),
+        ("mcx", "mcx_commodity_index_options", "MCX"),
+    ]
+    for master_exchange, master_segment, exchange_code in expected:
+        actual = flattrade_exchange_code(master_exchange, master_segment)
+        if actual != exchange_code:
+            problems.append(f"{master_exchange}/{master_segment} translated to {actual}, expected {exchange_code}")
+    for master_exchange, master_segment in [
+        ("nse", "nse_exchange_traded_funds"),
+        ("bse", "bse_investment_trusts"),
+        ("bse", "bse_uncategorised"),
+        ("unknown", "uncategorised"),
+    ]:
+        if flattrade_exchange_code(master_exchange, master_segment) is not None:
+            problems.append(f"{master_exchange}/{master_segment} should have translated to None")
+
+    passed = not problems
+    return ("exchange code translation pinned", passed, "; ".join(problems) or "all tradable segments map to their six codes and the untradable ones to None")
+
+
+def check_compare_tick_to_quote():
+    """
+    The REST comparison must divide by the tick's own divisor and compare both depth sides.
+
+    The tick and the quote are built from the same underlying prices, so an undivided comparison, a swapped side or a dropped field each shows up either as a false mismatch or as a mismatch count that changed.
+
+    Returns:
+        tuple: A (name, passed, detail) triple.
+    """
+    values = {"lp": "2418.55", "h": "2430.80", "l": "2385.00", "v": "123456", "ltq": "25"}
+    for level in range(5):
+        values[BID_QUANTITY_KEYS[level]] = str(100 + level)
+        values[BID_PRICE_KEYS[level]] = str(2418.55 - level)
+        values[ASK_QUANTITY_KEYS[level]] = str(200 + level)
+        values[ASK_PRICE_KEYS[level]] = str(2419.00 + level)
+    tick = TickAssembler().merge(decode_frame(build_depth_ack_message(EXCHANGE, TOKEN, values, price_precision=2), ARRIVAL_TIME)[0])
+
+    quote = {"stat": "Ok", "lp": 2418.55, "h": 2430.80, "l": 2385.00, "v": "123456", "ltq": "25"}
+    for level in range(5):
+        quote[BID_PRICE_KEYS[level]] = str(2418.55 - level)
+        quote[BID_QUANTITY_KEYS[level]] = str(100 + level)
+        quote[ASK_PRICE_KEYS[level]] = str(2419.00 + level)
+        quote[ASK_QUANTITY_KEYS[level]] = str(200 + level)
+
+    compared, disagreements = compare_tick_to_quote(tick, quote)
+    wrong_price_quote = dict(quote)
+    wrong_price_quote["lp"] = 2419.56
+    wrong_price_compared, wrong_price_disagreements = compare_tick_to_quote(tick, wrong_price_quote)
+    wrong_volume_quote = dict(quote)
+    wrong_volume_quote["v"] = "123457"
+    wrong_volume_compared, wrong_volume_disagreements = compare_tick_to_quote(tick, wrong_volume_quote)
+    sparse_quote = {"stat": "Ok", "lp": 2418.55, "h": 2430.80, "l": 2385.00, "v": "123456", "ltq": "25"}
+    sparse_compared, sparse_disagreements = compare_tick_to_quote(tick, sparse_quote)
+
+    passed = (
+        compared == 15
+        and not disagreements
+        and wrong_price_compared == 15
+        and len(wrong_price_disagreements) == 1
+        and wrong_price_disagreements[0].startswith("last_price:")
+        and len(wrong_volume_disagreements) == 1
+        and wrong_volume_disagreements[0].startswith("volume_traded:")
+        and sparse_compared == 5
+        and not sparse_disagreements
+    )
+    return (
+        "REST comparison matches a consistent quote",
+        passed,
+        f"agreeing tick and quote compared {compared} values with no disagreements, a wrong last price and a wrong volume each produced exactly one, and a quote without depth compared only the {sparse_compared} touchline values",
+    )
+
+
+def check_implied_scale_ratio():
+    """
+    The implied scale of a correctly scaled tick against its REST quote must be exactly one.
+
+    Returns:
+        tuple: A (name, passed, detail) triple.
+    """
+    first_tick = TickAssembler().merge(decode_frame(build_touchline_ack_message(EXCHANGE, TOKEN, {"lp": "2418.55"}, price_precision=2), ARRIVAL_TIME)[0])
+    second_tick = TickAssembler().merge(decode_frame(build_touchline_ack_message(EXCHANGE, "13", {"lp": "500.00"}, price_precision=2), ARRIVAL_TIME)[0])
+    third_tick = TickAssembler().merge(decode_frame(build_touchline_ack_message(EXCHANGE, "14", {"lp": "100.00"}, price_precision=2), ARRIVAL_TIME)[0])
+    instruments = [
+        {"exchange": EXCHANGE, "token": TOKEN, "key": "NSE|22", "master_segment": "manual"},
+        {"exchange": EXCHANGE, "token": "13", "key": "NSE|13", "master_segment": "manual"},
+        {"exchange": EXCHANGE, "token": "14", "key": "NSE|14", "master_segment": "manual"},
+    ]
+    ticks_by_key = {
+        (EXCHANGE, TOKEN): first_tick,
+        (EXCHANGE, "13"): second_tick,
+        (EXCHANGE, "14"): third_tick,
+    }
+    quotes = {
+        (EXCHANGE, TOKEN): {"lp": 2418.55},
+        (EXCHANGE, "13"): {"lp": 500.00},
+        (EXCHANGE, "14"): {"lp": 83.333333},
+    }
+
+    medians = implied_scale_ratios(instruments, ticks_by_key, quotes)
+    passed = medians.get(EXCHANGE) == 1.0
+    return ("implied scale ratio is one", passed, f"median ratio {medians.get(EXCHANGE)} across three samples, two exact and one off by a fifth")
+
+
 SYNTHETIC_CHECKS = [
     check_short_frames_decode_to_nothing,
     check_touchline_ack_fields,
@@ -596,6 +742,9 @@ SYNTHETIC_CHECKS = [
     check_wire_message_type_strings,
     check_assembler_keys_do_not_cross,
     check_connection_message_builders,
+    check_exchange_code_translation,
+    check_compare_tick_to_quote,
+    check_implied_scale_ratio,
 ]
 
 
@@ -621,6 +770,373 @@ def run_synthetic():
     return failures
 
 
+def flattrade_exchange_code(master_exchange, master_segment):
+    """
+    Translate an instruments.master exchange and segment into Flattrade's exchange code.
+
+    Flattrade's scrip master carries six exchange codes, NSE, BSE, NFO, BFO, CDS and MCX, confirmed live against the instrument tables. Equity derivatives ride NFO for NSE and BFO for BSE, currency derivatives ride CDS for both exchanges, and indices subscribe on their cash exchange. The labelled-but-untradable segments, exchange traded funds, investment trusts and the uncategorised remainder, translate to None and the cross-check skips them.
+
+    Args:
+        master_exchange (str): The canonical lowercase exchange stored in instruments.master, for example "nse".
+        master_segment (str): The exchange-prefixed segment stored in instruments.master, for example "nse_equities".
+
+    Returns:
+        str | None: Flattrade's exchange code, or None when the cross-check should not subscribe to this segment.
+    """
+    bare_segment = master_segment.partition("_")[2]
+    if master_exchange == "nse":
+        if bare_segment in ("equities", "equity_indices"):
+            return "NSE"
+        if bare_segment in ("equity_futures", "equity_options", "equity_index_futures", "equity_index_options"):
+            return "NFO"
+        if bare_segment in ("currency_futures", "currency_options"):
+            return "CDS"
+    if master_exchange == "bse":
+        if bare_segment in ("equities", "equity_indices"):
+            return "BSE"
+        if bare_segment in ("equity_futures", "equity_options", "equity_index_futures", "equity_index_options"):
+            return "BFO"
+    if master_exchange == "mcx" and bare_segment in ("commodity_futures", "commodity_options", "commodity_index_futures", "commodity_index_options"):
+        return "MCX"
+    return None
+
+
+def select_verification_instruments(engine, per_exchange):
+    """
+    Choose Flattrade instruments to check against Flattrade's own quote endpoint, spanning as many exchange codes as possible.
+
+    Expired contracts are excluded because the quote endpoint will not price them and they would produce gaps rather than comparisons. Futures are preferred over options within a derivative segment, since they are more likely to have traded and therefore to carry a full set of values worth comparing.
+
+    Args:
+        engine: A SQLAlchemy engine for the black_box database.
+        per_exchange (int): How many instruments to take from each Flattrade exchange code.
+
+    Returns:
+        list[dict]: One entry per instrument with keys "exchange", "token", "key" and "master_segment", where the key is the "EXCHANGE|TOKEN" string the websocket subscription and the quote endpoint both expect.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: If the instrument tables cannot be read.
+    """
+    statement = sql_text(
+        "SELECT broker_token, exchange, segment, shape FROM ("
+        "  SELECT b.broker_token AS broker_token, m.exchange AS exchange, m.segment AS segment, m.shape AS shape,"
+        "         row_number() OVER ("
+        "             PARTITION BY m.exchange, m.segment, m.shape"
+        "             ORDER BY CASE WHEN m.shape = 'future' THEN 0 ELSE 1 END, m.symbol"
+        "         ) AS rank"
+        "  FROM instruments.broker_mappings b"
+        "  JOIN instruments.master m ON m.instrument_id = b.instrument_id"
+        "  WHERE b.broker = 'flattrade'"
+        "    AND b.mapping_date = (SELECT max(mapping_date) FROM instruments.broker_mappings WHERE broker = 'flattrade')"
+        "    AND (m.expiry_date IS NULL OR m.expiry_date > CURRENT_DATE)"
+        ") ranked WHERE rank <= :per_exchange"
+    )
+    with engine.connect() as db_connection:
+        rows = db_connection.execute(statement, {"per_exchange": per_exchange}).all()
+
+    chosen = {}
+    for broker_token, master_exchange, master_segment, master_shape in rows:
+        exchange_code = flattrade_exchange_code(master_exchange, master_segment)
+        if exchange_code is None:
+            continue
+        token = str(broker_token)
+        if (exchange_code, token) in chosen:
+            continue
+        chosen[(exchange_code, token)] = {
+            "exchange": exchange_code,
+            "token": token,
+            "key": f"{exchange_code}|{token}",
+            "master_segment": f"{master_segment}/{master_shape}",
+        }
+
+    by_exchange = {}
+    for entry in chosen.values():
+        by_exchange.setdefault(entry["exchange"], []).append(entry)
+    instruments = []
+    for exchange_code in sorted(by_exchange):
+        exchange_entries = by_exchange[exchange_code][:per_exchange]
+        for entry in exchange_entries:
+            instruments.append(entry)
+    return instruments
+
+
+def capture_ticks(instruments, seconds):
+    """
+    Open one live depth connection, collect whatever it sends, and merge it into complete ticks.
+
+    The touchline and the depth feed differ only in the subscribe message and the extra fields the snapshot carries, so the depth feed is used here because it is the superset: it sends everything the touchline does plus the five levels a side the quote endpoint also reports. Outside market hours the capture can come back empty, and the caller must treat that as an inconclusive run rather than a passed one.
+
+    Args:
+        instruments (list[dict]): The instruments to subscribe to, as select_verification_instruments returns them.
+        seconds (float): How long to stay connected before closing.
+
+    Returns:
+        tuple: A (uid, access_token, ticks_by_key) triple, where ticks_by_key maps each (exchange, token) pair to the most recently merged tick for it. The credentials are returned so the REST comparison can reuse the same login.
+
+    Raises:
+        stream.flattrade.credentials.FlattradeCredentialsError: If there is no usable user identifier or access token.
+        stream.flattrade.connection.FlattradeConnectionError: If the connection could not be established.
+    """
+    frames = []
+
+    async def capture():
+        """
+        Hold one connection open for the requested time and let the callback collect frames.
+
+        Returns:
+            tuple: A (uid, access_token) pair, returned so the caller can reuse the same credentials for the REST comparison.
+        """
+        uid, access_token = websocket_credentials()
+        feed_connection = FlattradeConnection(
+            uid=uid,
+            access_token=access_token,
+            instruments=[instrument["key"] for instrument in instruments],
+            on_frame=lambda arrival, frame: frames.append((arrival, frame)),
+            mode=connection.MODE_DEPTH,
+            maximum_reconnect_attempts=0,
+        )
+        stop_event = asyncio.Event()
+        run_task = asyncio.create_task(feed_connection.run(stop_event))
+        await asyncio.sleep(seconds)
+        stop_event.set()
+        try:
+            await asyncio.wait_for(run_task, timeout=10)
+        except asyncio.TimeoutError:
+            run_task.cancel()
+        return (uid, access_token)
+
+    uid, access_token = asyncio.run(capture())
+
+    assembler = TickAssembler()
+    ticks_by_key = {}
+    for arrival, frame in frames:
+        for tick in decode_frame(frame, datetime.fromtimestamp(arrival / 1e9)):
+            ticks_by_key[(tick["exchange"], tick["token"])] = assembler.merge(tick)
+    return (uid, access_token, ticks_by_key)
+
+
+def fetch_quotes(uid, access_token, instruments):
+    """
+    Ask Flattrade's REST quote endpoint what it thinks these instruments are worth.
+
+    The endpoint prices one instrument per request, with the query inside a jData form field and the session token beside it in jKey. A one second pause between requests keeps the run well inside what a read-only endpoint should be asked to serve.
+
+    Args:
+        uid (str): The Flattrade user identifier, sent inside jData.
+        access_token (str): An access token issued today, sent as jKey.
+        instruments (list[dict]): The instruments to price, as select_verification_instruments returns them.
+
+    Returns:
+        dict: The endpoint's response per instrument, keyed by (exchange, token). Instruments it declines to price are simply absent.
+
+    Raises:
+        requests.HTTPError: If the endpoint returned an error status.
+    """
+    quotes = {}
+    for position, instrument in enumerate(instruments):
+        if position > 0:
+            time.sleep(QUOTE_REQUEST_PAUSE_SECONDS)
+        query = {"uid": uid, "exch": instrument["exchange"], "token": instrument["token"]}
+        response = requests.post(
+            QUOTE_ENDPOINT,
+            data={
+                "jData": json.dumps(query),
+                "jKey": access_token,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        quote = response.json()
+        if quote.get("stat") != "Ok":
+            continue
+        quotes[(instrument["exchange"], instrument["token"])] = quote
+    return quotes
+
+
+def compare_tick_to_quote(tick, quote):
+    """
+    Compare one decoded tick against Flattrade's own quote for the same instrument.
+
+    Prices are divided by the tick's own divisor before comparing, which is what makes this a real test of the precision handling rather than only of the field names. Quantities and volume are compared as they are, since no divisor applies to them. The quote endpoint carries no open, close or open interest, so those contract fields simply go uncompared here.
+
+    Args:
+        tick (dict): A decoded, merged tick from stream.flattrade.packets.
+        quote (dict): One instrument's response from the quote endpoint.
+
+    Returns:
+        tuple: A (compared_count, disagreements) pair, where disagreements is a list of readable strings describing each value that did not match.
+    """
+    divisor = tick["price_divisor"]
+    compared = 0
+    disagreements = []
+
+    prices = [
+        ("last_price", tick.get("last_price"), quote.get("lp")),
+        ("high_price", tick.get("high_price"), quote.get("h")),
+        ("low_price", tick.get("low_price"), quote.get("l")),
+    ]
+    for name, ours, theirs in prices:
+        if ours is None or theirs is None:
+            continue
+        compared = compared + 1
+        ours_value = ours / divisor
+        if abs(float(ours_value) - float(theirs)) >= VERIFICATION_TOLERANCE:
+            disagreements.append(f"{name}: ours {ours_value} theirs {theirs}")
+
+    quantities = [
+        ("volume_traded", tick.get("volume_traded"), quote.get("v")),
+        ("last_traded_quantity", tick.get("last_traded_quantity"), quote.get("ltq")),
+    ]
+    for name, ours, theirs in quantities:
+        if ours is None or theirs is None:
+            continue
+        compared = compared + 1
+        if int(ours) != int(theirs):
+            disagreements.append(f"{name}: ours {ours} theirs {theirs}")
+
+    sides = [
+        ("bid", tick.get("bid_prices"), tick.get("bid_quantities"), packets.BID_PRICE_KEYS, packets.BID_QUANTITY_KEYS),
+        ("ask", tick.get("ask_prices"), tick.get("ask_quantities"), packets.ASK_PRICE_KEYS, packets.ASK_QUANTITY_KEYS),
+    ]
+    for side_name, our_prices, our_quantities, price_keys, quantity_keys in sides:
+        if not our_prices:
+            continue
+        for level in range(5):
+            their_price = quote.get(price_keys[level])
+            their_quantity = quote.get(quantity_keys[level])
+            if their_price is None and their_quantity is None:
+                continue
+            compared = compared + 1
+            our_price = our_prices[level] / divisor
+            if their_price is not None and abs(our_price - float(their_price)) >= VERIFICATION_TOLERANCE:
+                disagreements.append(f"depth {side_name} level {level + 1} price: ours {our_price} theirs {their_price}")
+            if their_quantity is not None and our_quantities[level] != int(their_quantity):
+                disagreements.append(f"depth {side_name} level {level + 1} quantity: ours {our_quantities[level]} theirs {their_quantity}")
+
+    return (compared, disagreements)
+
+
+def implied_scale_ratios(instruments, ticks_by_key, quotes):
+    """
+    Measure what price scale the wire really carries, exchange code by exchange code.
+
+    The decoder scales prices by the `pp` precision each message declares, and this is the check that settles whether it read that precision right. Each instrument's last price is turned back into rupees and divided by the REST quote's own last price. A median ratio of one means the precision handling is right; a median of ten or a tenth would mean the declared precision is not the one the prices are written in.
+
+    Args:
+        instruments (list[dict]): The instruments that were compared, as select_verification_instruments returns them.
+        ticks_by_key (dict): Merged ticks keyed by (exchange, token), as capture_ticks returns them.
+        quotes (dict): REST quotes keyed by (exchange, token), as fetch_quotes returns them.
+
+    Returns:
+        dict: One entry per exchange code with a nonzero ratio sample, mapping the code to the median ratio for it.
+    """
+    ratios_by_exchange = {}
+    for instrument in instruments:
+        key = (instrument["exchange"], instrument["token"])
+        tick = ticks_by_key.get(key)
+        quote = quotes.get(key)
+        if tick is None or quote is None:
+            continue
+        our_price = tick.get("last_price")
+        their_price = quote.get("lp")
+        if not our_price or not their_price or float(their_price) == 0:
+            continue
+        ratio = (our_price / tick["price_divisor"]) / float(their_price)
+        ratios_by_exchange.setdefault(instrument["exchange"], []).append(ratio)
+
+    medians = {}
+    for exchange_code, ratios in ratios_by_exchange.items():
+        medians[exchange_code] = statistics.median(ratios)
+    return medians
+
+
+def run_against_rest(per_exchange, seconds, manual_instruments=None):
+    """
+    Check decoded websocket ticks against Flattrade's own REST quotes for the same instruments.
+
+    This is the check the synthetic ones cannot replace. Those prove the parser agrees with this file's own idea of the format, since every byte they read was written here; this one uses the broker as the oracle, so it catches a field that both the parser and the synthetic checks are wrong about in the same direction.
+
+    Args:
+        per_exchange (int): How many instruments to take from each Flattrade exchange code.
+        seconds (float): How long to hold the websocket connection open.
+        manual_instruments (list[str] | None): Instrument keys of the form "EXCHANGE|TOKEN" to check instead of the automatic selection, or None to select from the instrument tables.
+
+    Returns:
+        int: The number of instruments that disagreed with the quote endpoint.
+
+    Raises:
+        stream.flattrade.credentials.FlattradeCredentialsError: If there is no usable user identifier or access token.
+        requests.HTTPError: If the quote endpoint returned an error status.
+    """
+    if manual_instruments:
+        instruments = []
+        for key in manual_instruments:
+            exchange, token = key.split("|", 1)
+            instruments.append({
+                "exchange": exchange,
+                "token": token,
+                "key": key,
+                "master_segment": "manual",
+            })
+    else:
+        engine = create_engine(postgres_configuration["connection_string"])
+        instruments = select_verification_instruments(engine, per_exchange)
+    print(f"Checking {len(instruments)} instruments across {len({i['exchange'] for i in instruments})} Flattrade exchange codes against Flattrade's quote endpoint.")
+    print()
+
+    uid, access_token, ticks_by_key = capture_ticks(instruments, seconds)
+    if not ticks_by_key:
+        print("  NOTE  the websocket delivered no ticks at all; outside market hours that is the expected answer, and during a session it would mean Flattrade sent no snapshot on subscribe")
+        print("        run this again during market hours")
+        return 0
+
+    quotes = fetch_quotes(uid, access_token, instruments)
+
+    total_compared = 0
+    disagreeing_instruments = 0
+    unquotable = 0
+    undelivered = 0
+
+    for instrument in instruments:
+        key = (instrument["exchange"], instrument["token"])
+        tick = ticks_by_key.get(key)
+        quote = quotes.get(key)
+        if tick is None:
+            undelivered = undelivered + 1
+            continue
+        if quote is None:
+            unquotable = unquotable + 1
+            continue
+
+        compared, disagreements = compare_tick_to_quote(tick, quote)
+        total_compared = total_compared + compared
+        if disagreements:
+            disagreeing_instruments = disagreeing_instruments + 1
+            print(f"  MISMATCH  {instrument['key']} ({instrument['master_segment']}, divisor {tick['price_divisor']})")
+            for disagreement in disagreements:
+                print(f"        {disagreement}")
+        else:
+            print(f"  ok        {instrument['key']:20s} {instrument['master_segment']:42s} {compared:>3d} values")
+
+    print()
+    scale_medians = implied_scale_ratios(instruments, ticks_by_key, quotes)
+    for exchange_code in sorted(scale_medians):
+        median = scale_medians[exchange_code]
+        marker = "ok " if abs(median - 1.0) < 0.1 else "BAD"
+        print(f"  {marker} implied scale for {exchange_code}: median ratio {median:.4f}")
+    if not scale_medians:
+        print("  NOTE  no instruments had both a websocket price and a REST price, so the implied scale could not be measured")
+    print()
+
+    print(f"{total_compared} values compared, {disagreeing_instruments} instruments disagreed.")
+    if undelivered:
+        print(f"{undelivered} instruments were not delivered by the websocket.")
+    if unquotable:
+        print(f"{unquotable} instruments the quote endpoint would not price, so they could not be compared.")
+    scale_problems = sum(1 for median in scale_medians.values() if abs(median - 1.0) >= 0.1)
+    return disagreeing_instruments + scale_problems
+
+
 def main():
     """
     Run the checks the command line asked for.
@@ -628,13 +1144,25 @@ def main():
     Returns:
         None.
     """
-    parser = argparse.ArgumentParser(description="Checks that Flattrade's websocket frames are being decoded correctly.")
+    parser = argparse.ArgumentParser(description="Check that Flattrade's websocket frames are decoded correctly.")
     parser.add_argument("--synthetic", action="store_true", help="Run the synthetic decoding checks, which need no network.")
+    parser.add_argument("--against-rest", action="store_true", help="Compare decoded websocket ticks against Flattrade's own REST quotes; needs market hours and credentials.")
+    parser.add_argument("--per-exchange", type=int, default=3, help="How many instruments to take from each Flattrade exchange code for --against-rest.")
+    parser.add_argument("--instrument", action="append", help="An instrument to check as EXCHANGE|TOKEN, for example NSE|22; repeat for more; replaces the automatic selection in --against-rest.")
+    parser.add_argument("--seconds", type=float, default=12.0, help="How long to hold a live socket open.")
     arguments = parser.parse_args()
-    if not arguments.synthetic:
-        parser.print_help()
-        return
-    failures = run_synthetic()
+
+    if not arguments.synthetic and not arguments.against_rest:
+        parser.error("nothing to do: pass --synthetic, --against-rest, or both")
+
+    failures = 0
+    if arguments.synthetic:
+        failures = failures + run_synthetic()
+    if arguments.against_rest:
+        if arguments.synthetic:
+            print()
+        failures = failures + run_against_rest(arguments.per_exchange, arguments.seconds, arguments.instrument)
+
     if failures:
         raise SystemExit(1)
 
