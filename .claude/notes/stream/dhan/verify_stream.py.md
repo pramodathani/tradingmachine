@@ -1,27 +1,29 @@
 # stream/dhan/verify_stream.py
 
-Checks that Dhan's binary frames are being decoded correctly. It mirrors `stream/zerodha/verify_stream.py` and grows alongside the Dhan module: this phase carries only the synthetic byte-level checks, later phases add the REST cross-check and the depth socket check.
+Checks that Dhan's binary frames are being decoded correctly, in four modes: `--synthetic` byte-level checks that need no network, `--depth` a live hold of one depth socket, `--against-rest` the oracle comparison against Dhan's REST quote endpoint, and combinations of those.
 
-## The synthetic checks, and why each one exists
+## The synthetic checks target ways of being wrong, not the happy path
 
-A binary parser fails silently: a wrong offset, a wrong width, or a wrong field order produces numbers that are still plausible prices and quantities. Each check below targets one specific way the parser could be wrong, rather than exercising the happy path.
+Every check exists because a specific misreading would still produce plausible numbers. The quote check would fail if the day's prices were read in the open, high, low, close order Zerodha uses instead of Dhan's open, close, high, low, the full packet check would fail if its depth were read as five bids then five asks rather than five interleaved levels, and the float32 precision check pins the conversion on a price the float32 format cannot represent exactly. Salvage behaviour is checked by truncating a stacked frame at every byte offset and asserting nothing ever raises, because an exception in the read loop would take down a connection carrying thousands of instruments.
 
-- Frames shorter than a header decode to nothing, on both feeds.
-- The endianness check uses a security id whose bytes are zero, zero, zero, one, which a big endian reader reports as one and a little endian reader as one crore sixty seven lakh. Zerodha's frames are big endian, so this check is what stops the two decoders being confused with each other.
-- The quote check asserts open, close, high, low order with four distinct prices, and that the wire's sell quantity comes before its buy quantity.
-- The full packet check asserts the open interest fields sit before the day's prices, and that the five depth levels are interleaved, with order counts including 65535 so a wrong width shows up as wrong prices.
-- The float32 precision check pins the paise conversion on a price the float32 format cannot represent exactly, asserting the stored paise equals the paise of the unpacked float rather than the paise of the decimal that was packed.
-- The side packet check covers previous close, open interest, market status, and both feeds' disconnect packets.
-- The truncation check cuts a stacked frame at every byte offset and asserts nothing raises, because the decode loop runs inside the socket read loop.
+## The wire code bytes are pinned, and mutation testing is why
 
-## The expected_paise helper
+The depth frame builder and the depth decoder share one module's constants, so planting a wrong bid response code and running the suite produced thirteen self-consistent passes and caught nothing: the builder wrote the mutated code and the decoder read it back happily. The `check_wire_code_bytes` check exists because of that failed mutation. It pins the constants' output to their literal documented values, live code 2 at byte 0 and depth bid 41, ask 51 and disconnect 50 at byte 2, so the constants cannot drift from the wire without the check noticing even though the suite would otherwise agree with itself.
 
-Every price assertion goes through one helper that computes the paise of the float32 round trip of the price, not the paise of the decimal. This is the decoder's actual contract, since the wire rounds the price before the decoder sees it, and writing the assertion in the check as the same expression the decoder evaluates means a conversion change fails loudly here rather than drifting silently.
+The rest of the suite was mutation tested the same way, one planted mistake at a time: a big endian header, a divisor of one hundred and one, a shifted quote packet size, a full packet layout with the open interest figures displaced, a tightened plausible-epoch guard, a wrong depth bid code, a float32 read of the depth price, a depth header with the code at byte 0, and a renamed disconnect reason. Every one of them fails at least one check, and most fail several.
 
-## Building frames by hand
+## --against-rest uses the broker as the oracle, with a measured scale
 
-The builders write each packet byte by byte from the documented and library-derived layouts, with the message length field set to the whole packet including the header. That convention is this module's own choice, pinned by the unknown-code check, because the real field's coverage is unverified against live bytes. If a live run shows the field counts only the payload, the fix is in the builders and in the parsers' unknown-code path, and the synthetic checks say exactly where.
+The synthetic checks prove the parser agrees with this file's idea of the format, since every byte they read was written here. The REST comparison uses Dhan's Market Quote endpoint as an independent oracle, so it catches a field that both the parser and the synthetic checks are wrong about in the same direction. It selects a spread of instruments from `instruments.broker_mappings` for Dhan's latest mapping date, excluding expired contracts, captures live ticks over one FULL mode connection, and compares every field the two sources share at a tolerance of 0.011 rupees.
 
-## Mutation testing, in phase 5
+The implied scale check is the part that settles an undocumented fact. Dhan documents no price divisor, so the comparison turns each stored price back into rupees and takes the median ratio against the REST price, segment by segment, preferring the close price for the ratio because it does not move between the capture and the fetch the way the last price does. A median of one means the wire carries rupees, which the decoder's conversion to paise assumes, and a median near one hundred or one hundredth would mean the divisor table needs a per-segment correction like Zerodha's NSE Commodity got.
 
-The synthetic checks are only as good as their ability to fail, so phase 5 deliberately introduces each dangerous mistake, reading a full packet with the quote reader, decoding the depth as five bids then five asks, reading security ids big endian, dropping the paise multiplication, and reading the open interest at the quote packet's offsets, and confirms the intended check fails for each one. A check that survives its own mistake was never a check.
+The endpoint takes up to one thousand instruments per request at one request per second, so the fetch batches segments together into a single body and pauses between batches, rather than spending one request per segment.
+
+## Instrument selection needs a translation the tables do not store
+
+`instruments.broker_mappings` records Dhan's security id but nothing about which exchange segment it belongs to, and Dhan security ids are unique per segment, not globally. The selection joins `instruments.master` and translates the canonical exchange-prefixed segment, for example `bse_currency_futures`, into Dhan's segment number through `dhan_exchange_segment`. Segments Dhan does not feed, indexes on BSE and everything on NCDEX, translate to None and are skipped. One live catch from testing: the canonical bare segment is the plural `currencies`, so a check for a `currency` prefix silently misses it and must test both the plural and the prefixed forms.
+
+## What still needs a live run
+
+The full `--against-rest` path has only been exercised to the request boundary. It needs a token issued today, and the broker login cron runs on weekdays, so a weekday session is when the first real oracle run should happen. Two open questions ride on that run: whether Dhan delivers a snapshot on subscribe, which determines whether the oracle check is runnable outside market hours the way Zerodha's is, and whether the implied scale is one for every segment. When no ticks arrive at all, the mode reports a note and exits zero rather than passing silently, because outside market hours silence is the expected answer and during a session it would be the snapshot question answering itself.
