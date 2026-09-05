@@ -12,7 +12,13 @@ So the capacity is a stored operational fact, and only `stream/zerodha/capacity_
 
 The same MongoDB database already holds this kind of state: the broker `settings` and the daily `last_login` results. Capacity belongs beside them, not in the market data database that holds observations. The practical second reason is that the `evidence` field has no fixed shape — it carries whatever the probe observed, which is currently verbatim probe logs — and a schemaless document takes that without ceremony.
 
-The collection is named `stream_capacity` and holds one document per broker, keyed on `broker_name`, replaced whole on every write by `replace_one` with `upsert=True`. There is no history: the last measurement is the only one that matters operationally, and the evidence field preserves how it was obtained.
+The collection is named `stream_capacity` and holds one document per broker and feed, keyed on `broker_name` and `feed_name`, replaced whole on every write by `replace_one` with `upsert=True`. There is no history: the last measurement is the only one that matters operationally, and the evidence field preserves how it was obtained.
+
+## Why the key gained a feed name
+
+The original key was `broker_name` alone, and that held while Zerodha was the only broker. Dhan made it wrong: its live market feed and its full market depth sockets draw on one connection pool but are capped differently, so a single document per broker cannot hold both measurements without one overwriting the other. The key is now the pair, the document carries `feed_name`, and a legacy document lacking the field is simply replaced on the next write because the query no longer matches it. The `market_feed` default keeps Zerodha's probe and its stored document working unchanged.
+
+Feed names in use are `market_feed` and `twenty_depth`; the two hundred level depth socket contributes no measurement of its own, because it takes one connection for one instrument by design.
 
 ## What the numbers mean
 
