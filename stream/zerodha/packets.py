@@ -24,9 +24,11 @@ DEPTH_LEVELS_PER_SIDE = 5
 INDICES_SEGMENT = 9
 NSE_CURRENCY_SEGMENT = 3
 BSE_CURRENCY_SEGMENT = 6
+NSE_COMMODITY_SEGMENT = 12
 
 NSE_CURRENCY_PRICE_DIVISOR = 10000000
 BSE_CURRENCY_PRICE_DIVISOR = 10000
+NSE_COMMODITY_PRICE_DIVISOR = 10000
 DEFAULT_PRICE_DIVISOR = 100
 
 MAXIMUM_PLAUSIBLE_EPOCH_SECONDS = 4102444800
@@ -87,21 +89,25 @@ def price_divisor(instrument_token):
     """
     Give the number that turns this instrument's wire prices into rupees.
 
-    Only the two currency segments differ from the ordinary hundred. Zerodha's own written documentation is wrong about this, claiming that all currencies divide by ten million and never mentioning BSE currency at all, so these values follow its Python and Go client libraries instead, which agree with each other.
+    Three segments differ from the ordinary hundred. Zerodha's own written documentation is wrong about the two currency segments, claiming that all currencies divide by ten million and never mentioning BSE currency at all, so those follow its Python and Go client libraries instead, which agree with each other.
 
-    Every unknown segment divides by a hundred. That is the right default rather than a guess: segment 12 is NSE Commodity, whose tick sizes run from one paisa upwards, and it is handled correctly by this branch despite postdating both client libraries.
+    NSE Commodity, segment 12, appears in neither the documentation nor either client library, both of whose segment tables stop at 9. Its divisor of ten thousand was established by comparing decoded ticks against Zerodha's own REST quote endpoint for fourteen instruments, every one of which implied exactly ten thousand. Guessing it from tick sizes gives the wrong answer: they run from one paisa upwards and suggest a hundred, which is out by a factor of a hundred.
+
+    Every remaining segment, known or not, divides by a hundred.
 
     Args:
         instrument_token (int): The Zerodha instrument token.
 
     Returns:
-        int: The divisor to apply to every price in this instrument's packets, which is 10000000 for NSE currency, 10000 for BSE currency and 100 for everything else.
+        int: The divisor to apply to every price in this instrument's packets, which is 10000000 for NSE currency, 10000 for BSE currency and NSE Commodity, and 100 for everything else.
     """
     segment = instrument_token & 0xFF
     if segment == NSE_CURRENCY_SEGMENT:
         return NSE_CURRENCY_PRICE_DIVISOR
     if segment == BSE_CURRENCY_SEGMENT:
         return BSE_CURRENCY_PRICE_DIVISOR
+    if segment == NSE_COMMODITY_SEGMENT:
+        return NSE_COMMODITY_PRICE_DIVISOR
     return DEFAULT_PRICE_DIVISOR
 
 

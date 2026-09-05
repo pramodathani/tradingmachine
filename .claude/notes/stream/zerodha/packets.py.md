@@ -20,11 +20,21 @@ Zerodha's written documentation says that for currencies the price should be div
 
 This matters more than the small number of affected instruments suggests. There were 7808 NSE currency instruments in the September 2026 mapping, and getting the divisor wrong there does not produce an obviously broken number: USDINR at 86.12 would read as 8612345 or as 0.0000086, neither of which is visible unless somebody specifically looks at a currency instrument. The synthetic checks therefore test both currency segments explicitly.
 
+## NSE Commodity divides by ten thousand, and this was nearly got wrong
+
+Segment 12 is NSE Commodity. It is not in either client library's segment table, both of which stop at 9, it is absent from the written documentation, and it covered 24913 of the 108981 instruments Zerodha listed on 2026-09-04, which is close to a quarter of them.
+
+Its divisor is ten thousand. This was originally implemented as a hundred, reasoning from the tick sizes in the instrument file, which run from one paisa upwards and look exactly like an ordinary rupee-and-paise segment. That reasoning was wrong and the error was out by a factor of a hundred: NCO crude oil futures arrived on the wire as 85730000 and Zerodha's own quote endpoint priced the same contract at 8573.
+
+Nothing about the instrument file would have revealed this. It was found by comparing decoded ticks against the REST quote endpoint, where fourteen NCO instruments implied a divisor of exactly ten thousand and nothing else. The general lesson is worth keeping: a divisor cannot be inferred from tick size, and the only reliable way to establish one for a new segment is to ask the broker what the same instrument is worth and divide.
+
+Note that MCX commodity, segment 7, does divide by a hundred. The two commodity segments scale differently, so neither one can be used to guess the other.
+
 ## Unknown segments divide by a hundred rather than failing
 
-Segment 12 is NSE Commodity. It is not in either client library's segment table, both of which stop at 9, and it covered 24913 of the 108981 instruments Zerodha listed on 2026-09-04, which is close to a quarter of them. Its tick sizes run from one paisa upwards, so the ordinary divisor of a hundred is correct for it.
+An unrecognised segment is named by number and divided by a hundred, never rejected. Zerodha adds segments faster than it updates its client libraries, and a parser that raised on an unfamiliar segment would take down a connection carrying thousands of instruments the first time a new one appeared.
 
-The general rule follows from that case: an unrecognised segment is named by number and divided by a hundred, never rejected. Zerodha adds segments faster than it updates its client libraries, and a parser that raised on an unfamiliar segment would take down a connection carrying thousands of instruments the first time a new one appeared.
+The NCO experience shows the limit of that default, though. Falling back to a hundred keeps the data flowing and keeps the raw wire integer in the archive, which is recoverable, but the prices it produces will be silently wrong if the new segment happens to scale differently. So the fallback is a way to avoid losing data, not a way to be correct, and any newly appearing segment should be checked against the quote endpoint before its prices are trusted.
 
 ## Index and tradeable packets share no code, on purpose
 

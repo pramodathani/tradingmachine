@@ -9,11 +9,18 @@ Run with: python3 -m stream.zerodha.verify_stream --synthetic
 """
 
 import argparse
+import asyncio
 import struct
 import sys
 from datetime import datetime
 
+import requests
+from sqlalchemy import create_engine, text as sql_text
+
+from stream.zerodha.connection import ZerodhaConnection
+from stream.zerodha.credentials import websocket_credentials
 from stream.zerodha.packets import decode_frame
+from utilities.configuration import postgres_configuration
 
 ARRIVAL_TIME = datetime(2026, 9, 5, 10, 30, 0)
 
@@ -337,7 +344,7 @@ def check_price_divisors():
     """
     The two currency segments must use their own divisors and every other segment must use a hundred.
 
-    Segment 12 is NSE Commodity, which postdates both of Zerodha's client libraries, and segment 17 does not exist today. Both must fall through to the ordinary hundred rather than being rejected.
+    Segment 12 is NSE Commodity, which postdates both of Zerodha's client libraries and divides by ten thousand rather than a hundred, a value established against Zerodha's own quote endpoint rather than guessed from tick sizes. Segment 17 does not exist today and must fall through to the ordinary hundred rather than being rejected.
 
     Returns:
         tuple: A (name, passed, detail) triple.
@@ -346,7 +353,7 @@ def check_price_divisors():
         (NSE_EQUITY_TOKEN, 100, "nse"),
         (NSE_CURRENCY_TOKEN, 10000000, "cds"),
         (BSE_CURRENCY_TOKEN, 10000, "bcd"),
-        (NSE_COMMODITY_TOKEN, 100, "nco"),
+        (NSE_COMMODITY_TOKEN, 10000, "nco"),
         (INDEX_TOKEN, 100, "indices"),
         (UNKNOWN_SEGMENT_TOKEN, 100, "segment_17"),
     ]
@@ -359,7 +366,7 @@ def check_price_divisors():
         if tick["kite_segment"] != name:
             problems.append(f"token {token} segment {tick['kite_segment']} expected {name}")
     passed = not problems
-    return ("price divisors and segment names", passed, "; ".join(problems) or "nse 100, cds 10000000, bcd 10000, nco 100, indices 100, unknown 100")
+    return ("price divisors and segment names", passed, "; ".join(problems) or "nse 100, cds 10000000, bcd 10000, nco 10000, indices 100, unknown 100")
 
 
 def check_implausible_timestamps():
@@ -495,6 +502,256 @@ def run_synthetic():
     return failures
 
 
+QUOTE_ENDPOINT = "https://api.kite.trade/quote"
+
+VERIFICATION_TOLERANCE = 0.0001
+
+
+def select_verification_instruments(engine, per_exchange):
+    """
+    Choose instruments to check against Zerodha's own quote endpoint, spanning as many segments as possible.
+
+    Expired contracts are excluded, because the quote endpoint will not price them and they would produce gaps rather than comparisons. Futures are preferred over options within a derivative exchange, since they are more likely to have traded and therefore to carry a full set of values worth comparing.
+
+    Args:
+        engine: A SQLAlchemy engine for the black_box database.
+        per_exchange (int): How many instruments to take from each exchange.
+
+    Returns:
+        list[dict]: One entry per instrument with keys "instrument_token", "tradingsymbol", "exchange" and "identifier", where the identifier is the exchange and trading symbol joined by a colon as the quote endpoint expects.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: If the instrument tables cannot be read.
+    """
+    statement = sql_text(
+        "SELECT instrument_token, tradingsymbol, exchange FROM ("
+        "  SELECT instrument_token, tradingsymbol, exchange,"
+        "         row_number() OVER ("
+        "             PARTITION BY exchange"
+        "             ORDER BY CASE WHEN instrument_type = 'FUT' THEN 0 WHEN instrument_type = 'EQ' THEN 1 ELSE 2 END,"
+        "                      expiry NULLS FIRST, tradingsymbol"
+        "         ) AS rank"
+        "  FROM instruments.zerodha"
+        "  WHERE download_date = (SELECT max(download_date) FROM instruments.zerodha)"
+        "    AND (expiry IS NULL OR expiry = '' OR expiry::date > CURRENT_DATE)"
+        ") ranked WHERE rank <= :per_exchange ORDER BY exchange, tradingsymbol"
+    )
+    with engine.connect() as connection:
+        rows = connection.execute(statement, {"per_exchange": per_exchange}).all()
+
+    instruments = []
+    for instrument_token, tradingsymbol, exchange in rows:
+        instruments.append({
+            "instrument_token": int(instrument_token),
+            "tradingsymbol": tradingsymbol,
+            "exchange": exchange,
+            "identifier": f"{exchange}:{tradingsymbol}",
+        })
+    return instruments
+
+
+def capture_ticks(instrument_tokens, seconds):
+    """
+    Open one websocket connection, collect whatever it sends, and decode it.
+
+    Zerodha sends a snapshot of every subscribed instrument immediately after a subscription is accepted, so this returns useful data even when the market is closed, which is what makes this check runnable outside trading hours.
+
+    Args:
+        instrument_tokens (list[int]): The instrument tokens to subscribe to in full mode.
+        seconds (float): How long to stay connected before closing.
+
+    Returns:
+        tuple: An (api_key, access_token, ticks_by_token) triple, where ticks_by_token maps instrument token to the most recently decoded tick for it.
+
+    Raises:
+        stream.zerodha.credentials.ZerodhaCredentialsError: If there is no usable API key or access token.
+        stream.zerodha.connection.ZerodhaConnectionError: If the connection could not be established.
+    """
+    frames = []
+
+    async def capture():
+        """
+        Hold one connection open for the requested time and let the callback collect frames.
+
+        Returns:
+            tuple: An (api_key, access_token) pair, returned so the caller can reuse the same credentials for the REST comparison.
+        """
+        api_key, access_token = websocket_credentials()
+        connection = ZerodhaConnection(
+            api_key=api_key,
+            access_token=access_token,
+            instrument_tokens=instrument_tokens,
+            on_frame=lambda arrival, frame: frames.append((arrival, frame)),
+            mode="full",
+            maximum_reconnect_attempts=0,
+        )
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(connection.run(stop_event))
+        await asyncio.sleep(seconds)
+        stop_event.set()
+        try:
+            await asyncio.wait_for(task, timeout=10)
+        except asyncio.TimeoutError:
+            task.cancel()
+        return (api_key, access_token)
+
+    api_key, access_token = asyncio.run(capture())
+
+    ticks_by_token = {}
+    for arrival, frame in frames:
+        if len(frame) < 2:
+            continue
+        for tick in decode_frame(frame, datetime.fromtimestamp(arrival / 1e9)):
+            ticks_by_token[tick["instrument_token"]] = tick
+    return (api_key, access_token, ticks_by_token)
+
+
+def fetch_quotes(api_key, access_token, identifiers):
+    """
+    Ask Zerodha's REST quote endpoint what it thinks these instruments are worth.
+
+    Args:
+        api_key (str): The Zerodha Kite Connect API key.
+        access_token (str): An access token issued today.
+        identifiers (list[str]): Exchange and trading symbol pairs, such as "NSE:RELIANCE".
+
+    Returns:
+        dict: The endpoint's data block, keyed by identifier. Instruments it declines to price are simply absent.
+
+    Raises:
+        requests.HTTPError: If the endpoint returned an error status.
+    """
+    response = requests.get(
+        QUOTE_ENDPOINT,
+        params={"i": identifiers},
+        headers={
+            "X-Kite-Version": "3",
+            "Authorization": f"token {api_key}:{access_token}",
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json().get("data", {})
+
+
+def compare_tick_to_quote(tick, quote):
+    """
+    Compare one decoded tick against Zerodha's own quote for the same instrument.
+
+    Prices are divided by the tick's own divisor before comparing, which is what makes this a real test of the divisor rather than only of the field offsets. Quantities, volume and open interest are compared as they are, since no divisor applies to them.
+
+    Args:
+        tick (dict): A decoded tick from stream.zerodha.packets.
+        quote (dict): One instrument's entry from the quote endpoint's data block.
+
+    Returns:
+        tuple: A (compared_count, disagreements) pair, where disagreements is a list of readable strings describing each value that did not match.
+    """
+    divisor = tick["price_divisor"]
+    compared = 0
+    disagreements = []
+
+    values = [
+        ("last_price", tick.get("last_price"), quote.get("last_price"), True),
+        ("open", tick.get("open_price"), quote.get("ohlc", {}).get("open"), True),
+        ("high", tick.get("high_price"), quote.get("ohlc", {}).get("high"), True),
+        ("low", tick.get("low_price"), quote.get("ohlc", {}).get("low"), True),
+        ("close", tick.get("close_price"), quote.get("ohlc", {}).get("close"), True),
+        ("volume", tick.get("volume_traded"), quote.get("volume"), False),
+        ("open_interest", tick.get("open_interest"), quote.get("oi"), False),
+        ("total_buy_quantity", tick.get("total_buy_quantity"), quote.get("buy_quantity"), False),
+        ("total_sell_quantity", tick.get("total_sell_quantity"), quote.get("sell_quantity"), False),
+    ]
+    for name, ours, theirs, scaled in values:
+        if ours is None or theirs is None:
+            continue
+        compared = compared + 1
+        ours_value = ours / divisor if scaled else ours
+        if abs(float(ours_value) - float(theirs)) >= VERIFICATION_TOLERANCE:
+            disagreements.append(f"{name}: ours {ours_value} theirs {theirs}")
+
+    depth = quote.get("depth") or {}
+    sides = [
+        ("buy", tick.get("bid_prices"), tick.get("bid_quantities")),
+        ("sell", tick.get("ask_prices"), tick.get("ask_quantities")),
+    ]
+    for side_name, prices, quantities in sides:
+        entries = depth.get(side_name) or []
+        if not prices:
+            continue
+        for level, entry in enumerate(entries):
+            if level >= len(prices):
+                break
+            compared = compared + 2
+            our_price = prices[level] / divisor
+            if abs(our_price - float(entry["price"])) >= VERIFICATION_TOLERANCE:
+                disagreements.append(f"depth {side_name} level {level + 1} price: ours {our_price} theirs {entry['price']}")
+            if quantities[level] != entry["quantity"]:
+                disagreements.append(f"depth {side_name} level {level + 1} quantity: ours {quantities[level]} theirs {entry['quantity']}")
+
+    return (compared, disagreements)
+
+
+def run_against_rest(per_exchange, seconds):
+    """
+    Check decoded websocket ticks against Zerodha's own REST quotes for the same instruments.
+
+    This is the check the synthetic ones cannot replace. Those prove the parser agrees with this file's own idea of the format, since every byte they read was written here; this one uses the broker as the oracle, so it catches a field that both the parser and the synthetic checks are wrong about in the same direction.
+
+    Args:
+        per_exchange (int): How many instruments to take from each exchange.
+        seconds (float): How long to hold the websocket connection open.
+
+    Returns:
+        int: The number of instruments that disagreed with the quote endpoint.
+
+    Raises:
+        stream.zerodha.credentials.ZerodhaCredentialsError: If there is no usable API key or access token.
+        requests.HTTPError: If the quote endpoint returned an error status.
+    """
+    engine = create_engine(postgres_configuration["connection_string"])
+    instruments = select_verification_instruments(engine, per_exchange)
+    tokens = [instrument["instrument_token"] for instrument in instruments]
+    print(f"Checking {len(tokens)} instruments across {len({i['exchange'] for i in instruments})} exchanges against Zerodha's quote endpoint.")
+    print()
+
+    api_key, access_token, ticks_by_token = capture_ticks(tokens, seconds)
+    quotes = fetch_quotes(api_key, access_token, [instrument["identifier"] for instrument in instruments])
+
+    total_compared = 0
+    disagreeing_instruments = 0
+    unquotable = 0
+    undelivered = 0
+
+    for instrument in instruments:
+        tick = ticks_by_token.get(instrument["instrument_token"])
+        quote = quotes.get(instrument["identifier"])
+        if tick is None:
+            undelivered = undelivered + 1
+            continue
+        if quote is None:
+            unquotable = unquotable + 1
+            continue
+
+        compared, disagreements = compare_tick_to_quote(tick, quote)
+        total_compared = total_compared + compared
+        if disagreements:
+            disagreeing_instruments = disagreeing_instruments + 1
+            print(f"  MISMATCH  {instrument['identifier']} (segment {tick['exchange_segment']}, divisor {tick['price_divisor']})")
+            for disagreement in disagreements:
+                print(f"        {disagreement}")
+        else:
+            print(f"  ok        {instrument['identifier']:32s} segment {tick['exchange_segment']:>2d} divisor {tick['price_divisor']:>10,d} {compared:>3d} values")
+
+    print()
+    print(f"{total_compared} values compared, {disagreeing_instruments} instruments disagreed.")
+    if undelivered:
+        print(f"{undelivered} instruments were not delivered by the websocket.")
+    if unquotable:
+        print(f"{unquotable} instruments the quote endpoint would not price, so they could not be compared.")
+    return disagreeing_instruments
+
+
 def main():
     """
     Parse the command line and run the requested checks.
@@ -507,12 +764,23 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Check that Zerodha binary frames are decoded correctly.")
     parser.add_argument("--synthetic", action="store_true", help="Run the byte-level checks, which need no network.")
+    parser.add_argument("--against-rest", action="store_true", help="Compare decoded websocket ticks against Zerodha's own REST quotes.")
+    parser.add_argument("--per-exchange", type=int, default=3, help="How many instruments to take from each exchange for --against-rest.")
+    parser.add_argument("--seconds", type=float, default=12.0, help="How long to hold the websocket open for --against-rest.")
     arguments = parser.parse_args()
 
-    if not arguments.synthetic:
-        parser.error("nothing to do: pass --synthetic")
+    if not arguments.synthetic and not arguments.against_rest:
+        parser.error("nothing to do: pass --synthetic, --against-rest, or both")
 
-    raise SystemExit(1 if run_synthetic() else 0)
+    failures = 0
+    if arguments.synthetic:
+        failures = failures + run_synthetic()
+    if arguments.against_rest:
+        if arguments.synthetic:
+            print()
+        failures = failures + run_against_rest(arguments.per_exchange, arguments.seconds)
+
+    raise SystemExit(1 if failures else 0)
 
 
 if __name__ == "__main__":

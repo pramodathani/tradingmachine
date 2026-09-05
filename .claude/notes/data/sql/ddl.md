@@ -50,7 +50,7 @@ The row is therefore keyed on `instrument_id`, the same deterministic UUID that 
 
 ### Prices are stored as the broker sent them, with the divisor
 
-Every price column holds the raw integer the broker put on the wire, and `price_divisor` holds the number to divide it by. Zerodha sends prices as integers in paise for most segments, in ten-millionths for NSE currency, and in ten-thousandths for BSE currency; another broker will have its own conventions.
+Every price column holds the raw integer the broker put on the wire, and `price_divisor` holds the number to divide it by. Zerodha sends prices as integers in paise for most segments, in ten-millionths for NSE currency, and in ten-thousandths for both BSE currency and NSE Commodity; another broker will have its own conventions. That NSE Commodity scales differently from MCX commodity, despite both being commodity segments, is a good illustration of why the divisor is stored per row rather than derived from anything.
 
 Storing the raw integer is exact, it is narrower than a double, and it compresses far better because integer columns delta-encode well. But "raw integer" is meaningless on its own once more than one broker writes into the table, which is why the divisor travels with the row rather than being derived at read time from the broker and segment. `220_market_data_prices.sql` then defines `market_data.ticks_priced`, a view that divides, and it contains no broker names, no segment arithmetic and no `CASE` at all — every row already carries what is needed to interpret it.
 
