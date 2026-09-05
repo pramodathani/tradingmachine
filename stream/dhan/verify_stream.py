@@ -6,13 +6,22 @@ The synthetic checks in this module build frames byte by byte from known values 
 Each check targets a specific way this parser could be wrong rather than simply exercising the happy path. The quote check would fail if the day's prices were read as open, high, low, close instead of open, close, high, low, the full packet check would fail if its depth were read as five bids followed by five asks instead of five interleaved levels, and the precision check pins the float to paise conversion on a price the float32 format cannot represent exactly.
 
 Run with: python3 -m stream.dhan.verify_stream --synthetic
+
+The --depth mode opens a real depth socket during market hours, holds it for a few seconds, and reports what arrived: frame counts, the distinct security identifiers seen, and whether bid and ask sections arrive together. It exists because the depth frames' row layout is only pinned by synthetic bytes until a live run confirms it.
+
+Run with: python3 -m stream.dhan.verify_stream --depth --instrument NSE_EQ:1333 --seconds 30
 """
 
 import argparse
+import asyncio
+import logging
 import struct
 from datetime import datetime
 
 from stream.dhan import connection, depth_packets, packets
+from stream.dhan.connection import EXCHANGE_SEGMENT_NAMES
+from stream.dhan.credentials import websocket_credentials
+from stream.dhan.depth_connection import DhanDepthConnection
 from stream.dhan.packets import (
     HEADER_LENGTH,
     PAISE_PER_RUPEE,
@@ -760,6 +769,142 @@ def run_synthetic():
     return failures
 
 
+def parse_instruments(instrument_arguments):
+    """
+    Turn command line instrument arguments into (exchange_segment, security_id) pairs.
+
+    Args:
+        instrument_arguments (list[str]): One argument per instrument, each spelled as the wire's segment name, a colon, and the security identifier, for example "NSE_EQ:1333".
+
+    Returns:
+        list[tuple]: One (exchange_segment, security_id) pair per argument.
+
+    Raises:
+        ValueError: If an argument is not in SEGMENT:SECURITY_ID form, names an unknown segment, or has a security identifier that is not a number.
+    """
+    segment_by_wire_name = {wire_name: segment for segment, wire_name in EXCHANGE_SEGMENT_NAMES.items()}
+    instruments = []
+    for instrument_argument in instrument_arguments:
+        try:
+            wire_name, security_id_text = instrument_argument.split(":", 1)
+        except ValueError:
+            raise ValueError(f"Instrument {instrument_argument!r} must be spelled SEGMENT:SECURITY_ID, for example NSE_EQ:1333.")
+        if wire_name not in segment_by_wire_name:
+            raise ValueError(f"Segment {wire_name!r} is unknown; the known names are {sorted(segment_by_wire_name)}.")
+        if not security_id_text.isdigit():
+            raise ValueError(f"Security id {security_id_text!r} is not a number.")
+        instruments.append((segment_by_wire_name[wire_name], int(security_id_text)))
+    return instruments
+
+
+def run_depth(arguments):
+    """
+    Hold a real depth socket open for a few seconds and report what arrived.
+
+    This is a live check: it needs a valid access token and, for any real data, market hours. It prints its report and returns a failure count, treating a connection that arrived but saw nothing as a pass with a note, since outside market hours silence is the expected answer.
+
+    Args:
+        arguments (argparse.Namespace): The parsed command line, carrying depth_level, instrument and seconds.
+
+    Returns:
+        int: The number of checks that failed, always zero or one.
+
+    Raises:
+        SystemExit: If the credentials are missing or the connection was refused outright, since no report would be meaningful.
+    """
+    client_id, access_token = websocket_credentials()
+    instruments = parse_instruments(arguments.instrument)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    counters = {
+        "data_frames": 0,
+        "heartbeats": 0,
+        "disconnects": 0,
+        "bid_sections": 0,
+        "ask_sections": 0,
+        "security_ids": set(),
+        "rows_read": 0,
+    }
+
+    def on_frame(arrival_time_nanoseconds, frame):
+        arrival_time = datetime.fromtimestamp(arrival_time_nanoseconds / 1_000_000_000)
+        if len(frame) < DEPTH_HEADER_LENGTH:
+            counters["heartbeats"] = counters["heartbeats"] + 1
+            return
+        if frame[2] == BID_RESPONSE_CODE or frame[2] == ASK_RESPONSE_CODE:
+            counters["data_frames"] = counters["data_frames"] + 1
+            ticks = decode_depth_frame(frame, arguments.depth_level, arrival_time)
+            for tick in ticks:
+                counters["security_ids"].add(tick["security_id"])
+                counters["rows_read"] = counters["rows_read"] + len(tick["bid_prices"] + tick["ask_prices"])
+                if tick["side"] == "bid":
+                    counters["bid_sections"] = counters["bid_sections"] + 1
+                else:
+                    counters["ask_sections"] = counters["ask_sections"] + 1
+        else:
+            counters["disconnects"] = counters["disconnects"] + 1
+
+    async def drive():
+        stop_event = asyncio.Event()
+        depth_connection = DhanDepthConnection(
+            arguments.depth_level,
+            client_id,
+            access_token,
+            instruments,
+            on_frame=on_frame,
+            logger=logging.getLogger("verify_stream.depth"),
+        )
+        async def close_when_done():
+            await asyncio.sleep(arguments.seconds)
+            stop_event.set()
+        await asyncio.gather(depth_connection.run(stop_event), close_when_done())
+        return depth_connection
+
+    print(f"Depth check: {arguments.depth_level} level socket, {len(instruments)} instrument(s), {arguments.seconds:.0f} seconds")
+    print()
+    try:
+        depth_connection = asyncio.run(drive())
+    except Exception as error:
+        print(f"  FAIL  the connection did not survive its run: {type(error).__name__}: {error}")
+        return 1
+
+    paired = counters["bid_sections"] > 0 and abs(counters["bid_sections"] - counters["ask_sections"]) <= 2
+    passed = True
+    problems = []
+
+    print(f"  frames received         {depth_connection.frames_received}")
+    print(f"  data frames             {counters['data_frames']}")
+    print(f"  heartbeats              {counters['heartbeats']}")
+    print(f"  disconnect packets      {counters['disconnects']}")
+    print(f"  distinct security ids   {len(counters['security_ids'])}")
+    print(f"  bid sections            {counters['bid_sections']}")
+    print(f"  ask sections            {counters['ask_sections']}")
+    print(f"  depth rows read         {counters['rows_read']}")
+    print(f"  reconnects              {depth_connection.reconnect_count}")
+    print()
+
+    if counters["data_frames"] == 0:
+        print("  NOTE  no data frames arrived; outside market hours that is the expected answer, run again during a session")
+    else:
+        if not paired:
+            passed = False
+            problems.append(f"bid sections {counters['bid_sections']} and ask sections {counters['ask_sections']} did not arrive together")
+        if len(counters["security_ids"]) != len(instruments):
+            passed = False
+            problems.append(f"subscribed {len(instruments)} instrument(s) but saw {len(counters['security_ids'])}")
+        if depth_connection.reconnect_count > 0:
+            passed = False
+            problems.append(f"reconnected {depth_connection.reconnect_count} times during a short hold, which should not happen")
+
+    if problems:
+        for problem in problems:
+            print(f"  FAIL  {problem}")
+    else:
+        print("  PASS  frames decoded, bid and ask sections arrived together, every subscribed instrument was seen")
+    print()
+    return 0 if passed else 1
+
+
 def main():
     """
     Parse the command line and run the requested checks.
@@ -772,7 +917,18 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Check that Dhan binary frames are decoded correctly.")
     parser.add_argument("--synthetic", action="store_true", help="Run the byte-level checks, which need no network.")
+    parser.add_argument("--depth", action="store_true", help="Open a real depth socket and report what arrives; needs market hours and credentials.")
+    parser.add_argument("--depth-level", type=int, default=20, choices=(20, 200), help="Which depth socket to open in --depth mode, twenty levels or two hundred levels.")
+    parser.add_argument("--instrument", action="append", help="An instrument to subscribe as SEGMENT:SECURITY_ID, for example NSE_EQ:1333; repeat for more; the two hundred level socket takes exactly one.")
+    parser.add_argument("--seconds", type=float, default=30.0, help="How long to hold a live socket open.")
     arguments = parser.parse_args()
+
+    if arguments.depth and not arguments.instrument:
+        parser.error("--depth needs at least one --instrument SEGMENT:SECURITY_ID")
+
+    if arguments.depth:
+        failures = run_depth(arguments)
+        raise SystemExit(1 if failures else 0)
 
     if not arguments.synthetic:
         parser.error("nothing to do: pass --synthetic")
