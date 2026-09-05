@@ -45,3 +45,15 @@ Two feature branches were adding to this file at the same time, and both were ap
 The full set resolves and installs on Python 3.14.4 with no build from source. Every package has a `cp314` wheel. 88 packages are installed in total, and `pip check` reports no broken requirements.
 
 The pre-fix version of this file is preserved outside the project, at the session scratchpad path `requirements.txt.orig`, because the project is not yet under version control.
+
+## websockets and orjson arrived with the market data stream
+
+Both were already present in `.venv` as transitive dependencies and both are now declared, because the streaming subsystem imports them directly and a transitive pin is not a promise.
+
+`websockets` is the client the Zerodha ticker is built on. Zerodha publishes `pykiteconnect`, which would have supplied a ready-made ticker, but it is built on Twisted and Autobahn and runs everything on a Twisted reactor, of which there is exactly one per process. That would have forced either one reactor serving several connections, where a slow callback stalls parsing for all of them, or a process per connection anyway. Since the design already puts each connection in its own process, the Twisted dependency bought nothing and cost control over reconnection, timestamping and the decode path, so the client is written directly against `websockets` instead.
+
+`orjson` encodes the ticks that go onto the Redis bus. It matters here in a way it would not elsewhere: at the published rates the encoder runs tens of thousands of times a second, it encodes `datetime` natively without a default hook, and it is several times faster than the standard library `json`. The alternative considered was publishing the raw broker bytes, which would have been faster still but would have forced every consumer to carry a per-broker binary parser, defeating the purpose of a shared bus.
+
+## The archive needs no compression dependency
+
+The raw frame archive is compressed with zstd, and there is deliberately no `zstandard` line in this file. Python 3.14 ships `compression.zstd` in the standard library, bound to libzstd 1.5.7 on this host, which was verified in this virtual environment before the archive was designed around it. That keeps the compression on the one path that must never fail free of third-party code.
