@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIRECTORY="/home/pramod/Projects/black_box"
+PROJECT_DIRECTORY="/home/pramod/Projects/tradingmachine"
 LOG_DIRECTORY="${PROJECT_DIRECTORY}/logs"
 
 mkdir -p "${LOG_DIRECTORY}"

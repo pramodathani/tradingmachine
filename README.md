@@ -1,4 +1,4 @@
-# black_box
+# tradingmachine
 
 An algorithmic trading system for quantitative investing and trading in Indian markets.
 
@@ -29,7 +29,7 @@ TA-Lib needs no system library. The `TA-Lib` wheel bundles the C library.
    cp .env.example .env
    ```
 
-   Every setting is a `BLACK_BOX_`-prefixed variable. The host and port values are the host-side view, meaning `localhost` plus the published port, because the code runs on the host while the databases run as containers. The same variables are read by `docker-compose.yml` to decide which host port to publish each service on. Set any local password you like for Redis, MongoDB and Postgres; they are not shared with anything outside this machine. ChromaDB takes no credentials.
+   Every setting is a `TRADINGMACHINE_`-prefixed variable. The host and port values are the host-side view, meaning `localhost` plus the published port, because the code runs on the host while the databases run as containers. The same variables are read by `docker-compose.yml` to decide which host port to publish each service on. Set any local password you like for Redis, MongoDB and Postgres; they are not shared with anything outside this machine. ChromaDB takes no credentials.
 
 3. Start the data layer.
 
@@ -47,7 +47,7 @@ TA-Lib needs no system library. The `TA-Lib` wheel bundles the C library.
 
 ## Data layer
 
-Four containers run on a single bridge network, `black_box_network`.
+Four containers run on a single bridge network, `tradingmachine_network`.
 
 | Service | Image | Host port | Container port |
 |---|---|---|---|
@@ -62,7 +62,7 @@ Every port is published on `127.0.0.1` only, so the stores are not reachable fro
 
 TimescaleDB serves both the relational and the timeseries workload, because TimescaleDB is a Postgres extension rather than a separate engine. Hypertables and ordinary tables live in the same database, and a hypertable is created with ordinary application-side DDL such as `SELECT create_hypertable('ohlcv', 'ts')`.
 
-These containers belong to `black_box` alone. 
+These containers belong to `tradingmachine` alone. 
 
 There is no dev, uat or prod tier system, and there is no `app` service or Dockerfile, because the code always runs on the host.
 
@@ -126,7 +126,7 @@ A broker whose stored token was issued today is skipped unless `--force` is give
 `utilities/run_daily_broker_login.sh` activates the virtual environment and appends its output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
 
 ```
-0 7 * * 1-5 /home/pramod/Projects/black_box/utilities/run_daily_broker_login.sh
+0 7 * * 1-5 /home/pramod/Projects/tradingmachine/utilities/run_daily_broker_login.sh
 ```
 
 It runs at 07:00 so the day's tokens are in place before the instrument download at 07:30.
@@ -189,7 +189,7 @@ Confirmed on 2026-09-04, the first day loaded.
 `data/instruments/run_daily_download_and_map.sh` activates the virtual environment, runs both stages and appends the output to a monthly log under `logs/`. Add this crontab line to run it on weekday mornings:
 
 ```
-30 7 * * 1-5 /home/pramod/Projects/black_box/data/instruments/run_daily_download_and_map.sh
+30 7 * * 1-5 /home/pramod/Projects/tradingmachine/data/instruments/run_daily_download_and_map.sh
 ```
 
 It must run on the day whose files it wants, because Kotak's URL is stamped with the current date.
@@ -270,5 +270,5 @@ curl -s http://127.0.0.1:1004/api/v2/heartbeat
 To confirm the TimescaleDB extension is present:
 
 ```
-docker compose exec timescaledb psql -U black_box -d black_box -c "SELECT extversion FROM pg_extension WHERE extname='timescaledb';"
+docker compose exec timescaledb psql -U tradingmachine -d tradingmachine -c "SELECT extversion FROM pg_extension WHERE extname='timescaledb';"
 ```

@@ -153,7 +153,7 @@ def has_raw_rows(engine, broker, mapping_date):
     Check whether a broker's raw table holds any rows for a date.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         broker (str): The broker name, which is also its raw table name.
         mapping_date (datetime.date): The snapshot date to check.
 
@@ -175,7 +175,7 @@ def stored_download_dates(engine):
     List every date any broker has stored raw rows for, oldest first.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
 
     Returns:
         list[datetime.date]: The distinct snapshot dates, ascending.
@@ -234,7 +234,7 @@ def map_all(engine, mapping_date, broker_name=None):
     A broker with no raw rows stored for the date is skipped with a printed notice, so a late or failed download degrades to being absent from that day's mapping rather than aborting it.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The snapshot date to map.
         broker_name (str | None): A single broker to run. None runs every broker.
 

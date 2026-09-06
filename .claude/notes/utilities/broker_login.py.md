@@ -18,13 +18,13 @@ One document per broker in the `last_login` collection, `{broker_name, access_to
 
 Kotak is the exception that shapes the interface. Its API needs the session identifier and the account's own API host alongside the token, so its document also carries `sid` and `base_url`. That is why every login function returns a dictionary rather than a bare token string: the caller merges whatever the broker returned into the document instead of assuming a single field.
 
-Unlike `unified_broker_interface`, nothing is written to Redis. That project caches `last_login` in Redis because its REST layer re-reads the token on every single API call; nothing in black_box does that yet.
+Unlike `unified_broker_interface`, nothing is written to Redis. That project caches `last_login` in Redis because its REST layer re-reads the token on every single API call; nothing in tradingmachine does that yet.
 
 ## Tokens are not written to .env
 
-An earlier draft of this script wrote `BLACK_BOX_<BROKER>_ACCESS_TOKEN` variables into `.env`. That was dropped in favour of MongoDB. A secret that rotates daily does not belong in a file that is read once at process start, and `.env` has no room for Kotak's extra session fields.
+An earlier draft of this script wrote `TRADINGMACHINE_<BROKER>_ACCESS_TOKEN` variables into `.env`. That was dropped in favour of MongoDB. A secret that rotates daily does not belong in a file that is read once at process start, and `.env` has no room for Kotak's extra session fields.
 
-`data/instruments/indmoney.py` now takes its token from `last_login` rather than from `.env`, and the `BLACK_BOX_INDMONEY_ACCESS_TOKEN` variable, its configuration entry and its `.env.example` line were removed with that change. This job is therefore the only thing that issues or stores broker tokens, and there is no hand-managed token left in the project.
+`data/instruments/indmoney.py` now takes its token from `last_login` rather than from `.env`, and the `TRADINGMACHINE_INDMONEY_ACCESS_TOKEN` variable, its configuration entry and its `.env.example` line were removed with that change. This job is therefore the only thing that issues or stores broker tokens, and there is no hand-managed token left in the project.
 
 ## Why the flows are written out one per broker
 

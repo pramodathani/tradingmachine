@@ -514,7 +514,7 @@ def select_verification_instruments(engine, per_exchange):
     Expired contracts are excluded, because the quote endpoint will not price them and they would produce gaps rather than comparisons. Futures are preferred over options within a derivative exchange, since they are more likely to have traded and therefore to carry a full set of values worth comparing.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         per_exchange (int): How many instruments to take from each exchange.
 
     Returns:

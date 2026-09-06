@@ -1,5 +1,5 @@
 """
-Logging setup for long-running black_box processes.
+Logging setup for long-running tradingmachine processes.
 
 The one-shot jobs in this project print to standard output and let a cron wrapper redirect that into a monthly file, which is readable because each job produces one linear transcript. The market data stream does not work that way: it runs one supervisor and twenty-odd shard processes at once, so a line is only useful if it carries a timestamp, a level and the name of the process that wrote it.
 
@@ -19,7 +19,7 @@ LOG_BACKUP_COUNT = 5
 
 def configure_logging(job_name):
     """
-    Set up logging for one black_box process, writing to both standard error and a monthly log file.
+    Set up logging for one tradingmachine process, writing to both standard error and a monthly log file.
 
     Standard error is where systemd and cron pick output up, and the file is what survives a journal rotation. The file is named for the job and the current month, so a process that is restarted many times in a month keeps appending to one file rather than scattering its history.
 
