@@ -1,13 +1,13 @@
-name: black_box
+name: tradingmachine
 
 services:
   redis:
     image: redis:trixie
-    command: redis-server --requirepass ${BLACK_BOX_REDIS_PASSWORD} --appendonly yes
+    command: redis-server --requirepass ${TRADINGMACHINE_REDIS_PASSWORD} --appendonly yes
     environment:
-      REDIS_PASSWORD: "${BLACK_BOX_REDIS_PASSWORD}"
+      REDIS_PASSWORD: "${TRADINGMACHINE_REDIS_PASSWORD}"
     ports:
-      - "127.0.0.1:${BLACK_BOX_REDIS_PORT:-1001}:6379"
+      - "127.0.0.1:${TRADINGMACHINE_REDIS_PORT:-1001}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -22,10 +22,10 @@ services:
   mongodb:
     image: mongo:8.0.4
     environment:
-      MONGO_INITDB_ROOT_USERNAME: "${BLACK_BOX_MONGODB_USERNAME:-black_box}"
-      MONGO_INITDB_ROOT_PASSWORD: "${BLACK_BOX_MONGODB_PASSWORD}"
+      MONGO_INITDB_ROOT_USERNAME: "${TRADINGMACHINE_MONGODB_USERNAME:-tradingmachine}"
+      MONGO_INITDB_ROOT_PASSWORD: "${TRADINGMACHINE_MONGODB_PASSWORD}"
     ports:
-      - "127.0.0.1:${BLACK_BOX_MONGODB_PORT:-1002}:27017"
+      - "127.0.0.1:${TRADINGMACHINE_MONGODB_PORT:-1002}:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -42,11 +42,11 @@ services:
     shm_size: 256m
     environment:
       PGDATA: /pgdata
-      POSTGRES_DB: "${BLACK_BOX_POSTGRES_DATABASE:-black_box}"
-      POSTGRES_USER: "${BLACK_BOX_POSTGRES_USERNAME:-black_box}"
-      POSTGRES_PASSWORD: "${BLACK_BOX_POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${TRADINGMACHINE_POSTGRES_DATABASE:-tradingmachine}"
+      POSTGRES_USER: "${TRADINGMACHINE_POSTGRES_USERNAME:-tradingmachine}"
+      POSTGRES_PASSWORD: "${TRADINGMACHINE_POSTGRES_PASSWORD}"
     ports:
-      - "127.0.0.1:${BLACK_BOX_POSTGRES_PORT:-1003}:5432"
+      - "127.0.0.1:${TRADINGMACHINE_POSTGRES_PORT:-1003}:5432"
     volumes:
       - timescaledb_data:/pgdata
     healthcheck:
@@ -61,7 +61,7 @@ services:
   chroma:
     image: chromadb/chroma:1.5.9
     ports:
-      - "127.0.0.1:${BLACK_BOX_CHROMADB_PORT:-1004}:8000"
+      - "127.0.0.1:${TRADINGMACHINE_CHROMADB_PORT:-1004}:8000"
     volumes:
       - chromadb_data:/data
     healthcheck:
@@ -75,15 +75,15 @@ services:
 
 volumes:
   redis_data:
-    name: black_box_redis_volume
+    name: tradingmachine_redis_volume
   mongodb_data:
-    name: black_box_mongodb_volume
+    name: tradingmachine_mongodb_volume
   timescaledb_data:
-    name: black_box_timescaledb_volume
+    name: tradingmachine_timescaledb_volume
   chromadb_data:
-    name: black_box_chromadb_volume
+    name: tradingmachine_chromadb_volume
 
 networks:
   network:
-    name: black_box_network
+    name: tradingmachine_network
     driver: bridge
