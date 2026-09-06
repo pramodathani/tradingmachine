@@ -42,7 +42,7 @@ A shard that is restarted part way through a trading day opens a new file whose 
 
 The file header carries a numeric broker code as well as the shard number. A replay tool reading a file has to know which broker's decoder to apply to the frames inside it, and while the directory path also says so, the path can be renamed or the file moved. Putting it in the bytes makes the file self-describing.
 
-Adding a broker means adding an entry to `BROKER_CODES`. Codes are never reused or renumbered, because old archive files keep the code they were written with. Zerodha is 1 and Dhan is 2, Dhan being the second broker the streaming subsystem learned to carry.
+Adding a broker means adding an entry to `BROKER_CODES`. Codes are never reused or renumbered, because old archive files keep the code they were written with. The codes are handed out in the order the streaming subsystem learned to carry each broker: Zerodha is 1, Dhan is 2, Flattrade is 3 and Shoonya is 4.
 
 ## Packet counting is the broker parser's job
 
