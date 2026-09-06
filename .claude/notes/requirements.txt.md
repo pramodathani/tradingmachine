@@ -57,3 +57,15 @@ Both were already present in `.venv` as transitive dependencies and both are now
 ## The archive needs no compression dependency
 
 The raw frame archive is compressed with zstd, and there is deliberately no `zstandard` line in this file. Python 3.14 ships `compression.zstd` in the standard library, bound to libzstd 1.5.7 on this host, which was verified in this virtual environment before the archive was designed around it. That keeps the compression on the one path that must never fail free of third-party code.
+
+## PyNaCl arrived with the Groww feed, and only for Ed25519
+
+Groww's market data feed is a NATS message bus carried over a websocket, and NATS authenticates the client with an NKEY: the server sends a nonce, and the client must return an Ed25519 signature over it alongside the JSON Web Token Groww minted for the key. Python's standard library has no Ed25519, so exactly one third-party primitive is unavoidable here.
+
+`PyNaCl` is what supplies it. Groww's own SDK uses the same library for the same purpose, it is a thin binding over libsodium with no dependencies of its own beyond `cffi`, which is already installed, and `stream/groww/credentials.py` imports precisely two names from it. Everything else the NKEY handshake needs is written out in that module: the base32 encoding, the XMODEM CRC the encoding appends, and the unpadded base64url of the signature.
+
+The alternative was `cryptography`, which also provides Ed25519. It was not chosen because it is a much larger package carrying a Rust toolchain's worth of compiled code for one function call, and because matching Groww's own choice makes the handshake easier to compare against their SDK when it changes.
+
+What was deliberately not taken is `nats-py`, along with its `nkeys` and `aiohttp` dependencies. The NATS client protocol is a handful of newline terminated text operations, the project already speaks `websockets` directly for every other broker, and `stream/groww/connection.py` hand-rolls the protocol for the same reason `stream/fyers/depth_packets.py` hand-decodes protobuf: it keeps the reconnection, the refusal classification and the timestamping under this project's control.
+
+It sits above `PyYAML` rather than at the end of the file, for the merge reason recorded above.

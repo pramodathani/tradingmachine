@@ -17,5 +17,6 @@ selenium==4.44.0
 yfinance==1.4.0
 python-dotenv==1.2.3
 requests==2.34.2
+PyNaCl==1.6.2
 PyYAML==6.0.3
 orjson==3.12.0
