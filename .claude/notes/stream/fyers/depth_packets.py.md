@@ -14,7 +14,7 @@ The schema uses two of protobuf's six wire types. Every scalar is wrapped in a s
 
 It also keeps a promise the rest of the package makes. `requirements.txt` gains nothing, no build step is introduced, and the module stays testable on bytes alone exactly as `stream/zerodha/packets.py` and `stream/flattrade/packets.py` are.
 
-The correctness argument for generated code was answered directly rather than waved away: the synthetic checks encode messages with Fyers' own generated code and decode them with this module, so the hand-rolled reader is pinned against the official schema on every run.
+The correctness argument for generated code was answered directly rather than waved away. Golden frames were encoded once by Fyers' own generated code, from their published schema, and are stored as bytes in `verify_stream.py`. Every run decodes those bytes with this module and asserts the values they were built from, so the hand-rolled reader stays pinned to the official encoder without the client library needing to be installed or a build step to exist. Regenerating them needs the library and is a deliberate act, which is the point: the vectors are evidence, not fixtures that move when the code does.
 
 ## Two protobuf details that are easy to get wrong
 
