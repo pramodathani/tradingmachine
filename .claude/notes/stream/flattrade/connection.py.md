@@ -33,3 +33,7 @@ Flattrade documents no limit on the `k` field. One hundred per message is conser
 ## Mutation testing
 
 `check_connection_message_builders` pins the builders' JSON to their literal field names and values, plus the websocket URL and the heartbeat interval, because the connection and the decoder never touch the same wire direction and a renamed field in a builder would otherwise pass every decoder check unnoticed.
+
+## Probe mode must not swallow a failed first session
+
+The first version copied Dhan's run loop exactly, which returns silently in probe mode (`maximum_reconnect_attempts == 0`) after catching the first session's ordinary failure — ConnectionClosed, OSError or TimeoutError. The live smoke test on a weekend exposed this: Flattrade's API servers were down, every session died with a TimeoutError inside the authentication wait, and the connection reported zero frames with no error at all. A probe that returns nothing on failure is indistinguishable from one that returned nothing because the market was closed, so probe mode now raises the first failure wrapped as FlattradeConnectionError. The ordinary-retry path is unchanged; only the no-retry path changed, because there a silent return has no honest meaning.

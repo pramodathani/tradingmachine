@@ -208,7 +208,7 @@ class FlattradeConnection:
             mode (str): The feed to request, "touchline" or "depth".
             on_text (collections.abc.Callable | None): Called as on_text(payload) for every frame that is not market data, or None to ignore them.
             logger (logging.Logger | None): Where to report connection events, or None to stay silent.
-            maximum_reconnect_attempts (int | None): Give up after this many consecutive failures, or None to keep trying until stopped. Zero means do not reconnect at all, which is what capacity probing wants.
+            maximum_reconnect_attempts (int | None): Give up after this many consecutive failures, or None to keep trying until stopped. Zero means do not reconnect at all, which is what capacity probing wants, and the first session's failure is raised to the caller rather than silently dropped.
 
         Returns:
             None.
@@ -493,7 +493,7 @@ class FlattradeConnection:
         Raises:
             FlattradeAuthenticationError: If the credentials were rejected, which no amount of retrying will fix.
             FlattradeConnectionRefusedError: If Flattrade refused the connection, so the caller can record that its limit has been found.
-            FlattradeConnectionError: If the reconnection attempt limit was reached.
+            FlattradeConnectionError: If the reconnection attempt limit was reached, or the first session failed in probe mode.
         """
         delay = INITIAL_RECONNECT_SECONDS
         consecutive_failures = 0
@@ -508,12 +508,14 @@ class FlattradeConnection:
             except (ConnectionClosed, OSError, asyncio.TimeoutError) as error:
                 consecutive_failures = consecutive_failures + 1
                 self._log("warning", f"connection lost ({type(error).__name__}: {error}); reconnecting in {delay:.0f}s")
+                if self.maximum_reconnect_attempts == 0:
+                    raise FlattradeConnectionError(
+                        f"the first session failed ({type(error).__name__}: {error}) and probe mode does not retry."
+                    ) from error
 
             if stop_event.is_set():
                 break
 
-            if self.maximum_reconnect_attempts == 0:
-                return
             if self.maximum_reconnect_attempts is not None and consecutive_failures > self.maximum_reconnect_attempts:
                 raise FlattradeConnectionError(
                     f"gave up after {consecutive_failures} consecutive reconnection failures."
