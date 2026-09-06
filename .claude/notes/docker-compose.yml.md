@@ -1,14 +1,14 @@
 # docker-compose.yml
 
-The black_box data layer. Only the databases are containerized. black_box itself always runs on the host, so there is no `app` service and no Dockerfile. The sibling projects gate an app service behind `profiles: ["app"]` to support their UAT and prod deployments, and that is deliberately omitted here.
+The tradingmachine data layer. Only the databases are containerized. tradingmachine itself always runs on the host, so there is no `app` service and no Dockerfile. The sibling project `unified_broker_interface` gates an app service behind `profiles: ["app"]` to support its UAT and prod deployments, and that is deliberately omitted here.
 
-The top-level `name: black_box` sets the Compose project name, so a bare `docker compose up -d` works without passing `-p`.
+The top-level `name: tradingmachine` sets the Compose project name, so a bare `docker compose up -d` works without passing `-p`.
 
 ## Networking
 
-All four services share one bridge network, `black_box_network`. Inside it they resolve each other by service name on the container port: `redis:6379`, `mongodb:27017`, `timescaledb:5432`, `chroma:8000`. That is independent of the host ports below. The host-side black_box process does not join this network; it connects through the published ports on localhost instead.
+All four services share one bridge network, `tradingmachine_network`. Inside it they resolve each other by service name on the container port: `redis:6379`, `mongodb:27017`, `timescaledb:5432`, `chroma:8000`. That is independent of the host ports below. The host-side tradingmachine process does not join this network; it connects through the published ports on localhost instead.
 
-These containers are black_box's own. Following the rule stated in `tradingmachine/README.md`, each project runs its own Compose project on its own network, never joined to `unified_broker_interface`'s or `tradingmachine`'s, and shares no key, collection, or table with them.
+These containers are tradingmachine's own. Each project on this machine runs its own Compose project on its own network, never joined to `unified_broker_interface`'s, and shares no key, collection, or table with it.
 
 ## Host ports
 

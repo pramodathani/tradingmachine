@@ -1,6 +1,6 @@
 # requirements.txt
 
-A curated list of direct dependencies, not a `pip freeze`. Only packages that black_box imports directly are listed, and pip resolves the transitive set.
+A curated list of direct dependencies, not a `pip freeze`. Only packages that tradingmachine imports directly are listed, and pip resolves the transitive set.
 
 This file previously was a byte-for-byte copy of `unified_broker_interface`'s freeze, which carried 97 pins. That brought in that project's Selenium, Flask, and TUI stacks, and, more seriously, contained no Chroma client at all, so the Chroma container would have been unreachable from Python.
 
@@ -8,7 +8,7 @@ It also contained `dotenv==0.9.9` alongside `python-dotenv==1.2.3`. The `dotenv`
 
 ## chromadb-client rather than chromadb
 
-`chromadb` is the full server distribution, pulling in FastAPI, uvicorn, onnxruntime, and tokenizers. That is what runs inside the container. black_box only ever talks to it over HTTP, so it needs just the `HttpClient`, which is what `chromadb-client` provides. The pinned version tracks the `chromadb/chroma` image tag in `docker-compose.yml`.
+`chromadb` is the full server distribution, pulling in FastAPI, uvicorn, onnxruntime, and tokenizers. That is what runs inside the container. tradingmachine only ever talks to it over HTTP, so it needs just the `HttpClient`, which is what `chromadb-client` provides. The pinned version tracks the `chromadb/chroma` image tag in `docker-compose.yml`.
 
 ## TA-Lib needs no system library
 
@@ -16,7 +16,7 @@ There is no `libta_lib` on this host, and none is required. TA-Lib 0.6.8 publish
 
 ## yfinance is a judgment call
 
-It is kept for the `research/` directory, and it covers Indian tickers through the `.NS` and `.BO` suffixes. It is what drags in `curl_cffi`, `beautifulsoup4`, and `peewee` as transitive dependencies. If black_box ends up sourcing its data from `unified_broker_interface` instead, dropping this one line removes those too.
+It is kept for the `research/` directory, and it covers Indian tickers through the `.NS` and `.BO` suffixes. It is what drags in `curl_cffi`, `beautifulsoup4`, and `peewee` as transitive dependencies. If tradingmachine ends up sourcing its data from `unified_broker_interface` instead, dropping this one line removes those too.
 
 ## pyotp and selenium came back deliberately
 
@@ -32,7 +32,7 @@ Between them these two lines add ten packages, of which `trio`, `trio-websocket`
 
 `httpx` was already in the environment as a transitive dependency of `chromadb-client`. Listing it here promotes it to a direct dependency and pins the version.
 
-This is a deliberate exception to the rule at the top of this note, which says only packages black_box imports directly are listed. Nothing imports `httpx` yet. It was added on the user's instruction, ahead of whatever will use it.
+This is a deliberate exception to the rule at the top of this note, which says only packages tradingmachine imports directly are listed. Nothing imports `httpx` yet. It was added on the user's instruction, ahead of whatever will use it.
 
 ## Why the three login lines are not at the end of the file
 

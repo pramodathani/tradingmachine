@@ -6,7 +6,7 @@ Ported from `unified_broker_interface`'s `back_office/instruments_v2/adapters/ba
 
 `instrument_id()` hashes the composite natural key (exchange, segment, shape, identity fields) with `uuid5`. Every broker's adapter computes the id independently, so the same instrument from any broker produces the same id and upserts converge on one `instruments.master` row. There is no pairwise matching, no voting, no registry — this is the whole cross-broker merge.
 
-`IDENTITY_NAMESPACE` is a fresh fixed UUID, chosen when this file was written, and deliberately different from UBI's v2 namespace so a black_box instrument id can never alias a UBI v2 id if the two systems are ever compared or combined.
+`IDENTITY_NAMESPACE` is a fresh fixed UUID, chosen when this file was written, and deliberately different from UBI's v2 namespace so a tradingmachine instrument id can never alias a UBI v2 id if the two systems are ever compared or combined.
 
 ## The Decimal hashing bug, found live at UBI
 
@@ -27,7 +27,7 @@ UBI v1 had a live example of what happens without load-time validation: seven of
 
 `_validate_config` accepts both the bare name and the `{exchange}_`-prefixed form when checking segment membership, because the prefixed form is what the YAMLs carry; the prefix is stripped back to the bare name before looking it up.
 
-## Uncategorised routing, the black_box addition
+## Uncategorised routing, the tradingmachine addition
 
 UBI v2 silently skipped rows whose `classify()` returned None. Here `run()` routes them to a catch-all instead: `uncategorised_exchange()` (overridden per broker wherever the raw row carries a usable exchange column) picks the per-exchange bucket, and the unprefixed `uncategorised` entry is the guaranteed fallback. When the row's symbol is blank the broker token becomes the identity symbol, so the id is never computed over an empty field. This keeps coverage measurable — raw rows must equal matched plus uncategorised plus errors — and the full raw row stays recoverable from the broker's raw table by broker, mapping date, and token, which is why no separate capture table with a JSONB payload was built.
 
