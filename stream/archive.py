@@ -27,6 +27,7 @@ BROKER_CODES = {
     "zerodha": 1,
     "dhan": 2,
     "flattrade": 3,
+    "shoonya": 4,
 }
 
 
