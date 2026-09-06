@@ -23,7 +23,7 @@ def resolve_broker_tokens(engine, exchange, segment, shape, identity, as_of_date
     Find every broker's token for one instrument identity.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         exchange (str): Canonical lowercase exchange name, for example "nse".
         segment (str): Exchange-prefixed segment value, for example "nse_equities".
         shape (str): One of "security", "future", or "option".
@@ -83,7 +83,7 @@ def resolve_identity(engine, broker, broker_tokens, as_of_date):
     A token can point at more than one instrument, which happens when a broker's file reuses it, so the most recent mapping wins and the symbol breaks any remaining tie. That keeps the answer stable from one call to the next rather than depending on row order.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         broker (str): The broker name, for example "zerodha".
         broker_tokens (list[str]): The broker's own tokens to resolve.
         as_of_date (datetime.date): Use the latest mapping on or before this date.
@@ -139,7 +139,7 @@ def resolve_raw_row(engine, broker, broker_token, as_of_date):
     Fetch a broker's full raw instrument row for one of its own tokens.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         broker (str): The broker name, which is also its raw table name under the instruments schema.
         broker_token (str): The broker's own token, as stored in instruments.broker_mappings.
         as_of_date (datetime.date): Use the latest downloaded snapshot on or before this date.

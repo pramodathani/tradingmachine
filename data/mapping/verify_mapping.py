@@ -59,7 +59,7 @@ def check_coverage(engine, mapping_date):
     Every raw row must end up either classified into a real segment or filed in an uncategorised bucket. A shortfall means rows were dropped somewhere, which is the failure this whole layer is meant to make impossible to hide.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:
@@ -106,7 +106,7 @@ def check_convergence(engine, mapping_date):
     Report how many instruments are carried by several brokers, and check the spot list by hand.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:
@@ -147,7 +147,7 @@ def check_duplicates(engine, mapping_date):
     A broker's token space is per exchange segment, not global, so the same number legitimately means one thing on the cash market and another on the currency derivatives market. Those cases are expected and are counted separately from the ones worth looking at.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:
@@ -224,7 +224,7 @@ def check_index_names(engine, mapping_date):
     Report NSE equity index names whose normalized forms collide, which is how an alias leak shows itself.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:
@@ -259,7 +259,7 @@ def check_round_trips(engine, mapping_date):
     Resolve a random sample of stored mappings in both directions and report any mismatch.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:
@@ -319,7 +319,7 @@ def unexplained_backward_misses(engine, backward_failures, mapping_date):
     Narrow a list of backward misses down to the ones the broker's own duplicate tokens do not explain.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         backward_failures (list[tuple]): The (broker, token, segment) triples that resolved to another instrument.
         mapping_date (datetime.date): The date the sample came from.
 
@@ -378,7 +378,7 @@ def check_backfill(engine):
     Report per-date instrument counts and the first and last seen date extremes across the whole history.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
 
     Returns:
         None
@@ -426,7 +426,7 @@ def check_uncategorised_profile(engine, mapping_date):
     Report where each broker's uncategorised rows landed, so the bucket cannot quietly hide a rules gap.
 
     Args:
-        engine: A SQLAlchemy engine for the black_box database.
+        engine: A SQLAlchemy engine for the tradingmachine database.
         mapping_date (datetime.date): The date to check.
 
     Returns:

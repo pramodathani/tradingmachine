@@ -1,5 +1,5 @@
 """
-Daily broker login for black_box.
+Daily broker login for tradingmachine.
 
 Logs in to every broker whose credentials are held in the MongoDB `settings` collection and records the access token each broker returns in the MongoDB `last_login` collection.
 Broker access tokens expire at the end of the trading day, so this module is meant to be run once every morning before the market opens.
@@ -41,13 +41,13 @@ class BrokerLoginError(Exception):
 
 def open_mongodb_database():
     """
-    Open the black_box MongoDB database that holds the broker credentials and access tokens.
+    Open the tradingmachine MongoDB database that holds the broker credentials and access tokens.
 
     Args:
         None.
 
     Returns:
-        pymongo.database.Database: The black_box database named by the environment configuration.
+        pymongo.database.Database: The tradingmachine database named by the environment configuration.
     """
     client = pymongo.MongoClient(mongodb_configuration["connection_string"])
     return client[mongodb_configuration["database"]]
@@ -58,7 +58,7 @@ def read_broker_settings(mongodb_database, broker_name):
     Read one broker's credentials from the `settings` collection.
 
     Args:
-        mongodb_database (pymongo.database.Database): The black_box database.
+        mongodb_database (pymongo.database.Database): The tradingmachine database.
         broker_name (str): Name of the broker, for example "zerodha".
 
     Returns:
@@ -78,7 +78,7 @@ def save_last_login(mongodb_database, broker_name, login_details):
     Record a broker's fresh access token in the `last_login` collection.
 
     Args:
-        mongodb_database (pymongo.database.Database): The black_box database.
+        mongodb_database (pymongo.database.Database): The tradingmachine database.
         broker_name (str): Name of the broker, for example "zerodha".
         login_details (dict): The access token, and any further session values the broker needs on later calls.
 
@@ -96,7 +96,7 @@ def logged_in_today(mongodb_database, broker_name):
     Report whether a broker already has an access token issued earlier on today's date.
 
     Args:
-        mongodb_database (pymongo.database.Database): The black_box database.
+        mongodb_database (pymongo.database.Database): The tradingmachine database.
         broker_name (str): Name of the broker, for example "zerodha".
 
     Returns:
