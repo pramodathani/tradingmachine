@@ -109,30 +109,6 @@ TIMESTAMP_FIELDS = {
     "exchange_timestamp",
 }
 
-TOUCHLINE_BOOK_FIELDS = {
-    "touchline_bid_quantity",
-    "touchline_ask_quantity",
-    "touchline_bid_price",
-    "touchline_ask_price",
-}
-
-PRICE_FIELDS = {
-    "last_price",
-    "average_traded_price",
-    "open_price",
-    "high_price",
-    "low_price",
-    "close_price",
-    "yearly_high_price",
-    "yearly_low_price",
-    "lower_circuit_price",
-    "upper_circuit_price",
-    "touchline_bid_price",
-    "touchline_ask_price",
-    "bid_prices",
-    "ask_prices",
-}
-
 CONTRACT_FIELDS = (
     "exchange_timestamp",
     "last_trade_time",
