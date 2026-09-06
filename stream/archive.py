@@ -28,6 +28,7 @@ BROKER_CODES = {
     "dhan": 2,
     "flattrade": 3,
     "shoonya": 4,
+    "fyers": 5,
 }
 
 
