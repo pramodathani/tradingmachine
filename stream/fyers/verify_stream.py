@@ -1093,6 +1093,8 @@ def select_verification_instruments(engine, per_exchange):
 
     A spread matters more than a large sample. The price divisor is the thing under test and it is a per instrument property on this feed, so a hundred NSE equities would settle one segment and say nothing about the others, while three from each segment settles all of them.
 
+    The two dates are looked up first and passed in as parameters rather than written as sub-selects inside the main query. Both raw tables are TimescaleDB hypertables, and a sub-select makes the partitioning column's value a runtime value, which under a parallel plan makes chunk exclusion intermittently exclude every chunk and return no rows. The same query returned the right rows on some runs and none on others, on fresh connections. Resolving the dates first makes them plan-time constants and the result stable.
+
     Args:
         engine: A SQLAlchemy engine for the tradingmachine database.
         per_exchange (int): How many instruments to take from each segment.
@@ -1104,15 +1106,30 @@ def select_verification_instruments(engine, per_exchange):
         sqlalchemy.exc.SQLAlchemyError: If the instrument tables cannot be read.
     """
     with engine.connect() as database_connection:
-        rows = database_connection.execute(sql_text(
-            "SELECT f.fytoken, f.scrip_code, f.symbol_ticker "
-            "FROM instruments.fyers f "
-            "JOIN instruments.broker_mappings b ON b.broker_token = f.fytoken AND b.broker = 'fyers' "
-            "JOIN instruments.master m ON m.instrument_id = b.instrument_id "
-            "WHERE f.download_date = (SELECT max(download_date) FROM instruments.fyers) "
-            "  AND b.mapping_date = (SELECT max(mapping_date) FROM instruments.broker_mappings WHERE broker = 'fyers') "
-            "  AND (m.expiry_date IS NULL OR m.expiry_date > CURRENT_DATE)"
-        )).all()
+        download_date = database_connection.execute(sql_text(
+            "SELECT max(download_date) FROM instruments.fyers"
+        )).scalar()
+        mapping_date = database_connection.execute(sql_text(
+            "SELECT max(mapping_date) FROM instruments.broker_mappings WHERE broker = 'fyers'"
+        )).scalar()
+        if download_date is None or mapping_date is None:
+            return []
+
+        rows = database_connection.execute(
+            sql_text(
+                "SELECT f.fytoken, f.scrip_code, f.symbol_ticker "
+                "FROM instruments.fyers f "
+                "JOIN instruments.broker_mappings b ON b.broker_token = f.fytoken AND b.broker = 'fyers' "
+                "JOIN instruments.master m ON m.instrument_id = b.instrument_id "
+                "WHERE f.download_date = :download_date "
+                "  AND b.mapping_date = :mapping_date "
+                "  AND (m.expiry_date IS NULL OR m.expiry_date > CURRENT_DATE)"
+            ),
+            {
+                "download_date": download_date,
+                "mapping_date": mapping_date,
+            },
+        ).all()
 
     by_segment = {}
     for row in rows:
