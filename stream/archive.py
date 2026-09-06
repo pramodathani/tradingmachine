@@ -26,6 +26,7 @@ MANIFEST_FILE_NAME = "manifest.jsonl"
 BROKER_CODES = {
     "zerodha": 1,
     "dhan": 2,
+    "flattrade": 3,
 }
 
 

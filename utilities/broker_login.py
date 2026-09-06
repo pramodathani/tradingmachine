@@ -28,7 +28,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from utilities.configuration import mongodb_configuration
 
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = 90
 PAGE_LOAD_PAUSE_SECONDS = 2
 REDIRECT_WAIT_SECONDS = 30
 
@@ -212,7 +212,7 @@ def login_to_flattrade(settings):
         settings (dict): Flattrade's credentials, which must contain username, password, api_key, api_secret and totp_secret.
 
     Returns:
-        dict: The Flattrade access token, under the key "access_token".
+        dict: The Flattrade access token, under the key "access_token", and the account identifier the token exchange reports, under the key "uid" when it gives one. The websocket connect message sends the account identifier as both uid and actid, so it is stored alongside the token rather than asked for again.
 
     Raises:
         BrokerLoginError: If Flattrade rejects the login or returns no access token.
@@ -267,10 +267,14 @@ def login_to_flattrade(settings):
     )
     if response.status_code != 200:
         raise BrokerLoginError(f"Flattrade would not exchange the request code, status {response.status_code}: {response.text}")
-    access_token = response.json().get("token")
+    token_response = response.json()
+    access_token = token_response.get("token")
     if not access_token:
         raise BrokerLoginError(f"Flattrade returned no access token: {response.text}")
-    return {"access_token": access_token}
+    login_details = {"access_token": access_token}
+    if token_response.get("client"):
+        login_details["uid"] = token_response.get("client")
+    return login_details
 
 
 def login_to_fyers(settings):
