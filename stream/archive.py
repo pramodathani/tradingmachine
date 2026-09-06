@@ -29,6 +29,7 @@ BROKER_CODES = {
     "flattrade": 3,
     "shoonya": 4,
     "fyers": 5,
+    "groww": 6,
 }
 
 
