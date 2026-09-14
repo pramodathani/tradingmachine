@@ -6,13 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The repository is a git repository on the `main` branch, tracking `origin/main`. It holds `requirements.txt`, a stub `README.md`, a `pyproject.toml` that sets only the project name and version (currently `0.1.0`), a `docker-compose.yml` for the local databases, and a Python 3.14 virtual environment in `.venv/` with the required packages installed. There is no `ruff.toml` or test suite.
 
-The only source code so far is the client for the sibling project's REST API and the configuration it reads:
+The source code so far is the client for the sibling project's REST API, the configuration it reads, and the instrument classes built on it:
 
 ```
 utilities/configuration.py   ubi_configuration and mongodb_configuration, read from .env
 ubi_client/client.py         UnifiedBrokerInterface: connect, disconnect, status, get, post, put, patch, delete
 ubi_client/exceptions.py     one error class per HTTP status code UBI returns
+assets/instruments.py        Instrument, TradeableInstrument, NonTradeableInstrument
+assets/exceptions.py         InstrumentError and its two subclasses
+assets/analysis/             thirteen classes of candle analysis that Instrument inherits
 ```
+
+`Instrument` looks an instrument up once through `/api/instruments/details`, then fetches candles (`prices`) and live values (`quote`, `last_price`, `ohlc`) from UBI on every call. It inherits about 190 analysis methods from `assets/analysis/`: TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest. `TradeableInstrument` adds order-book values and refuses indices, and `NonTradeableInstrument` accepts only indices. Order placement is not ported yet. There is deliberately no caching and no date-range batching around UBI calls, because UBI is local and caches in its own Redis.
 
 Imports use full package paths (`from ubi_client import client`), so scripts run from the project root with the root on `PYTHONPATH`. Reasoning behind each file is in `.claude/notes/`, mirroring the source tree.
 
@@ -58,12 +63,12 @@ docker compose down
 
 ## Intended scope, inferred from dependencies
 
-The pinned dependencies suggest what the project is for. Apart from the UBI client, none of this is implemented yet:
+The pinned dependencies suggest what the project is for. Apart from the UBI client and the instrument classes, none of this is implemented yet:
 
 | Area | Packages |
 |---|---|
-| Market data | `yfinance`, `requests`, `beautifulsoup4`, `selenium`, `websocket-client`, `websockets` |
+| Market data | UBI's REST API through `assets.instruments`, which is implemented; `yfinance`, `beautifulsoup4`, `selenium`, `websocket-client`, `websockets` |
 | Broker access | `requests` through `ubi_client`, which is implemented; `pyotp` (time-based one-time passwords) |
-| Analysis and backtesting | `pandas`, `numpy`, `TA-Lib`, `backtesting`, `opstrat` |
+| Analysis and backtesting | `pandas`, `numpy`, `TA-Lib` and `backtesting` through `assets.analysis`, which is implemented; `opstrat` |
 | Storage | `redis`, `pymongo`, `psycopg2-binary`, `SQLAlchemy`, `peewee` |
 | Interfaces | `streamlit`, `Flask`, `textual`, `uvicorn`, `gunicorn` |
