@@ -26,6 +26,8 @@ class Signals(price_analysis.PriceAnalysis):
     ) -> pd.DataFrame:
         """Marks the rows where the first column rises above the second.
 
+        A row is marked when, on the previous row, the first column was at or below the second, and on this row it is above the second. The first row is never marked.
+
         Args:
             data: The pandas.DataFrame holding both columns, which is not changed.
             first_column: The str name of the column that crosses.
@@ -37,16 +39,13 @@ class Signals(price_analysis.PriceAnalysis):
         Raises:
             KeyError: data has no column named first_column or second_column.
         """
-        data = data.copy()
-        columns = data.columns.tolist()
-        data.reset_index(inplace=True, drop=True)
-        data["shifted_column1"] = data[first_column].shift()
-        crossed = (data["shifted_column1"] <= data[second_column]) & (
-            data[second_column] < data[first_column]
-        )
-        data["cross_over"] = np.where(crossed, True, False)
-        columns.append("cross_over")
-        return data[columns]
+        data = data.reset_index(drop=True)
+        previous_first = data[first_column].shift()
+        previous_second = data[second_column].shift()
+        was_at_or_below = previous_first <= previous_second
+        is_above = data[first_column] > data[second_column]
+        data["cross_over"] = np.where(was_at_or_below & is_above, True, False)
+        return data
 
     def is_cross_under(
         self,
@@ -55,6 +54,8 @@ class Signals(price_analysis.PriceAnalysis):
         second_column: str,
     ) -> pd.DataFrame:
         """Marks the rows where the first column falls below the second.
+
+        A row is marked when, on the previous row, the first column was at or above the second, and on this row it is below the second. The first row is never marked.
 
         Args:
             data: The pandas.DataFrame holding both columns, which is not changed.
@@ -67,13 +68,10 @@ class Signals(price_analysis.PriceAnalysis):
         Raises:
             KeyError: data has no column named first_column or second_column.
         """
-        data = data.copy()
-        columns = data.columns.tolist()
-        data.reset_index(inplace=True, drop=True)
-        data["shifted_column1"] = data[first_column].shift()
-        crossed = (data["shifted_column1"] >= data[second_column]) & (
-            data[second_column] > data[first_column]
-        )
-        data["cross_under"] = np.where(crossed, True, False)
-        columns.append("cross_under")
-        return data[columns]
+        data = data.reset_index(drop=True)
+        previous_first = data[first_column].shift()
+        previous_second = data[second_column].shift()
+        was_at_or_above = previous_first >= previous_second
+        is_below = data[first_column] < data[second_column]
+        data["cross_under"] = np.where(was_at_or_above & is_below, True, False)
+        return data

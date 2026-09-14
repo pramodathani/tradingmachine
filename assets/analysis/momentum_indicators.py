@@ -1068,6 +1068,7 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
     def stochastic_relative_strength_index(
         self,
+        window: int = 14,
         fast_k_period: int = 5,
         fast_d_period: int = 3,
         fast_d_moving_average_type: int = 0,
@@ -1081,7 +1082,8 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
         """Adds the stochastic relative strength index's %K and %D lines for one candle column.
 
         Args:
-            fast_k_period: The int number of candles in the relative strength index that the stochastic is taken of.
+            window: The int number of candles in the relative strength index that the stochastic is taken of.
+            fast_k_period: The int number of relative strength index values the stochastic %K looks back over.
             fast_d_period: The int number of candles smoothing %K into %D.
             fast_d_moving_average_type: The int TA-Lib moving average type for %D, where 0 is a simple moving average.
             column: The str name of the candle column to use, such as `close`.
@@ -1108,7 +1110,8 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
             return None
         fast_k, fast_d = talib.STOCHRSI(
             prices[column],
-            timeperiod=fast_k_period,
+            timeperiod=window,
+            fastk_period=fast_k_period,
             fastd_period=fast_d_period,
             fastd_matype=fast_d_moving_average_type,
         )

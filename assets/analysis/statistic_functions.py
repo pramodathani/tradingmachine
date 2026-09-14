@@ -6,6 +6,8 @@ Typical usage example:
 
   infosys = instruments.Instrument(exchange="nse", segment="equities", symbol="INFY")
   frame = infosys.linear_regression_slope(window=14, days=365)
+  nifty = instruments.NonTradeableInstrument(exchange="nse", segment="equity_indices", symbol="NIFTY")
+  frame = infosys.beta(nifty, window=60, days=730)
 """
 
 import datetime
@@ -21,17 +23,23 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
     def beta(
         self,
+        benchmark: price_analysis.PriceAnalysis,
         window: int = 14,
+        column: str = "close",
         interval: str = "day",
         from_date: datetime.date | str | None = None,
         to_date: datetime.date | str | None = None,
         days: int | None = None,
         adjusted: bool = True,
     ) -> pd.DataFrame | None:
-        """Adds the rolling beta of the high column against the low column.
+        """Adds the rolling beta of the instrument against a benchmark, such as an index.
+
+        TA-Lib's beta works on the change from each candle to the next, so a beta of 1 means the instrument moved in step with the benchmark. Candles are matched by time, and a candle either side lacks is left out.
 
         Args:
+            benchmark: The instrument to measure against, such as an assets.instruments.NonTradeableInstrument for NIFTY, or any other object with a `prices` method.
             window: The int number of candles in each calculation window.
+            column: The str name of the candle column to use from both, such as `close`.
             interval: The str candle interval, such as `day` or `5minute`.
             from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
             to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
@@ -39,12 +47,14 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
             adjusted: A bool that is True for prices adjusted for splits and bonuses.
 
         Returns:
-            A pandas.DataFrame of the candles with a `beta_<window>` column added, or None when UBI has no candles for the range.
+            A pandas.DataFrame of the matched candles with a `benchmark_<column>` column and a `beta_<window>` column added, or None when UBI has no candles for either instrument in the range.
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        prices = self.prices(
+        prices = self._prices_with_benchmark(
+            benchmark=benchmark,
+            column=column,
             interval=interval,
             from_date=from_date,
             to_date=to_date,
@@ -54,25 +64,31 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
         if prices is None:
             return None
         prices[f"beta_{window}"] = talib.BETA(
-            prices["high"],
-            prices["low"],
+            prices[f"benchmark_{column}"],
+            prices[column],
             timeperiod=window,
         )
         return prices
 
     def correlation_coefficient(
         self,
+        benchmark: price_analysis.PriceAnalysis,
         window: int = 14,
+        column: str = "close",
         interval: str = "day",
         from_date: datetime.date | str | None = None,
         to_date: datetime.date | str | None = None,
         days: int | None = None,
         adjusted: bool = True,
     ) -> pd.DataFrame | None:
-        """Adds the rolling Pearson correlation of the high column with the low column.
+        """Adds the rolling Pearson correlation of the instrument's returns with a benchmark's returns.
+
+        Returns, the fractional change from each candle to the next, are correlated rather than price levels, because two unrelated prices that both trend upwards would otherwise look strongly correlated. Candles are matched by time, and a candle either side lacks is left out.
 
         Args:
-            window: The int number of candles in each calculation window.
+            benchmark: The instrument to compare with, such as an assets.instruments.NonTradeableInstrument for NIFTY, or any other object with a `prices` method.
+            window: The int number of returns in each calculation window.
+            column: The str name of the candle column to use from both, such as `close`.
             interval: The str candle interval, such as `day` or `5minute`.
             from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
             to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
@@ -80,7 +96,52 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
             adjusted: A bool that is True for prices adjusted for splits and bonuses.
 
         Returns:
-            A pandas.DataFrame of the candles with a `corr_<window>` column added, or None when UBI has no candles for the range.
+            A pandas.DataFrame of the matched candles with a `benchmark_<column>` column and a `corr_<window>` column added, which lies between -1 and 1, or None when UBI has no candles for either instrument in the range.
+
+        Raises:
+            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+        """
+        prices = self._prices_with_benchmark(
+            benchmark=benchmark,
+            column=column,
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+            days=days,
+            adjusted=adjusted,
+        )
+        if prices is None:
+            return None
+        prices[f"corr_{window}"] = talib.CORREL(
+            prices[column].pct_change(),
+            prices[f"benchmark_{column}"].pct_change(),
+            timeperiod=window,
+        )
+        return prices
+
+    def _prices_with_benchmark(
+        self,
+        benchmark: price_analysis.PriceAnalysis,
+        column: str,
+        interval: str = "day",
+        from_date: datetime.date | str | None = None,
+        to_date: datetime.date | str | None = None,
+        days: int | None = None,
+        adjusted: bool = True,
+    ) -> pd.DataFrame | None:
+        """Fetches the instrument's candles with a benchmark's column matched to them by time.
+
+        Args:
+            benchmark: The object with a `prices` method whose column is matched in.
+            column: The str name of the candle column taken from the benchmark.
+            interval: The str candle interval, such as `day` or `5minute`.
+            from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            days: The int number of days to count back from today, or None when from_date and to_date are given.
+            adjusted: A bool that is True for prices adjusted for splits and bonuses.
+
+        Returns:
+            A pandas.DataFrame of the instrument's candles that have a benchmark candle at the same time, with an added `benchmark_<column>` column, or None when either has no candles in the range.
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
@@ -94,12 +155,25 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
         )
         if prices is None:
             return None
-        prices[f"corr_{window}"] = talib.CORREL(
-            prices["high"],
-            prices["low"],
-            timeperiod=window,
+        benchmark_prices = benchmark.prices(
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+            days=days,
+            adjusted=adjusted,
         )
-        return prices
+        if benchmark_prices is None:
+            return None
+        benchmark_column = benchmark_prices[
+            [
+                "datetime",
+                column,
+            ]
+        ].rename(columns={column: f"benchmark_{column}"})
+        matched = prices.merge(benchmark_column, on="datetime", how="inner")
+        if matched.empty:
+            return None
+        return matched
 
     def linear_regression(
         self,
