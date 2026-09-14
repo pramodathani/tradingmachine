@@ -8,7 +8,7 @@ Typical usage example:
       ...
 
   infosys = instruments.Instrument(exchange="nse", segment="equities", symbol="INFY")
-  statistics = infosys.run_backtest(SmaCross, cash=100000, days=730)
+  statistics = infosys.run_backtest(SmaCross, cash=100000, days=730, plot_filename="sma_cross.html")
 """
 
 import datetime
@@ -31,15 +31,14 @@ class StrategyBacktests(price_analysis.PriceAnalysis):
         trade_on_close: bool = False,
         hedging: bool = False,
         exclusive_orders: bool = False,
+        plot_filename: str | None = None,
         interval: str = "day",
         from_date: datetime.date | str | None = None,
         to_date: datetime.date | str | None = None,
         days: int | None = None,
         adjusted: bool = True,
     ) -> pd.Series | None:
-        """Runs a strategy over the candles in a range and plots the result.
-
-        The plot is written as an HTML file and opened in a browser by `backtesting`.
+        """Runs a strategy over the candles in a range, optionally saving a plot of the result.
 
         Args:
             strategy: The backtesting.Strategy subclass to run.
@@ -49,6 +48,7 @@ class StrategyBacktests(price_analysis.PriceAnalysis):
             trade_on_close: A bool that is True to fill market orders at the current candle's close rather than the next candle's open.
             hedging: A bool that is True to allow long and short trades at the same time.
             exclusive_orders: A bool that is True to close the open trade whenever a new order is placed.
+            plot_filename: The str path of an HTML file to write the interactive plot to, or None to skip the plot. The file is not opened.
             interval: The str candle interval, such as `day` or `5minute`.
             from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
             to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
@@ -98,5 +98,10 @@ class StrategyBacktests(price_analysis.PriceAnalysis):
             exclusive_orders=exclusive_orders,
         )
         statistics = backtest.run()
-        backtest.plot()
+        if plot_filename is not None:
+            backtest.plot(
+                results=statistics,
+                filename=plot_filename,
+                open_browser=False,
+            )
         return statistics
