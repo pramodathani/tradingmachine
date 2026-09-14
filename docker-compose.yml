@@ -1,0 +1,72 @@
+name: tradingmachine
+
+services:
+  redis:
+    image: redis:trixie
+    command: redis-server --requirepass ${TRADINGMACHINE_REDIS_PASSWORD} --appendonly yes
+    environment:
+      REDIS_PASSWORD: "${TRADINGMACHINE_REDIS_PASSWORD}"
+    ports:
+      - "0.0.0.0:${TRADINGMACHINE_REDIS_PORT:-2002}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - network
+
+  mongodb:
+    image: mongo:8.0.4
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${TRADINGMACHINE_MONGODB_USERNAME:-tradingmachine}"
+      MONGO_INITDB_ROOT_PASSWORD: "${TRADINGMACHINE_MONGODB_PASSWORD}"
+    ports:
+      - "0.0.0.0:${TRADINGMACHINE_MONGODB_PORT:-2003}:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --username \"$${MONGO_INITDB_ROOT_USERNAME}\" --password \"$${MONGO_INITDB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval 'db.runCommand({ping:1})' --quiet"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - network
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg18
+    shm_size: 1g
+    environment:
+      PGDATA: /pgdata
+      POSTGRES_DB: "${TRADINGMACHINE_TIMESCALEDB_DB:-tradingmachine}"
+      POSTGRES_USER: "${TRADINGMACHINE_TIMESCALEDB_USERNAME:-tradingmachine}"
+      POSTGRES_PASSWORD: "${TRADINGMACHINE_TIMESCALEDB_PASSWORD}"
+    ports:
+      - "0.0.0.0:${TRADINGMACHINE_TIMESCALEDB_PORT:-2004}:5432"
+    volumes:
+      - timescaledb_data:/pgdata
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - network
+
+volumes:
+  redis_data:
+    name: tradingmachine_redis_volume
+  mongodb_data:
+    name: tradingmachine_mongodb_volume
+  timescaledb_data:
+    name: tradingmachine_timescaledb_volume
+
+networks:
+  network:
+    name: tradingmachine_network
+    driver: bridge
