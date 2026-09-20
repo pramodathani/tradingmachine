@@ -1,4 +1,4 @@
-"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities`, `assets.fixed_income`, `assets.commodities`, `assets.currencies` and `assets.funds`.
+"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities`, `assets.fixed_income`, `assets.commodities`, `assets.currencies`, `assets.funds` and `assets.mutual_funds`.
 
 These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
 
@@ -137,3 +137,7 @@ class ExchangeTradedFundError(InstrumentError):
 
 class InvestmentTrustError(InstrumentError):
     """An investment trust UBI does not know, or one that is not in the investment trusts segment."""
+
+
+class MutualFundError(InstrumentError):
+    """A mutual fund scheme UBI does not know, or one that is not in the mutual funds segment."""
