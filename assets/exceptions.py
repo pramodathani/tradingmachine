@@ -1,4 +1,4 @@
-"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities`, `assets.fixed_income` and `assets.commodities`.
+"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities`, `assets.fixed_income`, `assets.commodities` and `assets.currencies`.
 
 These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
 
@@ -105,3 +105,27 @@ class CommodityIndexFuturesError(InstrumentError):
 
 class CommodityIndexOptionError(InstrumentError):
     """A commodity index option UBI does not know, or one that is not in the commodity index options segment."""
+
+
+class CurrencyError(InstrumentError):
+    """A currency pair UBI does not know, or one that is not in the currencies segment."""
+
+
+class CurrencyFuturesError(InstrumentError):
+    """A currency futures contract UBI does not know, or one that is not in the currency futures segment."""
+
+
+class CurrencyOptionError(InstrumentError):
+    """A currency option UBI does not know, or one that is not in the currency options segment."""
+
+
+class CurrencyIndexError(InstrumentError):
+    """A currency index UBI does not know, which is true of every one of them today, or one that is not in the currency indices segment."""
+
+
+class CurrencyIndexFuturesError(InstrumentError):
+    """A currency index futures contract UBI does not know, which is true of every one of them today, or one that is not in the currency index futures segment."""
+
+
+class CurrencyIndexOptionError(InstrumentError):
+    """A currency index option UBI does not know, which is true of every one of them today, or one that is not in the currency index options segment."""
