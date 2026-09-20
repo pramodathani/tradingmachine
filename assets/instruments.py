@@ -1,6 +1,6 @@
 """Instruments from UBI's unified instrument universe, with their candles, live prices and analysis.
 
-`Instrument` looks an instrument up in UBI once, keeps its identity, lot size and tick size, and fetches candles and live prices on demand. It inherits every analysis class in `assets.analysis`, so indicators, candlestick patterns, statistics and backtests are methods on the instrument. `TradeableInstrument` adds the values that come from the order book and refuses indices, and `NonTradeableInstrument` accepts only indices.
+`Instrument` looks an instrument up in UBI once, keeps its identity, lot size and tick size, and fetches candles and live prices on demand. It inherits every analysis class in `assets.analysis`, so indicators, candlestick patterns, statistics and backtests are methods on the instrument. `TradeableInstrument` adds the values that come from the order book, the methods that place, change and cancel orders, and this instrument's own orders, trades and positions, and it refuses indices. `NonTradeableInstrument` accepts only indices.
 
 Every call goes straight to UBI's REST API, which caches on its own side.
 
@@ -9,6 +9,10 @@ Typical usage example:
   infosys = instruments.TradeableInstrument(exchange="nse", segment="equities", symbol="INFY")
   frame = infosys.relative_strength_index(window=14, days=365)
   spread = infosys.bid_offer_spread()
+
+  placed = infosys.place_order(transaction_type="buy", order_type="limit", quantity=1, product="cnc", price=1200)
+  pending = infosys.orders(open_only=True)
+  infosys.cancel_order(placed["order_id"])
 
   nifty = instruments.NonTradeableInstrument(exchange="nse", segment="equity_indices", symbol="NIFTY")
   level = nifty.last_price()
@@ -40,6 +44,23 @@ from ubi_client import exceptions as ubi_exceptions
 INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 INDEX_SEGMENT_SUFFIX = "_indices"
+
+ORDER_DETAILS_PATH = "/api/orders/details"
+
+ORDER_TRADES_PATH = "/api/orders/trades"
+
+ORDER_PLACE_PATH = "/api/orders/place"
+
+ORDER_MODIFY_PATH = "/api/orders/modify"
+
+ORDER_CANCEL_PATH = "/api/orders/cancel"
+
+POSITIONS_PATH = "/api/portfolio/positions"
+
+OPEN_ORDER_STATUSES = [
+    "PENDING",
+    "OPEN",
+]
 
 
 class Instrument(
@@ -575,6 +596,263 @@ class TradeableInstrument(Instrument):
         if epoch_seconds is None:
             return None
         return datetime.datetime.fromtimestamp(epoch_seconds, INDIA_TIME_ZONE)
+
+    def place_order(
+        self,
+        transaction_type: str,
+        order_type: str,
+        quantity: int,
+        product: str,
+        price: float | None = None,
+        trigger_price: float | None = None,
+        validity: str | None = None,
+        disclosed_quantity: int | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """Places one order in this instrument through UBI.
+
+        UBI chooses the broker itself, so no broker is named here. The values are sent exactly as given, without rounding the price to the tick size or checking the quantity against the lot size, because UBI and the broker behind it hold those rules.
+
+        UBI couples the price fields to the order type and answers HTTP 400 when they do not agree: a `limit` or `sl` order needs a price, an `sl` or `sl-m` order needs a trigger price, and a `market` or `sl-m` order must carry no price at all.
+
+        Args:
+            transaction_type: The str side of the order, `buy` or `sell`.
+            order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            price: The float limit price in rupees, or None for an order type that takes no price.
+            trigger_price: The float trigger price in rupees, or None for an order type that takes no trigger.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            disclosed_quantity: The int quantity to show on the exchange, or None to disclose the whole order.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+            dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
+
+        Returns:
+            A dict with `broker`, `instrument_id`, `order_id`, `outcome`, `status_message`, `broker_response`, `skipped` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. The `order_id` is None unless the outcome is `accepted`.
+
+        Raises:
+            BadRequestError: A field is invalid, or the price fields do not fit the order type.
+            NotFoundError: No broker has a mapping for this instrument.
+            OrderRejectedError: The broker refused the order, and the detail holds its answer.
+            ServiceUnavailableError: No broker could take the order.
+            OrderOutcomeUnknownError: The order was sent but its outcome is unknown, so read the order book before sending it again.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        body = {
+            "instrument_id": self.instrument_id,
+            "transaction_type": transaction_type,
+            "order_type": order_type,
+            "quantity": quantity,
+            "product": product,
+            "after_market": after_market,
+            "dry_run": dry_run,
+        }
+        optional_fields = {
+            "price": price,
+            "trigger_price": trigger_price,
+            "validity": validity,
+            "disclosed_quantity": disclosed_quantity,
+            "tag": tag,
+        }
+        for field, value in optional_fields.items():
+            if value is not None:
+                body[field] = value
+        return self._unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
+
+    def modify_order(
+        self,
+        order_id: str,
+        quantity: int | None = None,
+        price: float | None = None,
+        trigger_price: float | None = None,
+        order_type: str | None = None,
+        validity: str | None = None,
+        disclosed_quantity: int | None = None,
+        broker: str | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """Changes one pending order through UBI.
+
+        UBI finds the order by its id in the brokers' order books, so this does not check that the order belongs to this instrument. Give at least one field to change; every field left as None keeps the value the order already has.
+
+        Args:
+            order_id: The str id the broker gave the order, as `place_order` returned it.
+            quantity: The int new total quantity in underlying units, counting what is already filled, or None to leave it.
+            price: The float new limit price in rupees, or None to leave it.
+            trigger_price: The float new trigger price in rupees, or None to leave it.
+            order_type: The str new kind of order, `market`, `limit`, `sl` or `sl-m`, or None to leave it.
+            validity: The str new validity, `day` or `ioc`, or None to leave it.
+            disclosed_quantity: The int new quantity to show on the exchange, or None to leave it.
+            broker: The str name of the broker holding the order, which is needed only after a ConflictError reporting that two brokers share the id, or None.
+            dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
+
+        Returns:
+            A dict with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `outcome`, `status_message`, `broker_response` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent.
+
+        Raises:
+            BadRequestError: No field was given to change, or a field is invalid or is one this broker cannot change.
+            NotFoundError: No broker's order book holds this order id.
+            ConflictError: The order is already complete, cancelled, rejected or expired, or two brokers hold the id and the detail lists them under `brokers`.
+            OrderRejectedError: The broker refused the change, and the detail holds its answer.
+            OrderOutcomeUnknownError: The change was sent but its outcome is unknown.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        body = {
+            "order_id": order_id,
+            "dry_run": dry_run,
+        }
+        changeable_fields = {
+            "quantity": quantity,
+            "price": price,
+            "trigger_price": trigger_price,
+            "order_type": order_type,
+            "validity": validity,
+            "disclosed_quantity": disclosed_quantity,
+            "broker": broker,
+        }
+        for field, value in changeable_fields.items():
+            if value is not None:
+                body[field] = value
+        return self._unified_broker_interface.put(ORDER_MODIFY_PATH, body=body)
+
+    def cancel_order(
+        self,
+        order_id: str,
+        broker: str | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """Cancels one pending order through UBI.
+
+        UBI finds the order by its id in the brokers' order books, so this does not check that the order belongs to this instrument.
+
+        Args:
+            order_id: The str id the broker gave the order, as `place_order` returned it.
+            broker: The str name of the broker holding the order, which is needed only after a ConflictError reporting that two brokers share the id, or None.
+            dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
+
+        Returns:
+            A dict with `broker`, `order_id`, `status_before_cancel`, `outcome`, `status_message`, `broker_response` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent.
+
+        Raises:
+            BadRequestError: The order id, broker or dry run flag is malformed.
+            NotFoundError: No broker's order book holds this order id.
+            ConflictError: The order is already complete, cancelled, rejected or expired, or two brokers hold the id and the detail lists them under `brokers`.
+            OrderRejectedError: The broker refused the cancellation, and the detail holds its answer.
+            OrderOutcomeUnknownError: The cancellation was sent but its outcome is unknown.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        body = {
+            "order_id": order_id,
+            "dry_run": dry_run,
+        }
+        if broker is not None:
+            body["broker"] = broker
+        return self._unified_broker_interface.delete(ORDER_CANCEL_PATH, body=body)
+
+    def orders(self, open_only: bool = False) -> pd.DataFrame | None:
+        """Fetches today's orders in this instrument.
+
+        UBI serves the whole account's order book and has no endpoint for one instrument, so this reads the book and keeps its own rows. The book is not merged across brokers, so one order placed at one broker appears once, and the same instrument traded at two brokers gives a row from each.
+
+        Args:
+            open_only: A bool that is True to keep only the orders that can still be changed or cancelled, which are the ones whose status is `PENDING` or `OPEN`.
+
+        Returns:
+            A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, or None when this instrument has no such orders today.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(ORDER_DETAILS_PATH)["orders"]
+        if open_only:
+            open_rows = []
+            for row in rows:
+                if row["status"] in OPEN_ORDER_STATUSES:
+                    open_rows.append(row)
+            rows = open_rows
+        return self._frame_for_this_instrument(rows)
+
+    def trades(self) -> pd.DataFrame | None:
+        """Fetches today's trades in this instrument.
+
+        UBI serves the whole account's trade book and has no endpoint for one instrument, so this reads the book and keeps its own rows. One order can produce several trades, and each trade names the order it came from.
+
+        Returns:
+            A pandas.DataFrame with UBI's trade fields, among them `broker`, `trade_id`, `order_id`, `transaction_type`, `product`, `quantity`, `price`, `value` and `trade_timestamp`, or None when this instrument has no trades today.
+
+        Raises:
+            BrokerError: No broker's trade book could be read.
+            ServiceUnavailableError: UBI's trade book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(ORDER_TRADES_PATH)["trades"]
+        return self._frame_for_this_instrument(rows)
+
+    @property
+    def positions(self) -> pd.DataFrame | None:
+        """The positions held in this instrument now, merged across every broker.
+
+        A position is what a derivative or an intraday trade leaves open, as against a holding, which is a share kept in the demat account and belongs to `Equity` instead.
+
+        Reading this sends one request to UBI every time, because UBI serves the whole account's positions and has no endpoint for a single instrument. UBI merges the brokers' positions by instrument and product, so one instrument gives one row per product it is held under, and no row names a broker.
+
+        Returns:
+            A pandas.DataFrame with `instrument_id`, `symbol`, `exchange`, `segment`, `product`, `quantity`, `buy`, `sell`, `average_price`, `last_price`, `pnl`, `day_change` and `day_change_percentage`, where `quantity` is positive when long and negative when short, or None when nothing is held in this instrument.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(POSITIONS_PATH)["net"]
+        return self._frame_for_this_instrument(rows)
+
+    @property
+    def day_positions(self) -> pd.DataFrame | None:
+        """Today's own positions in this instrument, without what was carried in.
+
+        This is the same shape as `positions`, counting only what was opened and closed today. It is usually empty even when `positions` is not, because only some brokers report a position on a day basis at all.
+
+        Returns:
+            A pandas.DataFrame with the same columns as `positions`, or None when no broker reports a day position in this instrument.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(POSITIONS_PATH)["day"]
+        return self._frame_for_this_instrument(rows)
+
+    def _frame_for_this_instrument(
+        self,
+        rows: list[dict],
+    ) -> pd.DataFrame | None:
+        """Keeps the rows belonging to this instrument and makes a frame of them.
+
+        A row UBI could not trace back to an instrument carries a null `instrument_id` and is left out, because there is no other field that names this instrument reliably: a row's exchange is the broker's own code, such as `NSE_EQ`, and its trading symbol is the broker's own spelling of the contract.
+
+        Args:
+            rows: A list of dicts from one of UBI's order, trade or position documents, each with an `instrument_id`.
+
+        Returns:
+            A pandas.DataFrame of the matching rows, or None when no row belongs to this instrument.
+
+        Raises:
+            Nothing.
+        """
+        matching_rows = []
+        for row in rows:
+            if row["instrument_id"] == self.instrument_id:
+                matching_rows.append(row)
+        if not matching_rows:
+            return None
+        return pd.DataFrame(matching_rows)
 
     @staticmethod
     def _best_level(levels: list[dict]) -> dict | None:
