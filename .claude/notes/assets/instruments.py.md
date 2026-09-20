@@ -222,6 +222,20 @@ Four members were added on 2026-09-20 so that a position can be changed and not 
 
 This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and are still deferred to a separate `Equity` change. Only the shape of the three was borrowed.
 
+#### What a position is worth, and what it has made
+
+`positions_value` and `positions_pnl` were added on 2026-09-20, after the four members above. They are properties, like `net_positions` itself and like `Equity.holdings`, because they report what the account holds rather than what the market is doing.
+
+UBI prices a holding for you, giving it a `current_value`, but it does not price a position: a position row carries a signed `quantity` and a `last_price` and leaves the multiplication to the caller. `positions_value` does that multiplication and keeps the sign, which the user chose on 2026-09-20 over an unsigned figure and over the net cost of the position. A long position therefore adds and a short one subtracts, which is right, because a short position is an obligation to buy back rather than something owned.
+
+When any position has no last price, the whole property returns None rather than a total quietly missing one of its parts. A number that silently omits a position is worse than no number.
+
+`positions_pnl` returns UBI's whole `pnl` dict, with `realized`, `unrealized` and `total` added across every position, which the user chose over picking one of the three. The realised part is profit already booked by closing some of a position today; the unrealised part is what is still riding on what remains open. The total is computed from the two sums rather than by adding the rows' own totals, so it is rounded once instead of twice.
+
+Both add up across products into a single answer, which the user chose over a frame with a row per product. That matches how the old project's `holdings_value` and `holdings_pnl` behaved.
+
+One difference from the four members that change a position is deliberate and worth knowing: these two read `net_positions` directly rather than `_tradeable_positions`, so they count positions held under `margin_trading`, `cover` and `bracket` too. Those cannot be closed through UBI, but they are real money, and a total that left them out would be wrong.
+
 #### Two vocabularies for one word
 
 UBI reports a position's product with one set of words and accepts orders with another, so every one of these members has to translate, and the translation is not total.
@@ -385,3 +399,19 @@ It sent a buy of 65 under nrml and a sell of 100 under mis, which is the right d
 Against the live UBI the lookup was exercised through `_tradeable_positions` and `_position_row` alone, which cannot place an order. Both reported correctly that nothing is held. The public members were deliberately not called live, because a position appearing between the check and the call would have turned a read into a real order, which is the rule that came out of the wrapper check earlier in the day.
 
 Seeing these work against a real position needs an order that fills, which means genuinely buying something and carrying it until it is closed. That has not been asked for.
+
+## The two position totals, checked on 2026-09-20
+
+Checked offline against made-up position frames, since the account holds nothing.
+
+| Positions | `positions_value` | `positions_pnl` |
+|---|---|---|
+| None | None | None |
+| Long 100 carry at 41.22, realised 120, unrealised -35 | 4122.0 | realized 120.0, unrealized -35.0, total 85.0 |
+| Short 65 carry at 41.22, unrealised 12.5 | -2679.3 | realized 0.0, unrealized 12.5, total 12.5 |
+| All three of those plus a bracket position of 25 | 2473.2 | realized 125.0, unrealized -21.5, total 103.5 |
+| Long 100 carry, and an intraday position with no last price | None | realized 120.0, unrealized -22.5, total 97.5 |
+
+The last two rows are the ones worth reading twice. The bracket position is counted in both totals, although none of the four members that change a position can see it, because it is real money. And a missing last price makes the value None while leaving the profit intact, which is right: the profit figures come from UBI and do not depend on a price this project has to supply.
+
+Against the live account, which holds no position, both returned None.

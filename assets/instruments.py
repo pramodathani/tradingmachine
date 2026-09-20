@@ -2072,6 +2072,65 @@ class TradeableInstrument(Instrument):
             tag=tag,
         )
 
+    @property
+    def positions_value(self) -> float | None:
+        """What this instrument's open positions are worth at the moment.
+
+        Each position is counted as its quantity times its last price, and the sign is kept, so a long position adds and a short one subtracts. A short position is an obligation to buy back, which is what the negative number says.
+
+        UBI prices a holding for you but not a position, so this is worked out here. When any position has no last price, the whole answer is None rather than a total quietly missing one of its parts.
+
+        Unlike the methods that change a position, this counts every position, including those held under `margin_trading`, `cover` and `bracket`, because they are real money even though UBI cannot send an order to close them.
+
+        Returns:
+            The float value in rupees of every position in this instrument added together, or None when nothing is held or any position has no last price.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = self.net_positions
+        if frame is None:
+            return None
+        total = 0.0
+        for row in frame.to_dict("records"):
+            last_price = row["last_price"]
+            if last_price is None or pd.isna(last_price):
+                return None
+            total = total + row["quantity"] * last_price
+        return round(total, 2)
+
+    @property
+    def positions_pnl(self) -> dict | None:
+        """What this instrument's positions have made or lost.
+
+        The realised part is profit already booked by closing some of a position today, and the unrealised part is what is still riding on what remains open. Both are added across every position in this instrument.
+
+        Unlike the methods that change a position, this counts every position, including those held under `margin_trading`, `cover` and `bracket`.
+
+        Returns:
+            A dict with `realized`, `unrealized` and `total` in rupees, or None when nothing is held in this instrument.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = self.net_positions
+        if frame is None:
+            return None
+        realized = 0.0
+        unrealized = 0.0
+        for row in frame.to_dict("records"):
+            realized = realized + row["pnl"]["realized"]
+            unrealized = unrealized + row["pnl"]["unrealized"]
+        return {
+            "realized": round(realized, 2),
+            "unrealized": round(unrealized, 2),
+            "total": round(realized + unrealized, 2),
+        }
+
     def add_to_position(
         self,
         quantity: int,
