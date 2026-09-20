@@ -264,3 +264,50 @@ The first version of that check was wrong in a way worth recording. It called ea
 It ended safely. Both orders were rejected, by `Adapter is Logged Off` and by a rule refusing to sell a share the account does not hold at that broker, the unknown one never appeared in the order book across two minutes of watching, and nothing filled. But that was luck, not design.
 
 The rule it cost is simple: a script Claude runs itself must never call a method that can place an order, even when the call is expected to raise first, and market hours and an empty book are not a safeguard. The plumbing of an order-placing method is checked by replacing the method that sends the request with a recorder; anything that can genuinely reach a broker belongs in the script the user runs.
+
+## The live check of the whole order surface, 2026-09-20 at 13:23
+
+The user authorised real after-market orders for one share of KWIL, priced no higher than one per cent above the last traded price, to be cancelled afterwards. The run covered everything that could be reached that way.
+
+The order book at the time was worth recording, because it shaped what could be tested: no bids at all, one offer of 6,878 shares at 41.22, no mid price, and a volume weighted average price of 40.54. The check worked out from that book which wrappers had no price to use, rather than assuming, and called only those. Twenty of the twenty-four raised `OrderError` and sent nothing. The other four were left alone, because each would have placed a real order at a price of its own choosing.
+
+Four orders were then placed, each through a different wrapper, and UBI's round robin spread them over three brokers:
+
+| Wrapper | Broker | Price | Status when it arrived |
+|---|---|---|---|
+| `buy_at_limit_price` | zerodha | 41.63 | `PENDING` |
+| `sell_at_limit_price` | zerodha | 41.63 | `PENDING` |
+| `buy_at_best_offer_price` | dhan | 41.22 | `PENDING` |
+| `buy_at_volume_weighted_average_price` | flattrade | 40.54 | `OPEN` |
+
+All four reached UBI's order book 6.0 seconds after being placed, which is the same lag measured earlier, now seen across three brokers at once.
+
+### Why `open_orders` spans two statuses, proved rather than argued
+
+That table is the important result. Four orders placed within a second of each other, in the same instrument, arrived as three `PENDING` and one `OPEN`. The status is the broker's own word for the same situation, not a stage an order passes through.
+
+`orders(status="pending")` returned three rows and `orders(status="open")` returned one. Had `open_orders` been written as a single-status filter, as the first design sketch had it, it would have found one order out of four, and `cancel_open_orders` would have cancelled that one and silently left three live orders with two brokers over the weekend. The decision to make `open_orders` span both statuses was taken on reasoning; this run is the evidence for it.
+
+### `cancel_open_orders` with real orders
+
+It cancelled all four, across three brokers, and reported each:
+
+```
+           order_id    broker  cancelled error
+      3252609207270      dhan       True  None
+     26091900006009 flattrade       True  None
+2101580428170272768   zerodha       True  None
+2101580428463874048   zerodha       True  None
+```
+
+`open_orders()` then returned None and `cancelled_orders()` returned six rows, the four new ones and the two from earlier in the day. The safety net found nothing left, the whole account's trade count stayed at zero, and the KWIL holding of 146 shares was untouched.
+
+### One refusal, from the broker rather than the code
+
+`modify_order` on the dhan order was refused with HTTP 422, `OrderRejectedError`. The order was an after-market order, and dhan refused to change it. This is not a fault in `modify_order`, which had already been proved against an indmoney order earlier in the day; it is a broker declining a modification it does not support for that kind of order. The check printed only the exception's message, which for a 422 is the fallback text, so the broker's own words were again in `detail` rather than in the message.
+
+### What is still untested against a broker
+
+Four wrappers were deliberately not run, because each would have gone outside what the user authorised. `buy_at_market_price` and `sell_at_market_price` carry no price at all, and the authorisation set a price ceiling. `sell_at_best_offer_price` and `sell_at_volume_weighted_average_price` would have sold at 41.22 and 40.54, both below that ceiling and so more likely to fill than the orders that were allowed. All four are covered by the offline check.
+
+`trades`, `net_positions` and `day_positions` have still only ever returned None. Seeing them with data needs an order that actually fills, which means genuinely buying or selling, and that has not been asked for.
