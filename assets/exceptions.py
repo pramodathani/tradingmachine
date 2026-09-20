@@ -31,6 +31,10 @@ class PositionError(InstrumentError):
     """A position that cannot be changed as asked, or one that is not held at all."""
 
 
+class HoldingError(InstrumentError):
+    """A holding that cannot be changed as asked, or one that is not held at all."""
+
+
 class EquityError(InstrumentError):
     """An equity share UBI does not know, or one that is not in the equities segment."""
 

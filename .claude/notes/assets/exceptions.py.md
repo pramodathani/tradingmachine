@@ -25,3 +25,11 @@ A broker's refusal of an order is not an `OrderError`. That is `ubi_client.excep
 It sits under `InstrumentError` beside `OrderError`, for the same reason and by the same choice: one `except InstrumentError` catches every domain problem this package raises.
 
 The last of those cases deserves a word, because it looks like local validation of the kind this project avoids. Reducing a position by more than it holds is not something UBI would reject; it would accept the order and leave the account holding a new position the other way round. The method refuses it because that is not what it was asked to do, which is different from second-guessing a rule UBI already enforces.
+
+## HoldingError
+
+`HoldingError` was added on 2026-09-20 with the holdings methods on `Equity`. It means the holding cannot be changed as asked: the share is not held at all, or the quantity asked for is more than the shares free to sell, or every share held is pledged as collateral so none can be sold.
+
+It sits under `InstrumentError` beside `OrderError` and `PositionError`, by the same choice and for the same reason.
+
+It lives here rather than in an equity-specific place because exchange traded funds, investment trusts and mutual funds can all be held, and they will raise this same error when they are ported. The old project called it `HoldingException` and gave it the code 1505, rooted directly at its own `TradingMachineException` rather than under the instrument errors.

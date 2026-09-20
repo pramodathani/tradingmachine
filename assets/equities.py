@@ -32,6 +32,8 @@ from ubi_client import client
 
 HOLDINGS_PATH = "/api/portfolio/holdings"
 
+HOLDINGS_ORDER_PRODUCT = "cnc"
+
 EQUITY_SEGMENT = "equities"
 
 EQUITY_FUTURES_SEGMENT = "equity_futures"
@@ -105,6 +107,236 @@ class Equity(instruments.TradeableInstrument):
             if row["symbol"] == self.symbol:
                 return row
         return None
+
+    @property
+    def holdings_value(self) -> float | None:
+        """What the shares held are worth at the moment.
+
+        UBI prices a holding itself, so this reads the figure rather than working it out, which is the opposite of `instruments.TradeableInstrument.positions_value`. It counts every share held, including any pledged as collateral, because a pledged share is still owned.
+
+        Returns:
+            The float value in rupees of the whole holding, or None when this share is not held.
+
+        Raises:
+            ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
+            BrokerError: No broker's holdings could be read.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        row = self.holdings
+        if row is None:
+            return None
+        return row["current_value"]
+
+    @property
+    def holdings_pnl(self) -> dict | None:
+        """What the shares held have made or lost.
+
+        The dict is not shaped like a position's. A holding reports `day_change`, `day_change_percentage` and `unrealized`, while a position reports `realized`, `unrealized` and `total`, so only `unrealized` means the same thing in both. There is no realised figure, because selling a share removes it from the holding rather than booking a profit against it.
+
+        Returns:
+            A dict with `day_change` and `day_change_percentage` in rupees and per cent since the previous close, and `unrealized` in rupees against what was paid, or None when this share is not held.
+
+        Raises:
+            ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
+            BrokerError: No broker's holdings could be read.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        row = self.holdings
+        if row is None:
+            return None
+        return row["pnl"]
+
+    def add_to_holdings(
+        self,
+        quantity: int,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys more of this share to keep.
+
+        The order is always sent as `cnc`, which is the product that puts shares in the demat account. Nothing is read first, because a share can be bought whether or not it is already held, and UBI checks funds no more than a broker's order endpoint does.
+
+        Args:
+            quantity: The int number of shares to buy.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        if price is None:
+            return self.buy_at_market_price(
+                quantity=quantity,
+                product=HOLDINGS_ORDER_PRODUCT,
+                validity=validity,
+                after_market=after_market,
+                tag=tag,
+            )
+        return self.buy_at_limit_price(
+            price=price,
+            quantity=quantity,
+            product=HOLDINGS_ORDER_PRODUCT,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def reduce_holdings(
+        self,
+        quantity: int,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells some of the shares held, without selling more than are free.
+
+        Shares pledged as collateral cannot be sold until they are released at the broker, so the quantity asked for is measured against the free shares rather than the whole holding.
+
+        Args:
+            quantity: The int number of shares to sell.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            HoldingError: This share is not held, or the quantity is more than the free shares.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        row = self._held_row()
+        free_quantity = self._free_quantity(row)
+        if quantity > free_quantity:
+            raise exceptions.HoldingError(
+                f"{free_quantity} of the {int(row['quantity'])} {self.symbol} shares held are free to sell, because {int(row['collateral_quantity'])} are pledged as collateral, so {quantity} cannot be sold"
+            )
+        return self._sell_from_holdings(
+            quantity=quantity,
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def liquidate_holdings(
+        self,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells every share held that is free to sell.
+
+        Shares pledged as collateral are left alone, because they cannot be sold until they are released at the broker, so this empties the holding only when nothing is pledged.
+
+        Args:
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            HoldingError: This share is not held, or every share held is pledged as collateral.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        row = self._held_row()
+        free_quantity = self._free_quantity(row)
+        if free_quantity <= 0:
+            raise exceptions.HoldingError(
+                f"All {int(row['quantity'])} {self.symbol} shares held are pledged as collateral, so none can be sold"
+            )
+        return self._sell_from_holdings(
+            quantity=free_quantity,
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def _held_row(self) -> dict:
+        """Reads this share's holding once, refusing when it is not held.
+
+        Returns:
+            The dict holdings row for this share.
+
+        Raises:
+            HoldingError: No broker holds this share.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        row = self.holdings
+        if row is None:
+            raise exceptions.HoldingError(
+                f"No {self.symbol} shares are held, so there is nothing to sell: {self!r}"
+            )
+        return row
+
+    @staticmethod
+    def _free_quantity(row: dict) -> int:
+        """Works out how many of the shares held can be sold.
+
+        Args:
+            row: The dict holdings row, with `quantity` and `collateral_quantity`.
+
+        Returns:
+            The int number of shares that are not pledged as collateral.
+
+        Raises:
+            Nothing.
+        """
+        return int(row["quantity"] - row["collateral_quantity"])
+
+    def _sell_from_holdings(
+        self,
+        quantity: int,
+        price: float | None,
+        validity: str | None,
+        after_market: bool,
+        tag: str | None,
+    ) -> dict:
+        """Sends the sell order that reduces the holding.
+
+        Args:
+            quantity: The int number of shares to sell.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns.
+
+        Raises:
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        if price is None:
+            return self.sell_at_market_price(
+                quantity=quantity,
+                product=HOLDINGS_ORDER_PRODUCT,
+                validity=validity,
+                after_market=after_market,
+                tag=tag,
+            )
+        return self.sell_at_limit_price(
+            price=price,
+            quantity=quantity,
+            product=HOLDINGS_ORDER_PRODUCT,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
 
 
 class EquityFutures(instruments.TradeableInstrument):

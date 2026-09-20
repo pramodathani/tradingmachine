@@ -56,6 +56,40 @@ UBI has no endpoint for one instrument's holding. `GET /api/portfolio/holdings` 
 
 The row is matched by `instrument_id` first and by `symbol` second. The fallback is not defensive padding; it is required by how UBI merges. Its documentation states that holdings sharing an ISIN or an instrument id become one row, "whichever broker's arrives first", so a stock held on the nse at one broker and on the bse at another is filed under a single listing that may not be the one you asked for. Matching on the id alone would then report that you hold nothing while the shares are there. ISIN would be the better second key, but `/api/instruments/details` does not return an ISIN, so an `Equity` does not know its own.
 
+## Acting on a holding, and what it is worth
+
+`holdings_value`, `holdings_pnl`, `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` were added to `Equity` on 2026-09-20. They sit here rather than on `instruments.TradeableInstrument` for the reason `holdings` itself does: a derivative leaves a position rather than a holding, and an index cannot be held at all.
+
+The three order methods take their shape from `ListedSecurity` in the old project. Nothing else carries over, because that project's order vocabulary has since changed completely and it ignored a field that costs a rejected order.
+
+### UBI prices a holding but not a position
+
+`holdings_value` reads `current_value` off the row. This is the opposite of `instruments.TradeableInstrument.positions_value`, which has to multiply a signed quantity by a last price, because UBI gives a holding a value and gives a position none.
+
+`holdings_pnl` returns the row's `pnl` dict whole, as `positions_pnl` does, but the two dicts are not the same shape and the docstring says so. A holding reports `day_change`, `day_change_percentage` and `unrealized`; a position reports `realized`, `unrealized` and `total`. Only `unrealized` means the same thing in both. There is no realised figure for a holding, because selling a share removes it from the holding rather than booking a profit against it.
+
+Both are properties, like `holdings`, and each sends its own request, so code that wants the value and the profit together should bind `holdings` to a local variable and read both fields from it rather than touching two properties.
+
+### The product is fixed, not a parameter
+
+Every order these three send is `cnc`. A holding is shares kept in the demat account, and `cnc` is the only product that buys into or sells out of one. The old project made this a parameter defaulting to `delivery`, and the user chose on 2026-09-20 to remove it.
+
+The reason is worth stating plainly, because it is not a matter of taste. Selling a holding as `mis` does not sell your shares. It opens an intraday short position alongside them, which the broker squares off before the session ends, so the mistake costs money twice and leaves the holding untouched. Taking the argument away makes that impossible to do by accident.
+
+### Pledged shares are not sellable
+
+A holdings row carries `collateral_quantity`, the part pledged as margin, which a broker will not let you sell until it is released. The user chose on 2026-09-20 to have `reduce_holdings` and `liquidate_holdings` work on the free shares, which are `quantity` minus `collateral_quantity`, rather than on the whole holding and letting the broker refuse.
+
+So `liquidate_holdings` sells what is free rather than everything, `reduce_holdings` refuses a quantity beyond it and names all three figures, and a holding that is entirely pledged raises rather than sending an order that cannot succeed.
+
+Every `collateral_quantity` in the account was `0.0` on 2026-09-20, so this changes nothing today. It matters the first time anything is pledged, and until then it is invisible, which is exactly why it went in now rather than later.
+
+`add_to_holdings` reads nothing before it buys. A share can be bought whether or not it is already held, and UBI checks funds no more than a broker's order endpoint does.
+
+### One reading of the holdings, not two
+
+The old project's `liquidate_holdings` called `reduce_holdings`, so it fetched the whole account's holdings twice and could decide on one figure and act on another. Here `_held_row` reads once, `_free_quantity` works out what can be sold, and `_sell_from_holdings` sends the order, so each method makes one request and one decision.
+
 ## Why a derivative does not hold its underlying
 
 The first plan had each futures and option contract build an object for its underlying share or index and keep it. The user removed that on 2026-09-20, and the module has no `underlying` attribute.
@@ -93,3 +127,35 @@ The `holdings` property was checked against the real account the same day, which
 Two things about the check script itself are worth recording, because the next person to verify this will hit them. UBI's `/api/instruments/search` orders its results by expiry ascending and has no offset parameter, so for a name with many contracts the 200-row limit returns only long-past expiries and never a live one. Live expiries were taken from the futures segments instead, which are small enough to return whole: `nse_equity_futures` holds 855 instruments and `nse_equity_index_futures` holds 23, against 125,967 in `nse_equity_options` and 14,826 in `nse_equity_index_options`. Equity options share the monthly expiry of the equity future on the same underlying, so that expiry works for both. A listed strike was then found by asking `/api/instruments/details` about round strikes outward from the spot price until one resolved.
 
 The check also turned up a cosmetic fault in `Instrument.__repr__`, which belongs to `instruments.py` rather than to this module: it formatted every identity value with `str(value)!r`, so a strike price printed as `strike_price='1250.0'`, quoted as though it were text. That matters here because the segment-check messages embed `{self!r}`. It was fixed the same day, and the reasoning is in `.claude/notes/assets/instruments.py.md`.
+
+## The holdings members, checked on 2026-09-20
+
+`holdings_value` and `holdings_pnl` were checked against the real account, which is the first of these features that could be verified live without sending an order, because the account genuinely holds seven shares.
+
+| Share | `holdings_value` | `holdings_pnl` | The raw row |
+|---|---|---|---|
+| KWIL | 6018.12 | day_change 1.31, day_change_percentage 3.28, unrealized -19.36 | `current_value` 6018.12, 146 shares, 0 pledged |
+| ONGC | 698.4 | day_change 0.37, day_change_percentage 0.16, unrealized -13.45 | `current_value` 698.4, 3 shares, 0 pledged |
+| RELIANCE | None | None | not held |
+
+The three order methods were checked offline, with `place_order` replaced by a recorder and `holdings` by made-up rows, which is the only way to reach the pledged-collateral cases while the real account has nothing pledged.
+
+| Holding | Call | What it did |
+|---|---|---|
+| 146, none pledged | `add_to_holdings(10)` | buy 10 cnc at market |
+| 146, none pledged | `add_to_holdings(10, price=41.5)` | buy 10 cnc at 41.5 |
+| Not held | `add_to_holdings(10)` | buy 10 cnc at market, no error |
+| 146, none pledged | `reduce_holdings(50)` | sell 50 cnc at market |
+| 146, none pledged | `reduce_holdings(200)` | `HoldingError`, 146 free, 200 asked |
+| 146, 40 pledged | `reduce_holdings(120)` | `HoldingError`, 106 of 146 free |
+| 146, 40 pledged | `reduce_holdings(100)` | sell 100 cnc at market |
+| 146, none pledged | `liquidate_holdings()` | sell 146 cnc at market |
+| 146, 40 pledged | `liquidate_holdings()` | sell 106 cnc at market |
+| 146, all 146 pledged | `liquidate_holdings()` | `HoldingError`, none can be sold |
+| 146, none pledged | `liquidate_holdings(price=41.5)` | sell 146 cnc at 41.5 |
+| Not held | `reduce_holdings(10)` | `HoldingError`, not held |
+| Not held | `liquidate_holdings()` | `HoldingError`, not held |
+
+Eight orders were recorded and none was sent, and every one of them carried the product `cnc`, which is the point of taking that argument away.
+
+No real order has been sent through any of the three. The authorisation the user gave earlier in the day covered a specific test of the order and wrapper methods, and it was not assumed to extend to these.
