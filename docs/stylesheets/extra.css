@@ -1,0 +1,12 @@
+.md-grid {
+  max-width: 72rem;
+}
+
+.md-typeset .admonition.danger,
+.md-typeset details.danger {
+  border-left-width: 0.4rem;
+}
+
+.md-typeset table:not([class]) td code {
+  white-space: nowrap;
+}

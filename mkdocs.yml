@@ -1,0 +1,163 @@
+site_name: Trading Machine
+site_description: Indian market instruments as Python objects - candles, quotes, order book, analysis, orders, positions and holdings, all through the Unified Broker Interface.
+site_author: Pramod Athani
+copyright: Copyright &copy; Pramod Athani
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/chart-line
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow the system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.keys
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+
+hooks:
+  - utilities/documentation_hooks.py
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - utilities/gen_ref_pages.py
+  - literate-nav:
+      nav_file: SUMMARY.md
+  - section-index
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            docstring_section_style: table
+            docstring_options:
+              returns_named_value: false
+              warn_unknown_params: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_source: true
+            show_if_no_docstring: false
+            inherited_members: false
+            members_order: source
+            filters: ["!^_[^_]"]
+            merge_init_into_class: true
+            separate_signature: true
+            signature_crossrefs: true
+            line_length: 96
+            heading_level: 2
+
+watch:
+  - assets
+  - ubi_client
+  - utilities
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Data stores: getting-started/data-stores.md
+  - Architecture:
+      - architecture/index.md
+      - The instrument model: architecture/instrument-model.md
+      - The UBI client: architecture/ubi-client.md
+      - Errors: architecture/errors.md
+  - Asset classes:
+      - asset-classes/index.md
+      - Equities: asset-classes/equities.md
+      - Fixed income: asset-classes/fixed-income.md
+      - Commodities: asset-classes/commodities.md
+      - Currencies: asset-classes/currencies.md
+      - Funds and trusts: asset-classes/funds.md
+      - Mutual funds: asset-classes/mutual-funds.md
+  - Guides:
+      - Candles and quotes: guides/prices-and-quotes.md
+      - Analysis: guides/analysis.md
+      - Finding instruments: guides/discovery.md
+      - Orders: guides/orders.md
+      - Positions: guides/positions.md
+      - Holdings: guides/holdings.md
+  - Contributing:
+      - Adding an asset class: contributing/adding-an-asset-class.md
+      - Pitfalls: contributing/pitfalls.md
+      - Known issues: contributing/known-issues.md
+      - Writing docs: contributing/documentation.md
+  - API reference: reference/
