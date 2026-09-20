@@ -1,4 +1,4 @@
-"""Errors raised by the instrument classes in `assets.instruments` and `assets.equities`.
+"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities` and `assets.fixed_income`.
 
 These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
 
@@ -57,3 +57,27 @@ class EquityIndexFuturesError(InstrumentError):
 
 class EquityIndexOptionError(InstrumentError):
     """An equity index option UBI does not know, or one that is not in the equity index options segment."""
+
+
+class FixedIncomeError(InstrumentError):
+    """A bond UBI does not know, or one that is not in the fixed income segment."""
+
+
+class FixedIncomeFuturesError(InstrumentError):
+    """A bond futures contract UBI does not know, or one that is not in the fixed income futures segment."""
+
+
+class FixedIncomeOptionError(InstrumentError):
+    """A bond option UBI does not know, or one that is not in the fixed income options segment."""
+
+
+class FixedIncomeIndexError(InstrumentError):
+    """A fixed income index UBI does not know, or one that is not in the fixed income indices segment."""
+
+
+class FixedIncomeIndexFuturesError(InstrumentError):
+    """A fixed income index futures contract UBI does not know, or one that is not in the fixed income index futures segment."""
+
+
+class FixedIncomeIndexOptionError(InstrumentError):
+    """A fixed income index option UBI does not know, which is true of every one of them today, or one that is not in the fixed income index options segment."""
