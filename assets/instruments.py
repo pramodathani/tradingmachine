@@ -228,6 +228,8 @@ class Instrument(
     def __repr__(self) -> str:
         """Describes the instrument by exchange, segment and identity fields.
 
+        Each value is shown as its own type, so a strike price reads as the number 24000.0 rather than as text. A date is shown in its `YYYY-MM-DD` form, which is what the constructor accepts, rather than as `datetime.date(2026, 9, 29)`.
+
         Returns:
             A str such as `Instrument(exchange='nse', segment='nse_equities', symbol='INFY')`.
 
@@ -246,8 +248,12 @@ class Instrument(
             f"segment={self.segment!r}",
         ]
         for field, value in identity.items():
-            if value is not None:
-                described_fields.append(f"{field}={str(value)!r}")
+            if value is None:
+                continue
+            if isinstance(value, datetime.date):
+                described_fields.append(f"{field}={value.isoformat()!r}")
+            else:
+                described_fields.append(f"{field}={value!r}")
         return f"{type(self).__name__}({', '.join(described_fields)})"
 
     def __eq__(self, other: object) -> bool:
