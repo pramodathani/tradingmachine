@@ -87,13 +87,13 @@ markdown_extensions:
   - pymdownx.tilde
 
 hooks:
-  - utilities/documentation_hooks.py
+  - scripts/documentation_hooks.py
 
 plugins:
   - search
   - gen-files:
       scripts:
-        - utilities/gen_ref_pages.py
+        - scripts/gen_ref_pages.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
@@ -101,7 +101,7 @@ plugins:
       default_handler: python
       handlers:
         python:
-          paths: [.]
+          paths: [src]
           options:
             docstring_style: google
             docstring_section_style: table
@@ -124,9 +124,7 @@ plugins:
             heading_level: 2
 
 watch:
-  - assets
-  - ubi_client
-  - utilities
+  - src
 
 nav:
   - Home: index.md

@@ -9,7 +9,7 @@ This file configures the project's documentation site, built with Material for M
 | `site_name` | Unified Broker Interface | Trading Machine | |
 | `palette` primary and accent | indigo | teal | So the two sites are distinguishable at a glance when both are open |
 | `theme.icon.logo` | `material/swap-horizontal-bold` | `material/chart-line` | The sibling normalises between brokers; this project analyses prices |
-| `watch` | `stock_brokers`, `utilities` | `assets`, `ubi_client`, `utilities` | This project's packages |
+| `watch` | `stock_brokers`, `utilities` | `src` | This project's one package tree |
 | `repo_url` | commented out | absent | Neither project has the remote wired into the site yet |
 | `inherited_members` | `true` | `false` | See below, this is the one substantive difference |
 
@@ -19,16 +19,16 @@ The sibling's `mkdocs.yml` carries explanatory comments. They are left out here,
 
 This is the only mkdocstrings option that differs from the sibling, and it is not a matter of taste.
 
-`assets.instruments.Instrument` inherits thirteen analysis classes, which is about 190 methods, and all twenty-seven classes in the six family modules inherit from it. With `inherited_members: true`, every one of those classes reprinted the whole analysis surface on its own reference page.
+`tradingmachine.assets.instruments.Instrument` inherits thirteen analysis classes, which is about 190 methods, and all twenty-seven classes in the six family modules inherit from it. With `inherited_members: true`, every one of those classes reprinted the whole analysis surface on its own reference page.
 
 Measured on 2026-09-20, on the same content:
 
 | `inherited_members` | Whole site | Build time | Largest page |
 |---|---|---|---|
-| `true` | 151 MB | 112 seconds | 23.8 MB, `assets/fixed_income` |
-| `false` | 13 MB | 5.9 seconds | 1.0 MB, `assets/analysis/candlestick_patterns` |
+| `true` | 151 MB | 112 seconds | 23.8 MB, `src/tradingmachine/assets/fixed_income` |
+| `false` | 13 MB | 5.9 seconds | 1.0 MB, `src/tradingmachine/assets/analysis/candlestick_patterns` |
 
-A 24 MB HTML page is not usable in a browser, so the setting was turned off. The analysis methods are still documented once each, on the `assets/analysis/*` pages where they are defined, and each class page names its base classes, so nothing is lost except the repetition.
+A 24 MB HTML page is not usable in a browser, so the setting was turned off. The analysis methods are still documented once each, on the `src/tradingmachine/assets/analysis/*` pages where they are defined, and each class page names its base classes, so nothing is lost except the repetition.
 
 The sibling can afford `true` because its classes have shallow inheritance.
 
@@ -36,16 +36,29 @@ The sibling can afford `true` because its classes have shallow inheritance.
 
 Kept from the sibling, and needed for the same reason. Docstrings in both projects write `Returns:` followed by a type, such as `A pandas.DataFrame sorted by time ...`. Griffe's Google parser would otherwise read the leading words as a value's name, decide the return has no type, and warn. Under `--strict` that warning fails the build.
 
+## What the `src/` layout changed
+
+Three entries moved when the project became an installable library on 2026-09-20, and a strict build fails if any of them is wrong.
+
+| Setting | Before | After |
+|---|---|---|
+| `hooks` | `scripts/documentation_hooks.py` | `scripts/documentation_hooks.py` |
+| `gen-files` `scripts` | `scripts/gen_ref_pages.py` | `scripts/gen_ref_pages.py` |
+| mkdocstrings `paths` | `[.]` | `[src]` |
+| `watch` | `assets`, `ubi_client`, `utilities` | `src` |
+
+`paths: [src]` is the one that is easy to get wrong. It is the import path mkdocstrings resolves an identifier such as `tradingmachine.assets.equities` against. Leaving it at `[.]` happens to keep working while the library is installed editable, because the identifier then resolves through the installed package instead, and it fails on a machine where it is not installed. Naming `src` makes the build depend on the source tree rather than on the state of the environment.
+
 ## Why there is a `hooks` entry
 
-`utilities/documentation_hooks.py` silences one griffe warning that this project's docstring convention provokes. The reasoning is in `.claude/notes/utilities/documentation_hooks.py.md`.
+`scripts/documentation_hooks.py` silences one griffe warning that this project's docstring convention provokes. The reasoning is in `.claude/notes/scripts/documentation_hooks.py.md`.
 
 ## The navigation
 
-Five sections plus the generated reference. `- API reference: reference/` with a trailing slash rather than a list of pages is what hands that section to `mkdocs-literate-nav`, which reads the `reference/SUMMARY.md` that `utilities/gen_ref_pages.py` writes during the build.
+Five sections plus the generated reference. `- API reference: reference/` with a trailing slash rather than a list of pages is what hands that section to `mkdocs-literate-nav`, which reads the `reference/SUMMARY.md` that `scripts/gen_ref_pages.py` writes during the build.
 
 MkDocs logs `Doc file 'index.md' contains an unrecognized relative link 'reference/'` at INFO level on every build, because that link points at a directory the generator creates rather than at a file on disk. It is informational, does not fail `--strict`, and the sibling logs the same line.
 
 ## Verified on 2026-09-20
 
-`mkdocs build --strict` completed with no warnings, producing 53 HTML pages, of which 26 are generated reference pages: fourteen for `assets.analysis`, seven for the rest of `assets`, two for `ubi_client`, one for `utilities.configuration`, plus the literate-nav summary and the section index. `ruff check` and `ruff format --check` pass on the two new Python files.
+`mkdocs build --strict` completed with no warnings, producing 53 HTML pages, of which 26 are generated reference pages: fourteen for `tradingmachine.assets.analysis`, seven for the rest of `assets`, two for `ubi_client`, one for `tradingmachine.utilities.configuration`, plus the literate-nav summary and the section index. `ruff check` and `ruff format --check` pass on the two new Python files.
