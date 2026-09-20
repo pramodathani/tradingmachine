@@ -617,6 +617,8 @@ class TradeableInstrument(Instrument):
 
         UBI couples the price fields to the order type and answers HTTP 400 when they do not agree: a `limit` or `sl` order needs a price, an `sl` or `sl-m` order needs a trigger price, and a `market` or `sl-m` order must carry no price at all.
 
+        An outcome of `accepted` means the broker took the order, not that the order survived. The exchange can still refuse it afterwards, which is what happens to an ordinary order sent while the market is closed, so the order's real fate is read from `orders` rather than from this answer. Neither this class nor UBI checks the market's hours, so use `after_market` to queue an order for the next session.
+
         Args:
             transaction_type: The str side of the order, `buy` or `sell`.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
@@ -678,6 +680,8 @@ class TradeableInstrument(Instrument):
 
         UBI finds the order by its id in the brokers' order books, so this does not check that the order belongs to this instrument. Give at least one field to change; every field left as None keeps the value the order already has.
 
+        Those order books are copies that UBI's own collectors refresh every few seconds, so an order placed a moment ago is not in them yet and raises NotFoundError. Wait for the order to appear in `orders` before changing it.
+
         Args:
             order_id: The str id the broker gave the order, as `place_order` returned it.
             quantity: The int new total quantity in underlying units, counting what is already filled, or None to leave it.
@@ -727,6 +731,8 @@ class TradeableInstrument(Instrument):
         """Cancels one pending order through UBI.
 
         UBI finds the order by its id in the brokers' order books, so this does not check that the order belongs to this instrument.
+
+        Those order books are copies that UBI's own collectors refresh every few seconds, so an order placed a moment ago is not in them yet and raises NotFoundError. Wait for the order to appear in `orders` before cancelling it.
 
         Args:
             order_id: The str id the broker gave the order, as `place_order` returned it.

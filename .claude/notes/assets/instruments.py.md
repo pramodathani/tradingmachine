@@ -185,4 +185,18 @@ prctyp=LMT  trantype=B  prd=C  ret=DAY  qty=1  prc=30.0  trgprc=0  dscqty=0  amo
 
 That confirms the lower-case strings survive UBI's parsing, that the body is assembled correctly, and that the optional fields left as None are genuinely absent rather than sent as zeros. The coupling rules fired as expected: a market order carrying a price raised `BadRequestError: a MARKET order takes no price`, and a limit order with no price raised `BadRequestError: a LIMIT order needs a price`.
 
-What this check does not cover is `modify_order` and `cancel_order` against a real order, because both look the order up in the broker's live book and answer 404 for an id that does not exist. That run needs a genuine order and has to be started by the user, for the reason recorded in `.claude/notes/ubi_client/client.py.md` and in the session memory: Claude Code's permission classifier blocks order placement.
+### The first real order, and the two things it taught
+
+The user ran the live script at 12:27 on Sunday 2026-09-20, with the market closed. It placed a genuine limit buy of one KWIL share at 28.85 against a last price of 41.22. UBI routed it to `wisdom_capital`, which answered `API Order Id sent` with order id `1310900080`, and UBI reported `outcome: accepted`. The modify that followed raised `NotFoundError: no broker order book in Redis holds this order_id`, and so did the cancel in the `finally` block, so the run ended in a traceback with what looked like an uncancelled order.
+
+Reading the order book a few minutes later showed there was nothing to cancel. The order was already `REJECTED`, with `status_message` reading `OEMS:Target Exchange Adapter Is Not Connected To Exchange.`, and nothing was bought.
+
+**An accepted order is not a live order.** UBI's `outcome: accepted` means the broker's own API took the request. The exchange sits behind that and can still refuse, which is exactly what an ordinary order meets on a closed market. Neither this class nor UBI checks the market's hours, despite what UBI's REST guide says about a 400 for out-of-hours orders; the order went through to the broker untouched. The order's real fate is read from `orders`, never from the answer `place_order` gave. Both facts are now in the `place_order` docstring.
+
+**A freshly placed order cannot be modified or cancelled straight away.** UBI does not ask the broker about one order; it reads a copy of each broker's order book that its own collectors refresh every few seconds, and `modify` and `cancel` look the id up in that copy. The order placed at 12:27:14 was not there when the modify ran a fraction of a second later, which is what the 404 meant. It was there by the next reading. So the sequence to follow is place, wait for the id to appear in `orders`, then modify or cancel. Both docstrings now say so.
+
+Nothing about this changes the class. Adding a wait or a retry inside `modify_order` would be the same mistake as adding a cache: it would hide UBI's own timing behind a guess about it. The waiting belongs in the caller, and the check script now polls `orders` for up to sixty seconds before it touches the order.
+
+The script was changed in one other way. It now sends the order with `after_market=True` rather than only falling back to that after a 400 that never comes. An after-market order is queued by the broker rather than passed to the exchange, so it survives on a closed market and can actually be modified and cancelled, which is the whole point of the run.
+
+`modify_order` and `cancel_order` have therefore still not been seen to succeed against an order the broker is holding. That is what the next run of the script is for.
