@@ -90,6 +90,26 @@ Every `collateral_quantity` in the account was `0.0` on 2026-09-20, so this chan
 
 The old project's `liquidate_holdings` called `reduce_holdings`, so it fetched the whole account's holdings twice and could decide on one figure and act on another. Here `_held_row` reads once, `_free_quantity` works out what can be sold, and `_sell_from_holdings` sends the order, so each method makes one request and one decision.
 
+## Finding contracts you do not already know
+
+Each of the six classes gained class methods on 2026-09-20 for finding instruments, over the mechanism in `instruments.py` described under "Finding instruments, and why search is not enough". The class supplies its own segment, exactly as its constructor does, so a segment string is never typed:
+
+| Class | Calls |
+|---|---|
+| `Equity`, `EquityIndex` | `search` |
+| `EquityFutures`, `EquityIndexFutures` | `expiries`, `contracts` |
+| `EquityOption`, `EquityIndexOption` | `expiries`, `strikes`, `chain` |
+
+The user chose class methods on these classes on 2026-09-20, over a separate catalogue class taking a segment argument and over having both. The cost is that each asset class ported later repeats the pattern; the gain is that the kind of contract stays the class rather than becoming a string again, which is the whole idea of this module.
+
+### Rows, not objects
+
+`search`, `contracts` and `chain` return a `pandas.DataFrame` of identities, never instrument objects. This is the user's decision from 2026-09-20 and it is about cost rather than taste: every constructor here looks its own contract up through `/api/instruments/details`, so returning a RELIANCE chain as objects would send 214 separate requests where returning rows sends none. The caller builds the two or three contracts it actually wants.
+
+An identity row carries `instrument_id`, `exchange`, `segment`, `shape`, `symbol`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type`. It does not carry `lot_size`, `tick_size` or `carried_by`, which is the other reason not to return objects built from it: they would be missing attributes that every other instrument has.
+
+`expiries` and `strikes` return plain lists rather than frames, because a single column of values is not a table.
+
 ## Why a derivative does not hold its underlying
 
 The first plan had each futures and option contract build an object for its underlying share or index and keep it. The user removed that on 2026-09-20, and the module has no `underlying` attribute.
@@ -159,3 +179,29 @@ The three order methods were checked offline, with `place_order` replaced by a r
 Eight orders were recorded and none was sent, and every one of them carried the product `cnc`, which is the point of taking that argument away.
 
 No real order has been sent through any of the three. The authorisation the user gave earlier in the day covered a specific test of the order and wrapper methods, and it was not assumed to extend to these.
+
+## The discovery calls, checked on 2026-09-20
+
+Every call here reads the instrument catalogue and nothing else, so the whole check ran live against UBI with no order risk.
+
+| Call | Result | Time |
+|---|---|---|
+| `Equity.search(term="RELI")` | RELIABLE, RELIANCE, RELIGARE, RELINFRA | 0.02s |
+| `EquityIndex.search(term="NIFTY", limit=8)` | NIFTY and seven more index names | 0.00s |
+| `Equity.search(term="ZZZNOSUCHTHING")` | None | 0.00s |
+| `EquityFutures.expiries("RELIANCE")` | 2026-09-29, 2026-10-27, 2026-11-23 | 0.02s |
+| the same with `include_expired=True` | those three, plus 2026-08-25 | 0.02s |
+| `EquityIndexFutures.contracts("NIFTY")` | the three live quarterly contracts | 0.00s |
+| `EquityOption.expiries("RELIANCE")` | the three live monthly expiries | 2.09s |
+| `EquityOption.chain("RELIANCE", 2026-09-29)` | 214 contracts, first rows 620 CE and 620 PE | 2.20s |
+| `EquityOption.strikes("RELIANCE", 2026-09-29)` | 107 strikes, 620.0 to 1920.0 | 2.10s |
+| `EquityIndexOption.expiries("NIFTY")` | 18 live expiries, weekly then monthly | 0.24s |
+| `EquityIndexOption.chain("NIFTY", 2026-09-22)` | 472 contracts | 0.27s |
+
+The single-stock option calls cost about two seconds each, because each one downloads all 125,967 rows of `nse_equity_options` afresh. Index options cost a quarter of a second for 14,826 rows, and futures and equities are instant.
+
+### The check that matters
+
+A row was taken from the middle of the RELIANCE chain, RELIANCE 2026-09-29 1270.0 PE, and an `EquityOption` was built from its four identity fields. UBI returned the instrument id `12278f86-2feb-54b0-875f-4c1311d550fc`, which is the same id the row carried, and the object came back with a lot size of 500 and a tick size of 0.05.
+
+That is the proof the whole feature rests on: discovery and construction agree on what an instrument is, so a row found by searching can be turned into a tradeable contract without guessing.

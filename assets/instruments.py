@@ -45,6 +45,10 @@ INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 INDEX_SEGMENT_SUFFIX = "_indices"
 
+SEARCH_PATH = "/api/instruments/search"
+
+MASTER_PATH = "/api/instruments/master"
+
 ORDER_DETAILS_PATH = "/api/orders/details"
 
 ORDER_TRADES_PATH = "/api/orders/trades"
@@ -193,6 +197,209 @@ class Instrument(
                 client.UnifiedBrokerInterface()
             )
         return Instrument._shared_unified_broker_interface
+
+    @classmethod
+    def _search_catalogue(
+        cls,
+        exchange: str,
+        segment: str,
+        term: str,
+        limit: int,
+        unified_broker_interface: client.UnifiedBrokerInterface | None,
+    ) -> pd.DataFrame | None:
+        """Finds instruments in one segment whose name contains a term.
+
+        UBI ranks an exact match first, then names starting with the term, then names containing it. This is the right way to look for a security by name, and the wrong way to look for a contract: UBI returns at most 200 rows in expiry order and offers no way to page past them, so for a segment with many expiries every row comes from the oldest one. Use `_contracts_for` for a future or an option.
+
+        Args:
+            exchange: The str exchange to search, such as `nse`.
+            segment: The str segment to search, bare such as `equities` or prefixed such as `nse_equities`.
+            term: The str the name must contain, matched without regard to case.
+            limit: The int most rows to return, which UBI caps at 200.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A pandas.DataFrame of identities, with `instrument_id`, `exchange`, `segment`, `shape`, `symbol`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type`, or None when nothing matches.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if unified_broker_interface is None:
+            unified_broker_interface = cls._get_shared_unified_broker_interface()
+        answer = unified_broker_interface.get(
+            SEARCH_PATH,
+            params={
+                "exchange": exchange,
+                "segment": segment,
+                "q": term,
+                "limit": limit,
+            },
+        )
+        return cls._identity_frame(answer["instruments"])
+
+    @classmethod
+    def _master_catalogue(
+        cls,
+        exchange: str,
+        segment: str,
+        unified_broker_interface: client.UnifiedBrokerInterface | None,
+    ) -> pd.DataFrame | None:
+        """Fetches every instrument UBI holds in one segment.
+
+        There is no limit on this, and UBI streams it, so even the largest segment arrives in a second or two. It is the only way to reach a live expiry in a segment whose oldest expiries fill the search route's 200 rows.
+
+        Args:
+            exchange: The str exchange, such as `nse`.
+            segment: The str segment, bare such as `equity_options` or prefixed such as `nse_equity_options`.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A pandas.DataFrame of every identity in the segment, shaped as `_search_catalogue` returns, or None when the segment holds nothing.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if unified_broker_interface is None:
+            unified_broker_interface = cls._get_shared_unified_broker_interface()
+        rows = unified_broker_interface.get(
+            MASTER_PATH,
+            params={
+                "exchange": exchange,
+                "segment": segment,
+            },
+        )
+        return cls._identity_frame(rows)
+
+    @classmethod
+    def _contracts_for(
+        cls,
+        exchange: str,
+        segment: str,
+        underlying_symbol: str | None,
+        expiry_date: datetime.date | str | None,
+        include_expired: bool,
+        unified_broker_interface: client.UnifiedBrokerInterface | None,
+    ) -> pd.DataFrame | None:
+        """Finds the contracts in one segment, narrowed by underlying and expiry.
+
+        The whole segment is fetched and narrowed here, because UBI's search route cannot reach a live expiry and its master route takes no filters.
+
+        Args:
+            exchange: The str exchange, such as `nse`.
+            segment: The str segment of the contracts, such as `equity_options`.
+            underlying_symbol: The str symbol of the underlying to keep, or None to keep every underlying.
+            expiry_date: The expiry to keep, as a datetime.date or a `YYYY-MM-DD` str, or None to keep every expiry.
+            include_expired: A bool that is True to keep contracts whose expiry has passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A pandas.DataFrame of the matching identities, sorted by expiry, strike price and option type, or None when nothing matches.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            ValueError: expiry_date is a str that is not a valid ISO date.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = cls._master_catalogue(
+            exchange,
+            segment,
+            unified_broker_interface,
+        )
+        if frame is None:
+            return None
+        wanted_expiry = expiry_date
+        if isinstance(wanted_expiry, str):
+            wanted_expiry = datetime.date.fromisoformat(wanted_expiry)
+        today = datetime.datetime.now(INDIA_TIME_ZONE).date()
+        kept_rows = []
+        for row in frame.to_dict("records"):
+            if underlying_symbol is not None:
+                if row["underlying_symbol"] != underlying_symbol.upper():
+                    continue
+            if row["expiry_date"] is None:
+                continue
+            if wanted_expiry is not None and row["expiry_date"] != wanted_expiry:
+                continue
+            if not include_expired and row["expiry_date"] < today:
+                continue
+            kept_rows.append(row)
+        if not kept_rows:
+            return None
+        kept_frame = pd.DataFrame(kept_rows)
+        sorted_frame = kept_frame.sort_values(
+            [
+                "expiry_date",
+                "strike_price",
+                "option_type",
+            ],
+            na_position="first",
+        )
+        return sorted_frame.reset_index(drop=True)
+
+    @classmethod
+    def _expiry_dates(
+        cls,
+        exchange: str,
+        segment: str,
+        underlying_symbol: str,
+        include_expired: bool,
+        unified_broker_interface: client.UnifiedBrokerInterface | None,
+    ) -> list[datetime.date]:
+        """Lists the expiries one underlying has contracts for in a segment.
+
+        Args:
+            exchange: The str exchange, such as `nse`.
+            segment: The str segment of the contracts, such as `equity_futures`.
+            underlying_symbol: The str symbol of the underlying, such as `RELIANCE`.
+            include_expired: A bool that is True to include expiries that have passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A list of datetime.date, soonest first, which is empty when the underlying has no contracts.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = cls._contracts_for(
+            exchange,
+            segment,
+            underlying_symbol,
+            None,
+            include_expired,
+            unified_broker_interface,
+        )
+        if frame is None:
+            return []
+        return sorted(set(frame["expiry_date"]))
+
+    @classmethod
+    def _identity_frame(cls, rows: list[dict]) -> pd.DataFrame | None:
+        """Turns UBI's identity rows into a frame, with real dates in it.
+
+        Args:
+            rows: A list of dicts as UBI's search and master routes return them.
+
+        Returns:
+            A pandas.DataFrame of the rows, with `expiry_date` as a datetime.date, or None when there are no rows.
+
+        Raises:
+            ValueError: An expiry date is not a valid ISO date.
+        """
+        if not rows:
+            return None
+        dated_rows = []
+        for row in rows:
+            dated_row = dict(row)
+            expiry_date = row.get("expiry_date")
+            if not expiry_date:
+                dated_row["expiry_date"] = None
+            else:
+                dated_row["expiry_date"] = cls._parse_date(expiry_date)
+            dated_rows.append(dated_row)
+        return pd.DataFrame(dated_rows)
 
     def _fetch_details(self, lookup: dict) -> dict:
         """Reads the instrument's details from UBI.

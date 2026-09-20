@@ -88,6 +88,36 @@ The old `bids` and `asks` filtered out zero-price levels. UBI now drops empty le
 
 `adjusted` is sent as the text `true` or `false`, which UBI's `parse_bool` reads, rather than relying on how `requests` would print a Python bool.
 
+## Finding instruments, and why search is not enough
+
+`Instrument` gained four protected class methods on 2026-09-20, so that the equity classes could offer ways of finding contracts rather than only naming them: `_search_catalogue`, `_master_catalogue`, `_contracts_for` and `_expiry_dates`, with `_identity_frame` turning UBI's rows into a frame.
+
+They sit on the base class because the mechanism is the same for every asset class, while the public calls belong to each class in its own file. That is the split the user's rules ask for: a shallow base holding what is genuinely identical, with each case's own surface visible where the case lives.
+
+### Search finds a name, never a contract
+
+UBI's `/api/instruments/search` ranks an exact symbol first, then symbols starting with the term, then symbols containing it, which is exactly right for finding a share. It is useless for a derivative, and measuring showed why. Asked for NIFTY index options on 2026-09-20 with the maximum limit of 200, it returned 200 rows that all shared one expiry, `2026-08-25`, which had passed four weeks earlier. The route sorts by expiry ascending, caps at 200 and takes no offset, so a segment with thousands of dead contracts hides every live one behind them permanently.
+
+`/api/instruments/master` has no cap and streams the whole segment, and because UBI is on this machine it is quick:
+
+| Segment | Rows | Time |
+|---|---|---|
+| `nse_equity_index_futures` | 23 | 0.0s |
+| `nse_equity_index_options` | 14,826 | 0.2s |
+| `nse_equity_options` | 125,967 | 1.3s |
+
+So the rule is: `/search` for a name, `/master` for a contract. `_contracts_for` fetches the segment and narrows it here, because `/master` takes no filters of its own.
+
+### Expired contracts, and what "live" means
+
+A contract is live when its expiry is today or later, measured in India time through `INDIA_TIME_ZONE`, because a contract expiring today can still be traded until the close. The comparison is therefore `>=` rather than `>`. Expired contracts are dropped unless `include_expired` is True, which the user chose on 2026-09-20 over returning the universe as UBI holds it, since the first row of an unfiltered list is always a dead contract.
+
+### Dates, and why every call fetches again
+
+`_identity_frame` converts `expiry_date` to a `datetime.date` everywhere it appears, including inside the frames, so one rule covers the whole surface. Both a date and a `YYYY-MM-DD` string are accepted by the constructors either way.
+
+Each discovery call fetches the segment master afresh, so asking for expiries and then a chain downloads it twice, about four seconds for single-stock options. That follows the standing rule against building caches around UBI, recorded under "No caching and no batching" above: a stale expiry list is a worse failure than a slow one, and if this ever matters the answer is a measurement rather than a cache added in advance.
+
 ## Tradeable or not
 
 A segment ending in `_indices` is an index and cannot be traded; every other segment can. This is the old rule. It works on UBI's prefixed segment names too, such as `nse_equity_indices`. The check runs after the details are fetched, so a wrong class costs one request before it raises.
