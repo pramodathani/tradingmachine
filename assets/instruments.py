@@ -794,8 +794,10 @@ class TradeableInstrument(Instrument):
         return self._frame_for_this_instrument(rows)
 
     @property
-    def positions(self) -> pd.DataFrame | None:
+    def net_positions(self) -> pd.DataFrame | None:
         """The positions held in this instrument now, merged across every broker.
+
+        This is UBI's `net` bucket, which counts everything open in this instrument whenever it was opened, as against `day_positions`, which counts only today.
 
         A position is what a derivative or an intraday trade leaves open, as against a holding, which is a share kept in the demat account and belongs to `Equity` instead.
 
@@ -816,10 +818,10 @@ class TradeableInstrument(Instrument):
     def day_positions(self) -> pd.DataFrame | None:
         """Today's own positions in this instrument, without what was carried in.
 
-        This is the same shape as `positions`, counting only what was opened and closed today. It is usually empty even when `positions` is not, because only some brokers report a position on a day basis at all.
+        This is UBI's `day` bucket. It has the same shape as `net_positions` and counts only what was opened and closed today, so it is usually empty even when `net_positions` is not, because only some brokers report a position on a day basis at all.
 
         Returns:
-            A pandas.DataFrame with the same columns as `positions`, or None when no broker reports a day position in this instrument.
+            A pandas.DataFrame with the same columns as `net_positions`, or None when no broker reports a day position in this instrument.
 
         Raises:
             BrokerError: No broker's positions could be read.

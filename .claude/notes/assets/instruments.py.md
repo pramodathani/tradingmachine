@@ -94,7 +94,7 @@ A segment ending in `_indices` is an index and cannot be traded; every other seg
 
 ## The order surface
 
-`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `assets/equities.py`, where they belong.
+`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `net_positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `assets/equities.py`, where they belong.
 
 This is a fresh build against UBI's current contract, not a port. The old project's order methods were written against a much earlier UBI, and every name in them has since changed:
 
@@ -129,11 +129,13 @@ Two consequences are written into the docstrings. A row whose `instrument_id` is
 
 ### Return shapes
 
-`orders`, `trades`, `positions` and `day_positions` return a `pandas.DataFrame`, or `None` when no row matches, which the user chose on 2026-09-20 over lists of dicts. This follows `prices`, which also returns `None` rather than an empty frame.
+`orders`, `trades`, `net_positions` and `day_positions` return a `pandas.DataFrame`, or `None` when no row matches, which the user chose on 2026-09-20 over lists of dicts. This follows `prices`, which also returns `None` rather than an empty frame.
 
 `place_order` returns UBI's whole response dict rather than the bare order id the old code returned. The caller needs `broker` from it, because two brokers can hold the same `order_id` and a later modify then has to say which one, and it needs `outcome`, because `order_id` is null unless the order was accepted.
 
-`positions` and `day_positions` are properties rather than methods, which the user chose on 2026-09-20. This extends the exception recorded under "Holdings, and why it is a property" in `.claude/notes/assets/equities.py.md`: a member reporting what the account currently owns or owes is a property, while a member reporting a market value, such as `quote` or `last_price`, stays a method. Each read still sends a request, so code that needs the frame twice should bind it to a local variable.
+The net bucket's member is called `net_positions` rather than plain `positions`, which the user asked for on 2026-09-20 so that the pair names the two buckets UBI actually serves. A bare `positions` beside a `day_positions` reads as though it were the whole of them rather than one of two, and the difference between them matters: net counts everything open now, however long it has been open, while day counts only what today opened.
+
+`net_positions` and `day_positions` are properties rather than methods, which the user chose on 2026-09-20. This extends the exception recorded under "Holdings, and why it is a property" in `.claude/notes/assets/equities.py.md`: a member reporting what the account currently owns or owes is a property, while a member reporting a market value, such as `quote` or `last_price`, stays a method. Each read still sends a request, so code that needs the frame twice should bind it to a local variable.
 
 ### Order id, not instrument
 
@@ -173,7 +175,7 @@ Index tick sizes are left unconverted by UBI (its `docs/contributing/known-issue
 
 A live check against UBI on `127.0.0.1:8080`, from a scratchpad script, covered everything that can be checked without placing an order.
 
-The account held exactly one order that day, a cancelled `indmoney` limit buy of one KWIL share at 40.4, and no trades and no positions. That was enough to test the filter in both directions. `TradeableInstrument(instrument_id="005799f8-f4b5-507b-a1bd-7a6aecd260fd")` resolved to KWIL and its `orders()` returned a one-row frame of 26 columns holding that order, while `orders(open_only=True)` correctly returned None, because `CANCELLED` is a terminal status. An `Equity` for RELIANCE, which had no orders, returned None from `orders`, `trades`, `positions` and `day_positions`.
+The account held exactly one order that day, a cancelled `indmoney` limit buy of one KWIL share at 40.4, and no trades and no positions. That was enough to test the filter in both directions. `TradeableInstrument(instrument_id="005799f8-f4b5-507b-a1bd-7a6aecd260fd")` resolved to KWIL and its `orders()` returned a one-row frame of 26 columns holding that order, while `orders(open_only=True)` correctly returned None, because `CANCELLED` is a terminal status. An `Equity` for RELIANCE, which had no orders, returned None from `orders`, `trades`, `net_positions` and `day_positions`.
 
 A dry run of `place_order` on KWIL, asking for a limit buy of one share at 30.0 with `transaction_type="buy"`, `order_type="limit"` and `product="cnc"` all in lower case, came back with UBI having chosen `shoonya` and built this form for it:
 
