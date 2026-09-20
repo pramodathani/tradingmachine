@@ -9,7 +9,7 @@ tradeable one can also be asked about the order book.
 a number of days to count back, and UBI serves any range in one request.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 

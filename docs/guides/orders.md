@@ -14,7 +14,7 @@ Orders live on `TradeableInstrument`, so every class except the indices has them
 Everything else on this page is a wrapper that works out a price and then calls it.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 
@@ -107,7 +107,7 @@ share.buy_at_best_bid_price(quantity=1, product="cnc")     # patient
 share.buy_at_best_offer_price(quantity=1, product="cnc")   # immediate
 ```
 
-Every wrapper that reads the order book raises `assets.exceptions.OrderError` when the side it
+Every wrapper that reads the order book raises `tradingmachine.assets.exceptions.OrderError` when the side it
 needs is empty, which is what the book looks like outside market hours.
 
 ## Changing and cancelling

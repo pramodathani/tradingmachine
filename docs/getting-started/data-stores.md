@@ -34,7 +34,7 @@ the local network, and `.env` points the clients at this machine's local network
 than at `127.0.0.1`.
 
 **MongoDB is created with a root user**, which is why every client has to authenticate against the
-`admin` database rather than against `tradingmachine`. `utilities.configuration` puts
+`admin` database rather than against `tradingmachine`. `tradingmachine.utilities.configuration` puts
 `authSource=admin` into the connection string for exactly this reason, so code that builds its own
 connection string by hand and forgets it will fail to authenticate with a confusing message.
 

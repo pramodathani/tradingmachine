@@ -1,11 +1,11 @@
 # Analysis
 
-`assets.analysis` holds thirteen classes, and `Instrument` inherits every one of them. That means
+`tradingmachine.assets.analysis` holds thirteen classes, and `Instrument` inherits every one of them. That means
 about 190 analysis methods are available on any instrument object, in any family, with no import
 and no separate library call.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 

@@ -14,7 +14,7 @@ own segment, so there is never a segment string to pass.
 All of them are class methods, so nothing has to be built before searching.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 matches = equities.Equity.search(exchange="nse", term="RELI")
 

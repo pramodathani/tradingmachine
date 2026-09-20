@@ -13,7 +13,7 @@ applies; this page is for reading before you start rather than after.
     not cover the wrappers.
 
     Where order methods have been checked, it was done by replacing `place_order` with a recorder
-    and fabricating a holdings or positions row. The sidecar notes under `.claude/notes/assets/`
+    and fabricating a holdings or positions row. The sidecar notes under `.claude/notes/src/tradingmachine/assets/`
     record exactly which orders were recorded and state plainly that none was sent.
 
 ## Nothing is validated locally
@@ -109,7 +109,16 @@ A holding gives `day_change`, `day_change_percentage` and `unrealized`. A positi
 `633GS2035`, and those are what the futures and options are written on. Sovereign gold bonds are
 in this family rather than with commodities.
 
-## `PYTHONPATH` has to include the project root
+## The library has to be installed, not just checked out
 
-Imports use full package paths, so a script run without the root on the path fails at
-`from assets import equities` rather than anywhere informative.
+The source lives under `src/`, which is deliberately not importable from the repository root. A
+checkout you have not run `pip install -e .` in fails at `from tradingmachine.assets import
+equities`, and adding the root to `PYTHONPATH` will not rescue it, because there is no
+`tradingmachine` directory there to find.
+
+## `.env` is found relative to the working directory, not the library
+
+`Configuration` asks `dotenv` for a file named `.env` in the working directory or one of its
+parents. A script run from your home directory therefore gets `None` for the UBI base url and
+fails with `UBI base url is not configured`, even though the file exists in the repository. Pass
+`Configuration(environment_file=...)` or export the variables instead.

@@ -1,6 +1,6 @@
 # The instrument model
 
-`assets.instruments` holds three classes, and every one of the twenty-seven classes in the six
+`tradingmachine.assets.instruments` holds three classes, and every one of the twenty-seven classes in the six
 family modules is a subclass of one of them.
 
 ```mermaid
@@ -36,7 +36,7 @@ You name the instrument; the object finds it. The constructor sends one request 
 lifetime.
 
 ```python
-from assets import instruments
+from tradingmachine.assets import instruments
 
 infosys = instruments.TradeableInstrument(
     exchange="nse",
@@ -115,7 +115,7 @@ members. Its constructor raises `TradeableInstrumentError` when the segment ends
 `NonTradeableInstrumentError` when the segment does **not** end in `_indices`.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 equities.Equity(exchange="nse", symbol="NIFTY")
 # InstrumentError, because NIFTY is not in the equities segment
@@ -133,7 +133,7 @@ equities.EquityIndex(exchange="nse", symbol="NIFTY")
 
 ## The shared client
 
-Instruments share one `ubi_client.UnifiedBrokerInterface` by default, held on `Instrument` itself
+Instruments share one `tradingmachine.ubi_client.client.UnifiedBrokerInterface` by default, held on `Instrument` itself
 rather than on the subclass, so that every class in every family uses the same one. UBI keeps a
 single access token for the whole application, so two clients would sit there replacing each
 other's token. Pass `unified_broker_interface=` to a constructor to use your own instead, which is

@@ -1,6 +1,6 @@
 # Fixed income
 
-`assets.fixed_income` is the same six classes as [equities](equities.md), built the same way and
+`tradingmachine.assets.fixed_income` is the same six classes as [equities](equities.md), built the same way and
 copied from that module rather than sharing a base with it. Bonds, rate indices, and the futures
 and options written on each.
 
@@ -23,7 +23,7 @@ This is the single most surprising thing about the module. Everywhere else in th
 is a ticker; here it is an ISIN.
 
 ```python
-from assets import fixed_income
+from tradingmachine.assets import fixed_income
 
 bond = fixed_income.FixedIncome(exchange="nse", symbol="IN000126C010")
 ```
@@ -113,4 +113,4 @@ account's holdings exactly as a share is. Two differences are worth knowing:
 
     This is inference from reading UBI's source on 2026-09-20, not a verified observation, because
     verifying it would mean sending a real order. Nothing in this module works around it; the fix
-    belongs in UBI. The full reasoning is in `.claude/notes/assets/fixed_income.py.md`.
+    belongs in UBI. The full reasoning is in `.claude/notes/src/tradingmachine/assets/fixed_income.py.md`.

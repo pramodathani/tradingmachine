@@ -1,6 +1,6 @@
 # Currencies
 
-`assets.currencies` covers UBI's six currency segments, on the `nse` and the `bse`. Ordering works
+`tradingmachine.assets.currencies` covers UBI's six currency segments, on the `nse` and the `bse`. Ordering works
 as it does for [commodities](commodities.md) rather than for shares, and this is the family with
 the thinnest coverage of all: half its classes resolve nothing, and nothing in it has candles.
 
@@ -18,7 +18,7 @@ UBI carries seven pairs on the nse: `EURINR`, `EURUSD`, `GBPINR`, `GBPUSD`, `JPY
 the readable pair names, and a derivative's underlying symbol matches its underlying's symbol.
 
 ```python
-from assets import currencies
+from tradingmachine.assets import currencies
 
 expiries = currencies.CurrencyFutures.expiries(exchange="nse", underlying_symbol="USDINR")
 contract = currencies.CurrencyFutures(

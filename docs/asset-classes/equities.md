@@ -1,6 +1,6 @@
 # Equities
 
-`assets.equities` is the family everything else was modelled on. Six classes cover UBI's six
+`tradingmachine.assets.equities` is the family everything else was modelled on. Six classes cover UBI's six
 equity segments, and every capability in the project is present here: candles, quotes, the order
 book, orders, positions, holdings and discovery.
 
@@ -16,7 +16,7 @@ book, orders, positions, holdings and discovery.
 ## Building one
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 

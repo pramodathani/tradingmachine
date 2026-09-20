@@ -5,8 +5,8 @@ UBI's or the instrument's.
 
 | Hierarchy | Base class | Raised by | Means |
 | --- | --- | --- | --- |
-| `ubi_client.exceptions` | `UnifiedBrokerInterfaceError` | The REST client | UBI answered with a failure, or could not be reached |
-| `assets.exceptions` | `InstrumentError` | The instrument classes | The request never reached UBI, or UBI's answer does not support what you asked for |
+| `tradingmachine.ubi_client.exceptions` | `UnifiedBrokerInterfaceError` | The REST client | UBI answered with a failure, or could not be reached |
+| `tradingmachine.assets.exceptions` | `InstrumentError` | The instrument classes | The request never reached UBI, or UBI's answer does not support what you asked for |
 
 Both hierarchies are exactly one level deep. Every subclass inherits the base directly, so
 catching the base catches everything in that family and there is no middle tier to remember.
@@ -32,7 +32,7 @@ Each class matches one HTTP status code, and anything with no match becomes `Ser
 Every one of them carries three attributes.
 
 ```python
-from ubi_client import exceptions
+from tradingmachine.ubi_client import exceptions
 
 try:
     price = contract.last_price()
@@ -54,7 +54,7 @@ wording there, and a commodity or currency order refused for its contract size c
 
 ## Failures from the instrument classes
 
-`assets.exceptions` has `InstrumentError` and thirty-two subclasses. Five of them are about what
+`tradingmachine.assets.exceptions` has `InstrumentError` and thirty-two subclasses. Five of them are about what
 you asked for, and the rest are one per instrument class, raised when that class's own lookup
 finds nothing or returns an instrument outside the class's segment.
 
@@ -74,8 +74,8 @@ commodities and currencies, plus `ExchangeTradedFundError`, `InvestmentTrustErro
 `MutualFundError`.
 
 ```python
-from assets import exceptions
-from assets import equities
+from tradingmachine.assets import exceptions
+from tradingmachine.assets import equities
 
 try:
     share = equities.Equity(exchange="nse", symbol="NOTAREALSYMBOL")
@@ -91,8 +91,8 @@ anybody having to read the arguments back.
 The two hierarchies are unrelated, so code that has to survive either failure catches both bases.
 
 ```python
-from assets import exceptions as asset_exceptions
-from ubi_client import exceptions as ubi_exceptions
+from tradingmachine.assets import exceptions as asset_exceptions
+from tradingmachine.ubi_client import exceptions as ubi_exceptions
 
 try:
     price = instrument.last_price()

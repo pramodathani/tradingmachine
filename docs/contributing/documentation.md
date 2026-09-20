@@ -18,19 +18,20 @@ a docstring rebuilds the affected reference page while `serve` is running.
 **Narrative pages** are hand-written Markdown under `docs/`. They explain why something is shaped
 the way it is and how the pieces fit, and they are listed explicitly in the `nav` in `mkdocs.yml`.
 
-**Reference pages** are generated at build time by `utilities/gen_ref_pages.py`, one page per
+**Reference pages** are generated at build time by `scripts/gen_ref_pages.py`, one page per
 module, straight from the docstrings. Nothing is written to disk in the project: `mkdocs-gen-files`
 holds the pages in memory for the build, and the section's navigation is written to a
 `reference/SUMMARY.md` that `mkdocs-literate-nav` reads. That is why `mkdocs.yml` says
 `- API reference: reference/` rather than listing pages.
 
-A module added to `assets`, `ubi_client` or `utilities` therefore appears in the reference with no
-edit anywhere. The generator itself is excluded, being part of the documentation build rather than
-part of the project being documented.
+A module added anywhere under `src/tradingmachine` therefore appears in the reference with no edit
+anywhere. The generator and the warning filter are not under `src/` at all: they live in
+`scripts/`, because they are part of the documentation build rather than part of the library being
+documented, and keeping them out of the package is what stops them documenting themselves.
 
 ```mermaid
 flowchart LR
-    SRC["assets/ ubi_client/ utilities/"] --> GEN["utilities/gen_ref_pages.py<br/>ReferencePageBuilder"]
+    SRC["src/tradingmachine/<br/>assets, ubi_client, utilities"] --> GEN["scripts/gen_ref_pages.py<br/>ReferencePageBuilder"]
     GEN --> PAGES["reference/**/*.md<br/>one ::: line each, in memory"]
     GEN --> SUM["reference/SUMMARY.md"]
     PAGES --> MKD["mkdocstrings"]
@@ -50,14 +51,15 @@ each.
 | `true` | 151 MB | 112 seconds | 23.8 MB |
 | `false` | 13 MB | 6 seconds | 1.0 MB |
 
-The analysis methods are documented once each, on the `assets/analysis/*` pages where they are
-defined, which is also where someone looking for them would think to go.
+The analysis methods are documented once each, on the `tradingmachine.assets.analysis` pages where
+they are defined, which is also where someone looking for them would think to go.
 
 ## Where the reasoning lives
 
 This project keeps no explanatory comments in source files. Reasoning, context, trade-offs and
 history go into a sidecar Markdown file under `.claude/notes/`, one per source file, mirroring the
-source tree: `assets/equities.py` is documented by `.claude/notes/assets/equities.py.md`.
+source tree: `src/tradingmachine/assets/equities.py` is documented by
+`.claude/notes/src/tradingmachine/assets/equities.py.md`.
 
 Those notes are not part of this site, and they are more detailed than it is. They hold the
 measurements, the dated live checks and the record of which alternative was turned down. A
@@ -81,8 +83,8 @@ the warning into a failed build.
 Cross-reference any documented object by its dotted path in square brackets:
 
 ```markdown
-[`TradeableInstrument`][assets.instruments.TradeableInstrument]
-[`place_order`][assets.instruments.TradeableInstrument.place_order]
+[`TradeableInstrument`][tradingmachine.assets.instruments.TradeableInstrument]
+[`place_order`][tradingmachine.assets.instruments.TradeableInstrument.place_order]
 ```
 
 Under `--strict` an unresolvable reference fails the build, which is what keeps these honest.

@@ -1,12 +1,12 @@
 # The UBI client
 
-`ubi_client.UnifiedBrokerInterface` is a thin REST client and nothing more. It finds its
+`tradingmachine.ubi_client.client.UnifiedBrokerInterface` is a thin REST client and nothing more. It finds its
 credentials, holds an access token, sends requests with that token, retries once when the token is
 refused, and turns every failed response into a typed exception. It never interprets a payload;
 what it returns is parsed JSON exactly as UBI sent it.
 
 ```python
-from ubi_client import client
+from tradingmachine.ubi_client import client
 
 unified_broker_interface = client.UnifiedBrokerInterface()
 brokers = unified_broker_interface.get("/api/brokers/details")
@@ -52,7 +52,7 @@ token is what sends `POST /api/session/connect`.
     that is connected at the same time. If a long-running job suddenly starts getting 401s, the
     usual cause is that something else connected.
 
-This is also why `assets.instruments` gives every instrument the same client by default. Two
+This is also why `tradingmachine.assets.instruments` gives every instrument the same client by default. Two
 clients in one process would take turns invalidating each other's token, and each request would
 pay for a reconnect.
 
