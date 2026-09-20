@@ -13,11 +13,14 @@ utilities/configuration.py   ubi_configuration and mongodb_configuration, read f
 ubi_client/client.py         UnifiedBrokerInterface: connect, disconnect, status, get, post, put, patch, delete
 ubi_client/exceptions.py     one error class per HTTP status code UBI returns
 assets/instruments.py        Instrument, TradeableInstrument, NonTradeableInstrument
-assets/exceptions.py         InstrumentError and its two subclasses
+assets/equities.py           the six equity-family classes, one per UBI equity segment
+assets/exceptions.py         InstrumentError and its eight subclasses
 assets/analysis/             thirteen classes of candle analysis that Instrument inherits
 ```
 
 `Instrument` looks an instrument up once through `/api/instruments/details`, then fetches candles (`prices`) and live values (`quote`, `last_price`, `ohlc`) from UBI on every call. It inherits about 190 analysis methods from `assets/analysis/`: TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest. `TradeableInstrument` adds order-book values and refuses indices, and `NonTradeableInstrument` accepts only indices. Order placement is not ported yet. There is deliberately no caching and no date-range batching around UBI calls, because UBI is local and caches in its own Redis.
+
+`assets/equities.py` puts a named class on each of UBI's six equity segments, so the kind of contract is the class rather than a segment string, and each constructor takes only the fields that identify one of its own contracts: `Equity` and `EquityIndex` by exchange and symbol, `EquityFutures` and `EquityIndexFutures` by exchange, underlying symbol and expiry date, and `EquityOption` and `EquityIndexOption` by those three plus a strike price and an option type. `EquityIndex` is built on `NonTradeableInstrument` and the other five on `TradeableInstrument`. A derivative deliberately does not hold an object for its underlying, because UBI links the two only by matching symbol strings. `Equity` alone has a `holdings` property, since a share is the only thing in the family that can be held for the long term. The equivalent classes for commodities, currencies, fixed income and funds are not ported yet.
 
 Imports use full package paths (`from ubi_client import client`), so scripts run from the project root with the root on `PYTHONPATH`. Reasoning behind each file is in `.claude/notes/`, mirroring the source tree.
 
