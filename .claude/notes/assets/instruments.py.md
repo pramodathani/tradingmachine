@@ -216,6 +216,45 @@ Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of on
 
 `cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. This is the one place in the project that catches `UnifiedBrokerInterfaceError` itself. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
 
+### Acting on a position
+
+Four members were added on 2026-09-20 so that a position can be changed and not only read: `add_to_position`, `reduce_position`, `liquidate_position` and `liquidate_all_positions`. Before them, closing a futures position meant reading `net_positions`, working out which way it pointed, taking its absolute size and flipping the side by hand, and getting that sign wrong doubles a position instead of closing it.
+
+This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and are still deferred to a separate `Equity` change. Only the shape of the three was borrowed.
+
+#### Two vocabularies for one word
+
+UBI reports a position's product with one set of words and accepts orders with another, so every one of these members has to translate, and the translation is not total.
+
+| Order product, what `place_order` takes | Position product, what `net_positions` reports |
+|---|---|
+| `cnc` | `delivery` |
+| `mis` | `intraday` |
+| `nrml` | `carry` |
+| nothing | `margin_trading`, `cover`, `bracket` |
+
+The last three come from order kinds UBI's place route cannot send, so there is no order these methods could write to close such a position. The user chose on 2026-09-20 to ignore them entirely, which means a position held under `bracket` is invisible to the lookup, exactly as though it were not there.
+
+That is a quiet trap, because a caller can hold a position and be told none exists. Every docstring says so in plain words, and `liquidate_all_positions` is deliberately different from the rest: it reads the unfiltered `net_positions` and reports an untradeable row as ignored, with the reason, rather than passing over it in silence. `_tradeable_positions` is the single place the filtering happens.
+
+Two module constants hold the mapping, one per direction, because both directions are needed: a caller names a product in the order vocabulary, and the rows come back in the position vocabulary.
+
+#### Which position, and which way
+
+`product` is optional on all of them and names the order product. With one position held it is not needed; with several, leaving it out raises and the message lists what is actually held, which the user chose over making it always required.
+
+Direction is never asked for when it can be worked out. `add_to_position` follows the position you hold, buying to add to a long one and selling to add to a short one. `reduce_position` does the opposite. `transaction_type` exists on `add_to_position` only for the case where nothing is held yet, and then `product` is required too, because neither can be read from a position that does not exist.
+
+A `transaction_type` that contradicts the position held raises and points at `reduce_position`, which the user chose over silently following the position. Selling against a long position is reducing it, so a call that says otherwise is a mistake worth stopping rather than reinterpreting.
+
+`reduce_position` refuses a quantity larger than the position, naming both figures. This is not the same as the rule against validating locally what UBI validates: UBI would accept the order happily and leave the account with a new position the other way round, which is not what the method was asked to do.
+
+#### Pricing, and what gets reused
+
+`price` is optional everywhere. Given, it sends a limit order; left out, it sends a market order, which is what closing a position usually means. This is the old holdings methods' convention, and the user confirmed it on 2026-09-20.
+
+The four members place nothing themselves. `_place_to_change_position` picks among `buy_at_market_price`, `sell_at_market_price`, `buy_at_limit_price` and `sell_at_limit_price`, which finally gives the two market wrappers a caller inside the project.
+
 ### The first real order, and the two things it taught
 
 The user ran the live script at 12:27 on Sunday 2026-09-20, with the market closed. It placed a genuine limit buy of one KWIL share at 28.85 against a last price of 41.22. UBI routed it to `wisdom_capital`, which answered `API Order Id sent` with order id `1310900080`, and UBI reported `outcome: accepted`. The modify that followed raised `NotFoundError: no broker order book in Redis holds this order_id`, and so did the cancel in the `finally` block, so the run ended in a traceback with what looked like an uncancelled order.
@@ -311,3 +350,38 @@ It cancelled all four, across three brokers, and reported each:
 Four wrappers were deliberately not run, because each would have gone outside what the user authorised. `buy_at_market_price` and `sell_at_market_price` carry no price at all, and the authorisation set a price ceiling. `sell_at_best_offer_price` and `sell_at_volume_weighted_average_price` would have sold at 41.22 and 40.54, both below that ceiling and so more likely to fill than the orders that were allowed. All four are covered by the offline check.
 
 `trades`, `net_positions` and `day_positions` have still only ever returned None. Seeing them with data needs an order that actually fills, which means genuinely buying or selling, and that has not been asked for.
+
+## The position methods, checked on 2026-09-20
+
+The account held no positions at all and the market was closed, so every case was set up offline, with `place_order` replaced by a recorder and `net_positions` replaced by made-up frames. That is not a weaker check here than it was for the wrappers: the whole value of these methods is the arithmetic on the position, and a recorder shows exactly which order each one would send.
+
+| Position | Call | What it did |
+|---|---|---|
+| Long 100 carry | `add_to_position(50)` | buy 50 nrml at market |
+| Short 65 carry | `add_to_position(35)` | sell 35 nrml at market |
+| Long 100 carry | `add_to_position(50, transaction_type="sell")` | `PositionError`, pointing at `reduce_position` |
+| None | `add_to_position(50, product="nrml", transaction_type="buy")` | buy 50 nrml at market |
+| None | `add_to_position(50)` | `PositionError`, asking for both |
+| Long 100 carry | `reduce_position(40)` | sell 40 nrml at market |
+| Short 65 carry | `reduce_position(30)` | buy 30 nrml at market |
+| Long 100 carry | `reduce_position(150)` | `PositionError` naming 100.0 and 150 |
+| Short 65 carry | `liquidate_position()` | buy 65 nrml at market |
+| Carry and intraday | `reduce_position(10)` | `PositionError` naming both products |
+| Carry and intraday | `reduce_position(10, product="mis")` | sell 10 mis at market |
+| Bracket only | `liquidate_position()` | `PositionError`, nothing UBI can trade |
+| Long 100 carry | `liquidate_position(price=41.5)` | sell 100 nrml at 41.5, a limit order |
+
+`liquidate_all_positions` over a short carry, a long intraday and a bracket position closed the first two and reported the third:
+
+```
+ product order_product  quantity  closed    order_id                                          error
+   carry          nrml     -65.0    True  recorded-9                                            NaN
+intraday           mis     100.0    True recorded-10                                            NaN
+ bracket           NaN      25.0   False         NaN ignored: UBI cannot send a bracket order...
+```
+
+It sent a buy of 65 under nrml and a sell of 100 under mis, which is the right direction for each, and returned None when nothing was held.
+
+Against the live UBI the lookup was exercised through `_tradeable_positions` and `_position_row` alone, which cannot place an order. Both reported correctly that nothing is held. The public members were deliberately not called live, because a position appearing between the check and the call would have turned a read into a real order, which is the rule that came out of the wrapper check earlier in the day.
+
+Seeing these work against a real position needs an order that fills, which means genuinely buying something and carrying it until it is closed. That has not been asked for.

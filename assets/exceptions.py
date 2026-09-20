@@ -27,6 +27,10 @@ class OrderError(InstrumentError):
     """An order that cannot be priced, because the value it asks for is not there."""
 
 
+class PositionError(InstrumentError):
+    """A position that cannot be changed as asked, or one that is not held at all."""
+
+
 class EquityError(InstrumentError):
     """An equity share UBI does not know, or one that is not in the equities segment."""
 

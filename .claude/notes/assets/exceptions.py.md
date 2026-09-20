@@ -17,3 +17,11 @@ Transport failures stay as `ubi_client.exceptions` classes and are chained onto 
 It inherits from `InstrumentError`, which the user chose on 2026-09-20. The old project deliberately did the opposite: its `OrderException` descended straight from the root, on the reasoning that an order problem is not an instrument problem, so `except InstrumentException` did not catch it. The choice here keeps one catch, `except InstrumentError`, working for every domain problem this package raises, which is the same reasoning that put the six equity errors under it.
 
 A broker's refusal of an order is not an `OrderError`. That is `ubi_client.exceptions.OrderRejectedError`, from HTTP 422, and it stays on the transport side along with `ConflictError` and `OrderOutcomeUnknownError`.
+
+## PositionError
+
+`PositionError` was added on 2026-09-20 with the four members that change a position. It means the position cannot be changed as asked: nothing is held in the instrument, or nothing under the product named, or several are held and none was named, or the direction given contradicts the position, or the reduction is larger than the position itself.
+
+It sits under `InstrumentError` beside `OrderError`, for the same reason and by the same choice: one `except InstrumentError` catches every domain problem this package raises.
+
+The last of those cases deserves a word, because it looks like local validation of the kind this project avoids. Reducing a position by more than it holds is not something UBI would reject; it would accept the order and leave the account holding a new position the other way round. The method refuses it because that is not what it was asked to do, which is different from second-guessing a rule UBI already enforces.

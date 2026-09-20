@@ -62,6 +62,18 @@ OPEN_ORDER_STATUSES = [
     "OPEN",
 ]
 
+POSITION_PRODUCT_FOR_ORDER_PRODUCT = {
+    "cnc": "delivery",
+    "mis": "intraday",
+    "nrml": "carry",
+}
+
+ORDER_PRODUCT_FOR_POSITION_PRODUCT = {
+    "delivery": "cnc",
+    "intraday": "mis",
+    "carry": "nrml",
+}
+
 
 class Instrument(
     price_statistics.PriceStatistics,
@@ -2055,6 +2067,386 @@ class TradeableInstrument(Instrument):
             price=self._offer_price_at(5),
             quantity=quantity,
             product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def add_to_position(
+        self,
+        quantity: int,
+        product: str | None = None,
+        transaction_type: str | None = None,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Makes an existing position bigger, or opens a new one.
+
+        The direction follows the position you already hold: a long position is added to by buying and a short one by selling, so `transaction_type` is needed only when you hold nothing yet. Holding nothing also means there is no position to read a product from, so `product` is needed then too.
+
+        Only positions held under `cnc`, `mis` and `nrml` are visible here. UBI also reports positions under `margin_trading`, `cover` and `bracket`, which come from order kinds it cannot send, and those are ignored as though they were not there.
+
+        Args:
+            quantity: The int quantity to add, in underlying units and always positive, whichever way the position points.
+            product: The str product of the position to add to, `cnc`, `mis` or `nrml`, or None when only one position is held.
+            transaction_type: The str direction to open in, `buy` or `sell`, used only when no position is held yet.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            PositionError: Several positions are held and none was named, or the direction given contradicts the position held, or nothing is held and no direction and product were given.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        frame = self._tradeable_positions()
+        if frame is None:
+            return self._open_a_new_position(
+                quantity=quantity,
+                product=product,
+                transaction_type=transaction_type,
+                price=price,
+                validity=validity,
+                after_market=after_market,
+                tag=tag,
+            )
+        row = self._position_row(product)
+        if row["quantity"] > 0:
+            wanted_direction = "buy"
+        else:
+            wanted_direction = "sell"
+        if transaction_type is not None:
+            if transaction_type.lower() != wanted_direction:
+                raise exceptions.PositionError(
+                    f"This is a position of {row['quantity']} under {row['product']}, so a {transaction_type.lower()} reduces it rather than adding to it; use reduce_position: {self!r}"
+                )
+        return self._place_to_change_position(
+            transaction_type=wanted_direction,
+            quantity=quantity,
+            product=ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]],
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def reduce_position(
+        self,
+        quantity: int,
+        product: str | None = None,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Makes an existing position smaller, without turning it around.
+
+        The direction is the opposite of the position: a long position is reduced by selling and a short one by buying. Asking for more than the position holds is refused rather than sent, because that would close the position and open a new one the other way round.
+
+        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`.
+
+        Args:
+            quantity: The int quantity to close, in underlying units and always positive, whichever way the position points.
+            product: The str product of the position to reduce, `cnc`, `mis` or `nrml`, or None when only one position is held.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            PositionError: Nothing is held in this instrument, or several positions are held and none was named, or the quantity is larger than the position.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        row = self._position_row(product)
+        held = abs(row["quantity"])
+        if quantity > held:
+            raise exceptions.PositionError(
+                f"The position under {row['product']} is {row['quantity']}, so {quantity} cannot be closed without opening a new position the other way round: {self!r}"
+            )
+        if row["quantity"] > 0:
+            direction = "sell"
+        else:
+            direction = "buy"
+        return self._place_to_change_position(
+            transaction_type=direction,
+            quantity=quantity,
+            product=ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]],
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def liquidate_position(
+        self,
+        product: str | None = None,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Closes one position in this instrument completely.
+
+        This is `reduce_position` by the whole size of the position, so a long position is sold and a short one is bought back.
+
+        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`.
+
+        Args:
+            product: The str product of the position to close, `cnc`, `mis` or `nrml`, or None when only one position is held.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            PositionError: Nothing is held in this instrument, or several positions are held and none was named.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        row = self._position_row(product)
+        return self.reduce_position(
+            quantity=int(abs(row["quantity"])),
+            product=ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]],
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def liquidate_all_positions(
+        self,
+        price: float | None = None,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> pd.DataFrame | None:
+        """Closes every position this instrument holds, under every product.
+
+        Each position is closed on its own, and every one is attempted even when an earlier one fails, so a single refusal does not leave the rest open. A position held under a product UBI cannot send an order for, which is `margin_trading`, `cover` or `bracket`, is reported as ignored rather than passed over in silence, and has to be closed at the broker directly.
+
+        Args:
+            price: The float limit price in rupees for every order, or None to send market orders.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the orders as after-market orders.
+            tag: A str of up to twenty letters and digits to label the orders with, or None.
+
+        Returns:
+            A pandas.DataFrame with one row per position, holding `product`, `order_product`, `quantity`, `closed`, `order_id` and `error`, or None when this instrument holds no position at all.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: The positions could not be read for any other reason. A failure to close one position is reported in the frame instead.
+        """
+        frame = self.net_positions
+        if frame is None:
+            return None
+        outcomes = []
+        for row in frame.to_dict("records"):
+            order_product = ORDER_PRODUCT_FOR_POSITION_PRODUCT.get(row["product"])
+            outcome = {
+                "product": row["product"],
+                "order_product": order_product,
+                "quantity": row["quantity"],
+                "closed": False,
+                "order_id": None,
+                "error": None,
+            }
+            if order_product is None:
+                outcome["error"] = (
+                    f"ignored: UBI cannot send a {row['product']} order, so close this at the broker"
+                )
+                outcomes.append(outcome)
+                continue
+            try:
+                answer = self.liquidate_position(
+                    product=order_product,
+                    price=price,
+                    validity=validity,
+                    after_market=after_market,
+                    tag=tag,
+                )
+            except (
+                exceptions.PositionError,
+                ubi_exceptions.UnifiedBrokerInterfaceError,
+            ) as error:
+                outcome["error"] = f"{type(error).__name__}: {error}"
+            else:
+                outcome["closed"] = True
+                outcome["order_id"] = answer.get("order_id")
+            outcomes.append(outcome)
+        return pd.DataFrame(outcomes)
+
+    def _tradeable_positions(self) -> pd.DataFrame | None:
+        """Reads this instrument's positions, keeping the ones UBI can trade.
+
+        UBI reports a position's product as `delivery`, `intraday`, `carry`, `margin_trading`, `cover` or `bracket`, but it accepts orders only for the first three. The last three come from order kinds its place route cannot send, so they are dropped here, which is the one place that happens.
+
+        Returns:
+            A pandas.DataFrame of the positions that can be traded through UBI, or None when there are none.
+
+        Raises:
+            BrokerError: No broker's positions could be read.
+            ServiceUnavailableError: UBI's positions document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = self.net_positions
+        if frame is None:
+            return None
+        tradeable_rows = []
+        for row in frame.to_dict("records"):
+            if row["product"] in ORDER_PRODUCT_FOR_POSITION_PRODUCT:
+                tradeable_rows.append(row)
+        if not tradeable_rows:
+            return None
+        return pd.DataFrame(tradeable_rows)
+
+    def _position_row(self, product: str | None) -> dict:
+        """Picks the one position to act on.
+
+        Args:
+            product: The str order product naming the position, `cnc`, `mis` or `nrml`, or None to use the only position held.
+
+        Returns:
+            The dict row of the position, with UBI's own `product` spelling in it.
+
+        Raises:
+            PositionError: Nothing tradeable is held, or the named product is not held, or several are held and none was named.
+        """
+        frame = self._tradeable_positions()
+        if frame is None:
+            raise exceptions.PositionError(
+                f"No position is held in this instrument that UBI can send an order for: {self!r}"
+            )
+        rows = frame.to_dict("records")
+        if product is None:
+            if len(rows) == 1:
+                return rows[0]
+            held_products = []
+            for row in rows:
+                held_products.append(row["product"])
+            raise exceptions.PositionError(
+                f"Positions are held under {', '.join(sorted(held_products))}, so name the product to act on: {self!r}"
+            )
+        wanted_product = POSITION_PRODUCT_FOR_ORDER_PRODUCT.get(product.lower())
+        for row in rows:
+            if row["product"] == wanted_product:
+                return row
+        held_products = []
+        for row in rows:
+            held_products.append(row["product"])
+        raise exceptions.PositionError(
+            f"No {product} position is held in this instrument, which holds {', '.join(sorted(held_products))}: {self!r}"
+        )
+
+    def _place_to_change_position(
+        self,
+        transaction_type: str,
+        quantity: int,
+        product: str,
+        price: float | None,
+        validity: str | None,
+        after_market: bool,
+        tag: str | None,
+    ) -> dict:
+        """Sends the order that changes a position, as a market or a limit order.
+
+        Args:
+            transaction_type: The str direction to trade in, `buy` or `sell`.
+            quantity: The int quantity in underlying units.
+            product: The str order product, `cnc`, `mis` or `nrml`.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns.
+
+        Raises:
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        if transaction_type == "buy":
+            if price is None:
+                return self.buy_at_market_price(
+                    quantity=quantity,
+                    product=product,
+                    validity=validity,
+                    after_market=after_market,
+                    tag=tag,
+                )
+            return self.buy_at_limit_price(
+                price=price,
+                quantity=quantity,
+                product=product,
+                validity=validity,
+                after_market=after_market,
+                tag=tag,
+            )
+        if price is None:
+            return self.sell_at_market_price(
+                quantity=quantity,
+                product=product,
+                validity=validity,
+                after_market=after_market,
+                tag=tag,
+            )
+        return self.sell_at_limit_price(
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def _open_a_new_position(
+        self,
+        quantity: int,
+        product: str | None,
+        transaction_type: str | None,
+        price: float | None,
+        validity: str | None,
+        after_market: bool,
+        tag: str | None,
+    ) -> dict:
+        """Opens a position in an instrument that holds none.
+
+        Args:
+            quantity: The int quantity in underlying units.
+            product: The str order product to open under, `cnc`, `mis` or `nrml`, or None.
+            transaction_type: The str direction to open in, `buy` or `sell`, or None.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns.
+
+        Raises:
+            PositionError: No direction or no product was given, and neither can be read from a position that does not exist.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        if transaction_type is None or product is None:
+            raise exceptions.PositionError(
+                f"No position is held in this instrument, so opening one needs both transaction_type and product: {self!r}"
+            )
+        return self._place_to_change_position(
+            transaction_type=transaction_type.lower(),
+            quantity=quantity,
+            product=product,
+            price=price,
             validity=validity,
             after_market=after_market,
             tag=tag,
