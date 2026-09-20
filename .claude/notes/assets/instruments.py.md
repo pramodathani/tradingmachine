@@ -199,4 +199,23 @@ Nothing about this changes the class. Adding a wait or a retry inside `modify_or
 
 The script was changed in one other way. It now sends the order with `after_market=True` rather than only falling back to that after a 400 that never comes. An after-market order is queued by the broker rather than passed to the exchange, so it survives on a closed market and can actually be modified and cancelled, which is the whole point of the run.
 
-`modify_order` and `cancel_order` have therefore still not been seen to succeed against an order the broker is holding. That is what the next run of the script is for.
+### The order that worked, at 12:35 the same day
+
+The third run went through the whole life of an order. It is the first proof that the writing methods work.
+
+| Step | What happened |
+|---|---|
+| Place | `indmoney` took the after-market limit buy of one KWIL share at 28.85, as order `EQ-100659431`, answering `O-PENDING` |
+| Appear | The order showed up in UBI's order book 2.0 seconds later, with status `PENDING` |
+| Modify | The price changed from 28.85 to 26.79, with `status_before_modify: PENDING` |
+| Read back | `orders()` showed the row at 26.79, so the change had really reached the broker |
+| Cancel | The broker answered `CANCELLED`, with `status_before_cancel: PENDING` |
+| Read back | `orders()` showed the row as `CANCELLED`, so nothing was left open |
+
+The second run, between the two, had failed with `OrderRejectedError`, which is UBI's HTTP 422 and means the broker refused and nothing was placed. Its cause was never identified, because the script printed only the exception's message, and for a 422 UBI returns the broker's own answer rather than an `{"error": ...}` body, so the message falls back to `UBI returned HTTP 422` and the explanation sits in `detail`. The lesson for anyone reading a 422 is to read `detail`, not the message.
+
+That failure also showed why a single attempt proves little. UBI's round-robin selector picks a different broker on every request, so one broker's refusal says nothing about the next, and two brokers, `fyers` and `groww`, take no after-market orders at all and are skipped with a reason. The check script now tries up to six times, prints each refusal in full, and stops at the first broker that takes the order. It never retries a 504, because an unknown outcome may have left a real order behind.
+
+One small thing to know when reading the returned frames: a field that is null for every row of a numeric column comes back from pandas as `NaN` rather than `None`, which is why the pending order's `status_message` printed as `nan`.
+
+The 2.0 second delay before the order appeared is the same lag the second run's `NotFoundError` was caused by, now measured rather than inferred.
