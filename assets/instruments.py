@@ -1,6 +1,6 @@
 """Instruments from UBI's unified instrument universe, with their candles, live prices and analysis.
 
-`Instrument` looks an instrument up in UBI once, keeps its identity, lot size and tick size, and fetches candles and live prices on demand. It inherits every analysis class in `assets.analysis`, so indicators, candlestick patterns, statistics and backtests are methods on the instrument. `TradeableInstrument` adds the values that come from the order book, the methods that place, change and cancel orders, and this instrument's own orders, trades and positions, and it refuses indices. `NonTradeableInstrument` accepts only indices.
+`Instrument` looks an instrument up in UBI once, keeps its identity, lot size and tick size, and fetches candles and live prices on demand. It inherits every analysis class in `assets.analysis`, so indicators, candlestick patterns, statistics and backtests are methods on the instrument. `TradeableInstrument` adds the values that come from the order book, the methods that place, change and cancel orders, a family of short methods that name the price to trade at rather than working it out, and this instrument's own orders, trades and positions. It refuses indices, and `NonTradeableInstrument` accepts only indices.
 
 Every call goes straight to UBI's REST API, which caches on its own side.
 
@@ -10,9 +10,9 @@ Typical usage example:
   frame = infosys.relative_strength_index(window=14, days=365)
   spread = infosys.bid_offer_spread()
 
-  placed = infosys.place_order(transaction_type="buy", order_type="limit", quantity=1, product="cnc", price=1200)
-  pending = infosys.orders(open_only=True)
-  infosys.cancel_order(placed["order_id"])
+  placed = infosys.buy_at_best_bid_price(quantity=1, product="cnc")
+  waiting = infosys.open_orders()
+  infosys.cancel_open_orders()
 
   nifty = instruments.NonTradeableInstrument(exchange="nse", segment="equity_indices", symbol="NIFTY")
   level = nifty.last_price()
@@ -758,13 +758,45 @@ class TradeableInstrument(Instrument):
             body["broker"] = broker
         return self._unified_broker_interface.delete(ORDER_CANCEL_PATH, body=body)
 
-    def orders(self, open_only: bool = False) -> pd.DataFrame | None:
+    def cancel_open_orders(self) -> pd.DataFrame | None:
+        """Cancels every order in this instrument that is still waiting in the market.
+
+        Each order is cancelled on its own, naming the broker holding it, and every one is attempted even when an earlier one fails. A failure is reported in the returned frame rather than raised, so one order that can no longer be cancelled does not leave the rest of them open.
+
+        Returns:
+            A pandas.DataFrame with one row per order, holding `order_id`, `broker`, `cancelled` and `error`, where `error` is None for an order that was cancelled and the name and message of the failure for one that was not, or None when this instrument has no open orders.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: The order book could not be read for any other reason. A failure to cancel one order is reported in the frame instead.
+        """
+        frame = self.open_orders()
+        if frame is None:
+            return None
+        outcomes = []
+        for row in frame.to_dict("records"):
+            outcome = {
+                "order_id": row["order_id"],
+                "broker": row["broker"],
+                "cancelled": True,
+                "error": None,
+            }
+            try:
+                self.cancel_order(row["order_id"], broker=row["broker"])
+            except ubi_exceptions.UnifiedBrokerInterfaceError as error:
+                outcome["cancelled"] = False
+                outcome["error"] = f"{type(error).__name__}: {error.message}"
+            outcomes.append(outcome)
+        return pd.DataFrame(outcomes)
+
+    def orders(self, status: str | None = None) -> pd.DataFrame | None:
         """Fetches today's orders in this instrument.
 
         UBI serves the whole account's order book and has no endpoint for one instrument, so this reads the book and keeps its own rows. The book is not merged across brokers, so one order placed at one broker appears once, and the same instrument traded at two brokers gives a row from each.
 
         Args:
-            open_only: A bool that is True to keep only the orders that can still be changed or cancelled, which are the ones whose status is `PENDING` or `OPEN`.
+            status: The str status to keep, one of `pending`, `open`, `complete`, `cancelled`, `rejected` or `expired` in any case, or None to keep every status. Note that an order still waiting in the market is `pending` at some brokers and `open` at others, so `open_orders` is the way to ask for those.
 
         Returns:
             A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, or None when this instrument has no such orders today.
@@ -774,14 +806,95 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
+        if status is None:
+            wanted_statuses = None
+        else:
+            wanted_statuses = [
+                status.upper(),
+            ]
+        return self._orders_with_status(wanted_statuses)
+
+    def open_orders(self) -> pd.DataFrame | None:
+        """Fetches today's orders in this instrument that can still be changed.
+
+        An order counts as open while it is waiting in the market, which UBI reports as `PENDING` at some brokers and `OPEN` at others. Those are the orders `modify_order` and `cancel_order` will accept; every other status is final.
+
+        Returns:
+            A pandas.DataFrame shaped as `orders` returns, or None when nothing is waiting in the market for this instrument.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self._orders_with_status(OPEN_ORDER_STATUSES)
+
+    def completed_orders(self) -> pd.DataFrame | None:
+        """Fetches today's orders in this instrument that filled in full.
+
+        Returns:
+            A pandas.DataFrame shaped as `orders` returns, or None when nothing filled in this instrument today.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.orders(status="complete")
+
+    def rejected_orders(self) -> pd.DataFrame | None:
+        """Fetches today's orders in this instrument that a broker or the exchange refused.
+
+        The `status_message` column holds the reason each one was refused, in the words of whoever refused it.
+
+        Returns:
+            A pandas.DataFrame shaped as `orders` returns, or None when nothing was refused in this instrument today.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.orders(status="rejected")
+
+    def cancelled_orders(self) -> pd.DataFrame | None:
+        """Fetches today's orders in this instrument that were cancelled.
+
+        Returns:
+            A pandas.DataFrame shaped as `orders` returns, or None when nothing was cancelled in this instrument today.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.orders(status="cancelled")
+
+    def _orders_with_status(
+        self,
+        wanted_statuses: list[str] | None,
+    ) -> pd.DataFrame | None:
+        """Reads the order book and keeps this instrument's rows in the wanted statuses.
+
+        Args:
+            wanted_statuses: A list of upper-case UBI statuses to keep, or None to keep every status.
+
+        Returns:
+            A pandas.DataFrame of the matching rows, or None when no row matches.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
         rows = self._unified_broker_interface.get(ORDER_DETAILS_PATH)["orders"]
-        if open_only:
-            open_rows = []
-            for row in rows:
-                if row["status"] in OPEN_ORDER_STATUSES:
-                    open_rows.append(row)
-            rows = open_rows
-        return self._frame_for_this_instrument(rows)
+        if wanted_statuses is None:
+            return self._frame_for_this_instrument(rows)
+        wanted_rows = []
+        for row in rows:
+            if row["status"] in wanted_statuses:
+                wanted_rows.append(row)
+        return self._frame_for_this_instrument(wanted_rows)
 
     def trades(self) -> pd.DataFrame | None:
         """Fetches today's trades in this instrument.
@@ -836,6 +949,1156 @@ class TradeableInstrument(Instrument):
         """
         rows = self._unified_broker_interface.get(POSITIONS_PATH)["day"]
         return self._frame_for_this_instrument(rows)
+
+    def buy_at_market_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at whatever price the market is asking.
+
+        A market order takes the best price on offer and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="market",
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_market_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at whatever price the market is bidding.
+
+        A market order takes the best price being bid and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="market",
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_limit_price(
+        self,
+        price: float,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at a price of your choosing, or better.
+
+        A limit buy never pays more than the price given. It waits in the market until someone sells at that price or lower, and it may never fill at all.
+
+        Args:
+            price: The float limit price in rupees.
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_limit_price(
+        self,
+        price: float,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at a price of your choosing, or better.
+
+        A limit sell never accepts less than the price given. It waits in the market until someone buys at that price or higher, and it may never fill at all.
+
+        Args:
+            price: The float limit price in rupees.
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys patiently, joining the queue at the highest price anyone is bidding.
+
+        This is the patient side of the pair. It prices the order alongside everyone already waiting at the best price on its own side of the book, so it saves the spread but only fills when the market comes to it.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._bid_price_at(1),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at once, by crossing the spread to the lowest price anyone is offering.
+
+        This is the aggressive side of the pair. It prices the order where the other side of the market already is, so it fills immediately against whoever is waiting there, and it pays the spread for that certainty.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._offer_price_at(1),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells patiently, joining the queue at the lowest price anyone is offering.
+
+        This is the patient side of the pair. It prices the order alongside everyone already waiting at the best price on its own side of the book, so it saves the spread but only fills when the market comes to it.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._offer_price_at(1),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at once, by crossing the spread to the highest price anyone is bidding.
+
+        This is the aggressive side of the pair. It prices the order where the other side of the market already is, so it fills immediately against whoever is waiting there, and it pays the spread for that certainty.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._bid_price_at(1),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_mid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys halfway between the best bid and the best offer.
+
+        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price = self.mid_price()
+        if price is None:
+            raise exceptions.OrderError(
+                f"One side of the order book is empty, so there is no mid price to buy at: {self!r}"
+            )
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_mid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells halfway between the best bid and the best offer.
+
+        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price = self.mid_price()
+        if price is None:
+            raise exceptions.OrderError(
+                f"One side of the order book is empty, so there is no mid price to sell at: {self!r}"
+            )
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_volume_weighted_average_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the average price the day has traded at so far.
+
+        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price = self.volume_weighted_average_price()
+        if price is None:
+            raise exceptions.OrderError(
+                f"The broker serving the quote reports no volume weighted average price, so there is none to buy at: {self!r}"
+            )
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_volume_weighted_average_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the average price the day has traded at so far.
+
+        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price = self.volume_weighted_average_price()
+        if price is None:
+            raise exceptions.OrderError(
+                f"The broker serving the quote reports no volume weighted average price, so there is none to sell at: {self!r}"
+            )
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=price,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_second_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the second best price on the buy side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the second best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._bid_price_at(2),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_third_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the third best price on the buy side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the third best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._bid_price_at(3),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_fourth_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the fourth best price on the buy side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the fourth best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._bid_price_at(4),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_fifth_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the fifth best price on the buy side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the fifth best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._bid_price_at(5),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_second_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the second best price on the buy side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the second. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._bid_price_at(2),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_third_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the third best price on the buy side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the third. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._bid_price_at(3),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_fourth_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the fourth best price on the buy side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the fourth. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._bid_price_at(4),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_fifth_best_bid_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the fifth best price on the buy side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the fifth. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._bid_price_at(5),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_second_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the second best price on the sell side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the second. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._offer_price_at(2),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_third_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the third best price on the sell side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the third. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._offer_price_at(3),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_fourth_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the fourth best price on the sell side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the fourth. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._offer_price_at(4),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_fifth_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys at the fifth best price on the sell side of the book.
+
+        This is more aggressive than pricing at the best level, because the order reaches past the front of the other side and can sweep every level down to the fifth. Expect a larger fill at a worse average price.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price=self._offer_price_at(5),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_second_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the second best price on the sell side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the second best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._offer_price_at(2),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_third_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the third best price on the sell side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the third best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._offer_price_at(3),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_fourth_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the fourth best price on the sell side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the fourth best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._offer_price_at(4),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_fifth_best_offer_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells at the fifth best price on the sell side of the book.
+
+        This is more patient than pricing at the best level, because the order waits behind everyone at the fifth best price on its own side. It fills less often, and at a better price when it does.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price=self._offer_price_at(5),
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def _bid_price_at(self, position: int) -> float:
+        """Reads the price at one level of the buy side of the order book.
+
+        Args:
+            position: The int level to read, where 1 is the best bid and 5 is the deepest level UBI serves.
+
+        Returns:
+            The float price in rupees at that level.
+
+        Raises:
+            OrderError: The buy side holds fewer levels than that, which is what an empty book looks like.
+            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+        """
+        levels = self.bids()
+        if len(levels) < position:
+            raise exceptions.OrderError(
+                f"The buy side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"
+            )
+        return levels[position - 1]["price"]
+
+    def _offer_price_at(self, position: int) -> float:
+        """Reads the price at one level of the sell side of the order book.
+
+        Args:
+            position: The int level to read, where 1 is the best offer and 5 is the deepest level UBI serves.
+
+        Returns:
+            The float price in rupees at that level.
+
+        Raises:
+            OrderError: The sell side holds fewer levels than that, which is what an empty book looks like.
+            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+        """
+        levels = self.asks()
+        if len(levels) < position:
+            raise exceptions.OrderError(
+                f"The sell side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"
+            )
+        return levels[position - 1]["price"]
 
     def _frame_for_this_instrument(
         self,

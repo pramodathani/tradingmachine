@@ -185,6 +185,37 @@ prctyp=LMT  trantype=B  prd=C  ret=DAY  qty=1  prc=30.0  trgprc=0  dscqty=0  amo
 
 That confirms the lower-case strings survive UBI's parsing, that the body is assembled correctly, and that the optional fields left as None are genuinely absent rather than sent as zeros. The coupling rules fired as expected: a market order carrying a price raised `BadRequestError: a MARKET order takes no price`, and a limit order with no price raised `BadRequestError: a LIMIT order needs a price`.
 
+### Naming the price instead of working it out
+
+Twenty-eight wrapper methods were added on 2026-09-20, on top of the order methods. Each one is a short call to `place_order` whose name says where the price comes from, so an intention such as "join the queue at the best bid" is one line rather than a calculation followed by an order.
+
+| Family | Members | Price |
+|---|---|---|
+| Market | `buy_at_market_price`, `sell_at_market_price` | None; the market decides |
+| Limit | `buy_at_limit_price`, `sell_at_limit_price` | The caller's |
+| Top of the book | `buy_at_best_bid_price` and the three others | The first level of one side |
+| Inside the spread | `buy_at_mid_price`, `sell_at_mid_price` | `mid_price()` |
+| The day's benchmark | `buy_at_volume_weighted_average_price` and its sell twin | `volume_weighted_average_price()` |
+| Deeper in the book | Sixteen, by level and side | The second to fifth level of one side |
+
+The sixteen deeper ones never existed in the old project, which left a comment saying they were mechanical repeats to be added on demand. The user asked for them on 2026-09-20, so they are written here for the first time.
+
+The four that price at the top of the book carry a meaning that is easy to get backwards, and each docstring says which it is. Buying at the best bid is patient, because it joins the queue of buyers and waits; buying at the best offer is aggressive, because it crosses the spread and fills at once. Selling reverses that. The deeper levels extend the same idea: pricing further down your own side of the book makes an order more patient, and reaching further into the other side makes it more aggressive, because it can sweep several levels at once.
+
+Three choices differ deliberately from the old project:
+
+- **`product` is required, with no default.** The old project defaulted to `intraday` on these wrappers and to `delivery` on its holdings methods, so the same unstated word meant two different things depending on which method was called. That decides whether a buy becomes shares you keep or a position the broker closes before the session ends, which is too consequential to leave unsaid.
+- **Every wrapper takes the same arguments.** In the old project only the two limit wrappers let you set `validity`, and the other ten silently used the default. Here all of them take `quantity`, `product`, `validity`, `after_market` and `tag`. Anything beyond that, such as a disclosed quantity or a stop loss, is a reason to call `place_order` directly.
+- **They live in `instruments.py`** rather than in a mixin module of their own, which the user chose on 2026-09-20 over following the pattern that `assets/analysis/` uses. The file grows to about 2,200 lines, and everything about orders stays in one place.
+
+Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of one side through the existing `bids()` and `asks()` and raise `OrderError` when the book is not that deep. They keep each wrapper to a few lines without putting an abstraction in front of the twenty-eight public names, which is the same bargain `_best_level` already makes.
+
+### Asking for orders by status
+
+`orders` lost its `open_only` flag and gained a `status` argument, matched without regard to case, which covers all six of UBI's statuses including `EXPIRED`. Four named readers sit on top of it: `completed_orders`, `rejected_orders` and `cancelled_orders` are one-line calls to `orders`, and `open_orders` is not, because "open" is not a status. UBI reports an order still waiting in the market as `PENDING` at some brokers and `OPEN` at others, so `open_orders` filters on both through the existing `OPEN_ORDER_STATUSES` constant. That is also why the bulk cancel is called `cancel_open_orders` rather than the old project's `cancel_pending_orders`.
+
+`cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. This is the one place in the project that catches `UnifiedBrokerInterfaceError` itself. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
+
 ### The first real order, and the two things it taught
 
 The user ran the live script at 12:27 on Sunday 2026-09-20, with the market closed. It placed a genuine limit buy of one KWIL share at 28.85 against a last price of 41.22. UBI routed it to `wisdom_capital`, which answered `API Order Id sent` with order id `1310900080`, and UBI reported `outcome: accepted`. The modify that followed raised `NotFoundError: no broker order book in Redis holds this order_id`, and so did the cancel in the `finally` block, so the run ended in a traceback with what looked like an uncancelled order.
@@ -219,3 +250,17 @@ That failure also showed why a single attempt proves little. UBI's round-robin s
 One small thing to know when reading the returned frames: a field that is null for every row of a numeric column comes back from pandas as `NaN` rather than `None`, which is why the pending order's `status_message` printed as `nan`.
 
 The 2.0 second delay before the order appeared is the same lag the second run's `NotFoundError` was caused by, now measured rather than inferred.
+
+## The wrappers, checked on 2026-09-20
+
+The readers were checked against the live order book, which by then held five orders in KWIL. `orders()` returned all five, `orders(status="cancelled")` and `cancelled_orders()` both returned the same two, `orders(status="rejected")` and `rejected_orders()` both returned the same three, and `completed_orders()`, `open_orders()` and `orders(status="expired")` all returned None. `cancel_open_orders()` returned None, because nothing was open.
+
+All twenty-eight wrappers were then checked offline, by replacing `place_order` on the instrument with a recorder and giving the instrument a made-up five-level book priced from 100.0 down to 96.0. Every wrapper sent the right side, the right order type and the right price: the market pair sent no price at all, the limit pair sent the caller's, the best-level four sent 100.0, and the deeper twelve sent 99.0, 98.0, 97.0 and 96.0 by level. The same twenty-eight were then called again with an empty book and no mid or average price, and all twenty-four that need a price raised `OrderError` while the four that do not were skipped. Nothing was sent in either pass.
+
+### A check that placed real orders by accident
+
+The first version of that check was wrong in a way worth recording. It called each priced wrapper for real, expecting `OrderError`, on the reasoning that the market was closed and the book would therefore be empty. The buy side was empty; the sell side was not. Two real orders went out, a `kotak` buy and a `shoonya` sell, and a third came back as HTTP 504 with its outcome unknown.
+
+It ended safely. Both orders were rejected, by `Adapter is Logged Off` and by a rule refusing to sell a share the account does not hold at that broker, the unknown one never appeared in the order book across two minutes of watching, and nothing filled. But that was luck, not design.
+
+The rule it cost is simple: a script Claude runs itself must never call a method that can place an order, even when the call is expected to raise first, and market hours and an empty book are not a safeguard. The plumbing of an order-placing method is checked by replacing the method that sends the request with a recorder; anything that can genuinely reach a broker belongs in the script the user runs.

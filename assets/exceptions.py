@@ -1,6 +1,6 @@
 """Errors raised by the instrument classes in `assets.instruments` and `assets.equities`.
 
-These describe problems with an instrument itself, such as one UBI does not know or an index used as something tradeable. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
+These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
 
 Typical usage example:
 
@@ -21,6 +21,10 @@ class TradeableInstrumentError(InstrumentError):
 
 class NonTradeableInstrumentError(InstrumentError):
     """An instrument asked for as non-tradeable that can in fact be traded."""
+
+
+class OrderError(InstrumentError):
+    """An order that cannot be priced, because the value it asks for is not there."""
 
 
 class EquityError(InstrumentError):
