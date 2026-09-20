@@ -33,19 +33,24 @@ class UnifiedBrokerInterface:
         self,
         base_url: str | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        project_configuration: configuration.Configuration | None = None,
     ):
         """Initialises the client and reads its api key and secret from MongoDB.
 
         Args:
             base_url: The str address of the server, such as `http://127.0.0.1:8080`, or None to use `TRADINGMACHINE_UBI_BASE_URL`.
             timeout_seconds: The float number of seconds to wait for each response.
+            project_configuration: The configuration.Configuration to read the base url and the MongoDB settings from, or None to build one that reads the environment and the `.env` file.
 
         Raises:
             ValueError: No base url is configured, or the MongoDB settings document or its api key or secret is missing.
         """
+        if project_configuration is None:
+            project_configuration = configuration.Configuration()
+        self._configuration = project_configuration
         chosen_base_url = base_url
         if not chosen_base_url:
-            chosen_base_url = configuration.ubi_configuration["base_url"]
+            chosen_base_url = self._configuration.ubi_base_url
         if not chosen_base_url:
             raise ValueError(
                 "UBI base url is not configured: TRADINGMACHINE_UBI_BASE_URL"
@@ -64,9 +69,9 @@ class UnifiedBrokerInterface:
         Raises:
             ValueError: The settings document is missing, or it has no api key or no api secret.
         """
-        database_name = configuration.mongodb_configuration["db"]
+        database_name = self._configuration.mongodb_database_name
         with pymongo.MongoClient(
-            configuration.mongodb_configuration["connection_string"]
+            self._configuration.mongodb_connection_string
         ) as mongo_client:
             settings = mongo_client[database_name]["settings"].find_one(
                 {

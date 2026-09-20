@@ -46,6 +46,14 @@ The pair is read from tradingmachine's own MongoDB, from the `settings` collecti
 
 The document was seeded by hand on 2026-09-14 with a one-off upsert. If UBI's key or secret changes, this document must be updated to match. MongoDB is read once, in `__init__`, with the client closed by a `with` block, so no database connection stays open for the life of the object.
 
+## How it finds its settings
+
+`__init__` takes an optional `project_configuration`, a `tradingmachine.utilities.configuration.Configuration`, and builds a plain one when it is not given. That object supplies the base url when `base_url` is not passed, and the database name and connection string that `_load_credentials` uses. It is held on `self._configuration` for the life of the client, so every read goes through the same object.
+
+The parameter is named `project_configuration` rather than `configuration` because the module is imported under that name and a parameter called `configuration` would shadow it inside the method.
+
+Before 2026-09-20 the module read two module-level dictionaries directly, and there was no way to point one client at a different `.env` from another. The parameter was added when those dictionaries became a class, as part of turning the project into an installable library. Passing nothing behaves exactly as it did before.
+
 ## Other decisions
 
 The request body parameter is named `body` rather than `json`, as the old client had it, so that it does not shadow the standard `json` module and reads plainly. It is passed to `requests` as `json=`.
