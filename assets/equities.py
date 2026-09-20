@@ -682,7 +682,7 @@ class EquityIndex(instruments.NonTradeableInstrument):
     ) -> pd.DataFrame | None:
         """Finds equity indices whose symbol contains a term.
 
-        UBI puts an exact match first, then symbols starting with the term, then symbols containing it, so a partial name such as `RELI` finds RELIANCE near the top.
+        UBI puts an exact match first, then symbols starting with the term, then symbols containing it, so a partial name such as `BANK` finds BANKNIFTY near the top.
 
         Args:
             exchange: The str exchange to search, such as `nse`.
@@ -910,7 +910,7 @@ class EquityIndexOption(instruments.TradeableInstrument):
             unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
 
         Returns:
-            A list of float strike prices in rupees, lowest first, which is empty when nothing is listed for that expiry.
+            A list of float strike prices in index points, lowest first, which is empty when nothing is listed for that expiry.
 
         Raises:
             BadRequestError: The exchange is not one UBI knows.
