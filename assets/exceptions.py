@@ -1,4 +1,4 @@
-"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities` and `assets.fixed_income`.
+"""Errors raised by the instrument classes in `assets.instruments`, `assets.equities`, `assets.fixed_income` and `assets.commodities`.
 
 These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `ubi_client.exceptions`, chained onto these where one caused the other.
 
@@ -81,3 +81,27 @@ class FixedIncomeIndexFuturesError(InstrumentError):
 
 class FixedIncomeIndexOptionError(InstrumentError):
     """A fixed income index option UBI does not know, which is true of every one of them today, or one that is not in the fixed income index options segment."""
+
+
+class CommodityError(InstrumentError):
+    """A commodity UBI does not know, or one that is not in the commodities segment."""
+
+
+class CommodityFuturesError(InstrumentError):
+    """A commodity futures contract UBI does not know, or one that is not in the commodity futures segment."""
+
+
+class CommodityOptionError(InstrumentError):
+    """A commodity option UBI does not know, or one that is not in the commodity options segment."""
+
+
+class CommodityIndexError(InstrumentError):
+    """A commodity index UBI does not know, or one that is not in the commodity indices segment."""
+
+
+class CommodityIndexFuturesError(InstrumentError):
+    """A commodity index futures contract UBI does not know, or one that is not in the commodity index futures segment."""
+
+
+class CommodityIndexOptionError(InstrumentError):
+    """A commodity index option UBI does not know, or one that is not in the commodity index options segment."""
