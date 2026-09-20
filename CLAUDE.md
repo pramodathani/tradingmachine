@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state of the repository
 
-The repository is a git repository on the `main` branch, tracking `origin/main`. It holds `requirements.txt`, a stub `README.md`, a `pyproject.toml` that sets only the project name and version (currently `0.1.0`), a `docker-compose.yml` for the local databases, and a Python 3.14 virtual environment in `.venv/` with the required packages installed. There is no `ruff.toml` or test suite.
+The repository is a git repository on the `main` branch, tracking `origin/main`. It holds `requirements.txt`, a `README.md` describing the project, a `pyproject.toml` that sets only the project name and version (currently `0.1.0`), a `docker-compose.yml` for the local databases, an `mkdocs.yml` and a `docs/` tree for the documentation site, and a Python 3.14 virtual environment in `.venv/` with the required packages installed. There is no `ruff.toml` or test suite.
 
 The source code so far is the client for the sibling project's REST API, the configuration it reads, and the instrument classes built on it:
 
@@ -72,6 +72,17 @@ Use the interpreter and tools inside `.venv/` directly rather than any system-wi
 `pytest` is not in `requirements.txt` and is not installed, so it must be added before tests can be run.
 
 `TA-Lib` is a Python wrapper around a native C library. It imports correctly in the current `.venv`, but recreating the environment on another machine requires the TA-Lib C library to be installed first.
+
+## Documentation
+
+The project has a Material for MkDocs site, added on 2026-09-20 and modelled on the sibling project's. Narrative pages are hand-written under `docs/` and listed in the `nav` in `mkdocs.yml`; reference pages are generated at build time by `utilities/gen_ref_pages.py`, one per module of `assets`, `ubi_client` and `utilities`, straight from the docstrings, and held in memory rather than written into the repository. `site/` is gitignored.
+
+```bash
+.venv/bin/mkdocs serve
+.venv/bin/mkdocs build --strict
+```
+
+Two settings differ from the sibling's configuration and both matter. `inherited_members` is `false`, because with it on, all twenty-seven family classes reprinted the 190 inherited analysis methods and the site came out at 151 MB with 24 MB pages. `utilities/documentation_hooks.py` is registered under `hooks:` to filter one griffe warning provoked by this project's `Raises:\n    Nothing.` convention, which would otherwise fail every strict build; nothing else is suppressed. The reasoning is in `.claude/notes/mkdocs.yml.md`.
 
 ## Local services
 
