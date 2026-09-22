@@ -58,28 +58,36 @@ UBI holds one access token for the whole application, and every connect replaces
 
 Every call goes straight to UBI. The old project cached candles in Redis for 5 minutes and quotes for 5 seconds, kept warm by a poller, and had a stub for a websocket source. The user decided on 2026-09-14 that none of this carries over: UBI runs on the same machine and caches in its own Redis, and its `/prices` endpoint serves any date range in one request.
 
-So an indicator method fetches its own candles, and `bid_offer_spread` fetches one quote per call. Methods that need two values from the same moment, `bid_offer_spread` and `mid_price`, read both from a single quote rather than calling `best_bid` and `best_offer`, which would fetch twice and could mix two different moments.
+So an indicator method fetches its own candles, and `bid_offer_spread` fetches one quote per read. The members that need two values from the same moment, `bid_offer_spread` and `mid_price`, read both from a single quote rather than reading `best_bid` and `best_offer`, which would fetch twice and could mix two different moments.
 
-## Live values are methods
+## Live values are properties
 
-The old code exposed `ltp`, `best_bid`, `vwap` and the other quote values as properties. Here they are methods, because each is a network call, and Google style guide rule 2.13 allows properties only for cheap computations.
+Every member that only reports a value is a property. That covers `quote`, `last_price` and `ohlc` on `Instrument`, the eleven order-book values on `TradeableInstrument`, and the five members that read the order and trade books.
 
-`quote`, `last_price` and `ohlc` sit on `Instrument` rather than `TradeableInstrument`, because UBI quotes indices too, and an index's last price is one of the most used values. The order-book methods sit on `TradeableInstrument`, because an index has no order book.
+This reverses the decision recorded here on 2026-09-20 and was made by the user on 2026-09-22. The old reading leaned on Google style guide rule 2.13, which allows a property only for a cheap and unsurprising computation, and treated a network call as too expensive to hide behind attribute syntax. The user overruled it for the reason the rule exists in the first place, which is that the caller should read what the member means rather than how it is fetched. `share.last_price` is the share's last price, and the fact that the figure comes over HTTP from a service on the same machine is an implementation detail. The cost argument was also weaker than it looked, because UBI is local and answers from its own Redis, and because the members that report what the account owns, such as `net_positions` and `Equity.holdings`, were already properties and already sent a request on every read. Having half the live values as properties and half as methods was the real surprise.
+
+What stayed a method is anything that takes an argument or does something. `prices` takes an interval and a date range, so it is a method. `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the twenty-eight priced wrappers and the four position-changing members all write to the market, so they are methods however few arguments they take.
+
+The cost of the change is that a loop reading the same property twice now sends two requests without the parentheses to warn you. Code that needs a value more than once should bind it to a local variable, which is the same advice that already applied to `net_positions`.
+
+The dated records of live checks further down this note were written before 2026-09-22 and keep the call syntax of the day, so they show `orders()` and `bids()` with parentheses. They are left as they were, because they record what was actually run.
+
+`quote`, `last_price` and `ohlc` sit on `Instrument` rather than `TradeableInstrument`, because UBI quotes indices too, and an index's last price is one of the most used values. The order-book properties sit on `TradeableInstrument`, because an index has no order book.
 
 The old `bids` and `asks` filtered out zero-price levels. UBI now drops empty levels itself, as `docs/architecture/contracts.md` in UBI states, so the filter is gone.
 
 | Old | New | Notes |
 |---|---|---|
-| `quote` property | `quote()` on `Instrument` | Full unified quote dict |
-| `ltp` | `last_price()` on `Instrument` | Uses `/api/instruments/ltp` |
-| `ohlc` | `ohlc()` on `Instrument` | Uses `/api/instruments/ohlc`; `ohlc` has no close, but the dict has `previous_close` |
-| `bids`, `asks` | `bids()`, `asks()` | From `depth.buy` and `depth.sell` |
-| `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price` | Same names, as methods | |
-| `vwap` | `volume_weighted_average_price()` | UBI's `average_price` |
-| `last_traded_quantity` | `last_quantity()` | Underlying units, not lots |
-| `total_traded_volume` | `total_traded_volume()` | UBI's `volume` |
-| `last_traded_at` | `last_trade_time()` | Epoch seconds turned into an India-time `datetime` |
-| none | `open_interest()` | New; UBI's `oi` |
+| `quote` property | `quote` on `Instrument` | Full unified quote dict |
+| `ltp` | `last_price` on `Instrument` | Uses `/api/instruments/ltp` |
+| `ohlc` | `ohlc` on `Instrument` | Uses `/api/instruments/ohlc`; `ohlc` has no close, but the dict has `previous_close` |
+| `bids`, `asks` | `bids`, `asks` | From `depth.buy` and `depth.sell` |
+| `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price` | Same names | |
+| `vwap` | `volume_weighted_average_price` | UBI's `average_price` |
+| `last_traded_quantity` | `last_quantity` | Underlying units, not lots |
+| `total_traded_volume` | `total_traded_volume` | UBI's `volume` |
+| `last_traded_at` | `last_trade_time` | Epoch seconds turned into an India-time `datetime` |
+| none | `open_interest` | New; UBI's `oi` |
 | `upper_circuit`, `lower_circuit`, `total_traded_value` | dropped | UBI no longer provides them |
 
 ## prices
@@ -165,7 +173,7 @@ Two consequences are written into the docstrings. A row whose `instrument_id` is
 
 The net bucket's member is called `net_positions` rather than plain `positions`, which the user asked for on 2026-09-20 so that the pair names the two buckets UBI actually serves. A bare `positions` beside a `day_positions` reads as though it were the whole of them rather than one of two, and the difference between them matters: net counts everything open now, however long it has been open, while day counts only what today opened.
 
-`net_positions` and `day_positions` are properties rather than methods, which the user chose on 2026-09-20. This extends the exception recorded under "Holdings, and why it is a property" in `.claude/notes/src/tradingmachine/assets/equities.py.md`: a member reporting what the account currently owns or owes is a property, while a member reporting a market value, such as `quote` or `last_price`, stays a method. Each read still sends a request, so code that needs the frame twice should bind it to a local variable.
+`net_positions` and `day_positions` are properties rather than methods, which the user chose on 2026-09-20. At the time this was an exception, recorded under "Holdings, and why it is a property" in `.claude/notes/src/tradingmachine/assets/equities.py.md`, covering members that report what the account currently owns or owes while members reporting a market value stayed methods. On 2026-09-22 the market-value members became properties too, so the distinction is gone and the rule is now simply that a member which only reports a value is a property. Each read still sends a request, so code that needs the frame twice should bind it to a local variable.
 
 ### Order id, not instrument
 
@@ -224,7 +232,7 @@ Twenty-eight wrapper methods were added on 2026-09-20, on top of the order metho
 | Market | `buy_at_market_price`, `sell_at_market_price` | None; the market decides |
 | Limit | `buy_at_limit_price`, `sell_at_limit_price` | The caller's |
 | Top of the book | `buy_at_best_bid_price` and the three others | The first level of one side |
-| Inside the spread | `buy_at_mid_price`, `sell_at_mid_price` | `mid_price()` |
+| Inside the spread | `buy_at_mid_price`, `sell_at_mid_price` | `mid_price` |
 | The day's benchmark | `buy_at_volume_weighted_average_price` and its sell twin | `volume_weighted_average_price()` |
 | Deeper in the book | Sixteen, by level and side | The second to fifth level of one side |
 
@@ -238,11 +246,13 @@ Three choices differ deliberately from the old project:
 - **Every wrapper takes the same arguments.** In the old project only the two limit wrappers let you set `validity`, and the other ten silently used the default. Here all of them take `quantity`, `product`, `validity`, `after_market` and `tag`. Anything beyond that, such as a disclosed quantity or a stop loss, is a reason to call `place_order` directly.
 - **They live in `instruments.py`** rather than in a mixin module of their own, which the user chose on 2026-09-20 over following the pattern that `src/tradingmachine/assets/analysis/` uses. The file grows to about 2,200 lines, and everything about orders stays in one place.
 
-Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of one side through the existing `bids()` and `asks()` and raise `OrderError` when the book is not that deep. They keep each wrapper to a few lines without putting an abstraction in front of the twenty-eight public names, which is the same bargain `_best_level` already makes.
+Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of one side through the existing `bids` and `asks` and raise `OrderError` when the book is not that deep. They keep each wrapper to a few lines without putting an abstraction in front of the twenty-eight public names, which is the same bargain `_best_level` already makes.
 
 ### Asking for orders by status
 
-`orders` lost its `open_only` flag and gained a `status` argument, matched without regard to case, which covers all six of UBI's statuses including `EXPIRED`. Four named readers sit on top of it: `completed_orders`, `rejected_orders` and `cancelled_orders` are one-line calls to `orders`, and `open_orders` is not, because "open" is not a status. UBI reports an order still waiting in the market as `PENDING` at some brokers and `OPEN` at others, so `open_orders` filters on both through the existing `OPEN_ORDER_STATUSES` constant. That is also why the bulk cancel is called `cancel_open_orders` rather than the old project's `cancel_pending_orders`.
+`orders` lost its `open_only` flag and gained a `status` argument on 2026-09-20, matched without regard to case, which covered all six of UBI's statuses including `EXPIRED`. Four named readers sat on top of it: `completed_orders`, `rejected_orders` and `cancelled_orders` were one-line calls to `orders`, and `open_orders` was not, because "open" is not a status. UBI reports an order still waiting in the market as `PENDING` at some brokers and `OPEN` at others, so `open_orders` filters on both through the existing `OPEN_ORDER_STATUSES` constant. That is also why the bulk cancel is called `cancel_open_orders` rather than the old project's `cancel_pending_orders`.
+
+On 2026-09-22 the `status` argument was dropped, because `orders` became a property and a property takes no arguments. The user chose this over keeping `orders` as the one method among the readers and over adding `pending_orders` and `expired_orders` to cover the two statuses that lose their shortcut. `orders` now gives the whole book for this instrument, and the five readers each filter through the private `_orders_with_status`, which now takes one of `OPEN_ORDER_STATUSES`, `COMPLETED_ORDER_STATUSES`, `REJECTED_ORDER_STATUSES`, `CANCELLED_ORDER_STATUSES` or None. A caller wanting `PENDING` or `EXPIRED` on its own filters the `status` column of the frame, which is a single pandas expression and needs no extra request.
 
 `cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. This is the one place in the project that catches `UnifiedBrokerInterfaceError` itself. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
 
@@ -445,3 +455,28 @@ Checked offline against made-up position frames, since the account holds nothing
 The last two rows are the ones worth reading twice. The bracket position is counted in both totals, although none of the four members that change a position can see it, because it is real money. And a missing last price makes the value None while leaving the profit intact, which is right: the profit figures come from UBI and do not depend on a price this project has to supply.
 
 Against the live account, which holds no position, both returned None.
+
+## The properties, checked on 2026-09-22
+
+Every converted member was read once against the live UBI, through `Equity(exchange="nse", symbol="INFY")` and `EquityIndex(exchange="nse", symbol="NIFTY")`, about an hour before the market opened. Nothing in the check could place an order.
+
+| Property | What came back |
+|---|---|
+| `last_price` | 1038.5 |
+| `ohlc` | `{'high': 1044.5, 'low': 1030.3, 'open': 1031.8}` |
+| `quote` | The full dict, beginning `average_price`, `broker`, `broker_token`, `buy_quantity`, `change` |
+| `bids`, `asks`, `best_bid`, `best_offer` | Five levels a side, best bid 1142.3 and best offer 934.7 |
+| `bid_offer_spread` | -207.6 |
+| `mid_price` | 1038.5 |
+| `volume_weighted_average_price`, `open_interest` | None, which is right for a share before the open |
+| `last_quantity`, `total_traded_volume` | 1 and 27,793 |
+| `last_trade_time` | `2026-09-21 15:59:42+05:30` |
+| `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`, `net_positions` | None, because the account had nothing that day |
+| `EquityIndex.last_price` | 23411.45 |
+| `EquityIndex.ohlc` | `{'high': None, 'low': None, 'open': None}` |
+
+The crossed book, where the best bid sits 207.6 above the best offer, is UBI serving a stale pre-open depth rather than anything this refactor caused. It is worth knowing that `bid_offer_spread` and `mid_price` will happily return a negative spread, because neither checks the book for sense.
+
+The five order and trade readers could only be shown to return None, since the account held no order that day. The path through `_orders_with_status` was exercised for each of the four status constants and for None, so the wiring is proved even though the filtering is not. The filtering itself was proved on 2026-09-20 against a book of five KWIL orders, recorded above, and the only thing that changed since is how the statuses reach `_orders_with_status`.
+
+`prices(days=5)` was read in the same run and returned candles, which confirms that the one member left as a method still works from the same object.

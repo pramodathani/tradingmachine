@@ -35,7 +35,7 @@ Every one of them carries three attributes.
 from tradingmachine.ubi_client import exceptions
 
 try:
-    price = contract.last_price()
+    price = contract.last_price
 except exceptions.ServiceUnavailableError as error:
     print(error.message)      # taken from the response's "error" field
     print(error.status_code)  # 503, or None when no response arrived
@@ -49,7 +49,7 @@ wording there, and a commodity or currency order refused for its contract size c
 !!! danger "`OrderOutcomeUnknownError` is not a failure"
 
     HTTP 504 means UBI sent the order to the broker and then lost the thread. The order may well be
-    live. Read the order book with `orders()` before sending anything again, or you will place the
+    live. Read the order book with `orders` before sending anything again, or you will place the
     same order twice.
 
 ## Failures from the instrument classes
@@ -95,7 +95,7 @@ from tradingmachine.assets import exceptions as asset_exceptions
 from tradingmachine.ubi_client import exceptions as ubi_exceptions
 
 try:
-    price = instrument.last_price()
+    price = instrument.last_price
 except ubi_exceptions.UnifiedBrokerInterfaceError as error:
     ...
 except asset_exceptions.InstrumentError as error:

@@ -11,10 +11,10 @@ infosys = equities.Equity(exchange="nse", symbol="INFY")
 
 candles = infosys.prices(days=365)
 strength = infosys.relative_strength_index(window=14, days=365)
-spread = infosys.bid_offer_spread()
+spread = infosys.bid_offer_spread
 
 placed = infosys.buy_at_limit_price(quantity=1, price=1450.0, product="cnc")
-waiting = infosys.open_orders()
+waiting = infosys.open_orders
 infosys.cancel_open_orders()
 ```
 
@@ -125,7 +125,7 @@ Once that is done, this proves the whole chain, from the credentials through UBI
 from tradingmachine.assets import equities
 infosys = equities.Equity(exchange='nse', symbol='INFY')
 print(infosys)
-print(infosys.last_price())
+print(infosys.last_price)
 "
 ```
 

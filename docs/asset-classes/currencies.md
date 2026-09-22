@@ -26,7 +26,7 @@ contract = currencies.CurrencyFutures(
     underlying_symbol="USDINR",
     expiry_date=expiries[0],
 )
-rate = contract.last_price()
+rate = contract.last_price
 ```
 
 ## Half the family does not exist
@@ -74,7 +74,7 @@ for currencies, and UBI's contract size check refuses any order in this family t
 or an option.
 
 Having a method is not the same as the method working. `hasattr(pair, "bids")` is `True` while
-`pair.last_price()` raises `ServiceUnavailableError`, because every currency venue code maps to the
+`pair.last_price` raises `ServiceUnavailableError`, because every currency venue code maps to the
 derivative family in the tick streams and a `currencies` row is not in it.
 
 ## No holdings, ever

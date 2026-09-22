@@ -11,14 +11,14 @@ classDiagram
     class Instrument {
         identity attributes
         +prices()
-        +quote()
-        +last_price()
-        +ohlc()
+        +quote
+        +last_price
+        +ohlc
     }
     class TradeableInstrument {
         order book values
         +place_order()
-        +orders()
+        +orders
         +net_positions
     }
     class NonTradeableInstrument {
@@ -96,9 +96,9 @@ Everything except the identity is fetched at the moment you ask for it.
 | Member | Route | Returns |
 | --- | --- | --- |
 | `prices(...)` | `/api/instruments/prices` | A `pandas.DataFrame` of candles, or `None` |
-| `quote()` | `/api/instruments/quote` | The full unified quote as a `dict` |
-| `last_price()` | `/api/instruments/ltp` | A `float`, or `None` |
-| `ohlc()` | `/api/instruments/ohlc` | The day's open, high, low, last and previous close |
+| `quote` | `/api/instruments/quote` | The full unified quote as a `dict` |
+| `last_price` | `/api/instruments/ltp` | A `float`, or `None` |
+| `ohlc` | `/api/instruments/ohlc` | The day's open, high, low, last and previous close |
 
 There is no caching between calls and no batching of date ranges. Asking for the last price twice
 sends two requests. This is deliberate: UBI runs on the same machine and caches in its own Redis,

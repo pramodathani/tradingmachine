@@ -47,9 +47,9 @@ Never divide by `lot_size` to compute an order quantity. See
 ## Having a method does not mean the method works
 
 `Commodity`, `Currency` and `FixedIncome` are all `TradeableInstrument` subclasses, so they carry
-`place_order`, the twenty-eight price wrappers and the order-book methods. None of those can
+`place_order`, the twenty-eight price wrappers and the order-book properties. None of those can
 succeed, because UBI has no cash market for those asset classes. `hasattr(pair, "bids")` is `True`
-while `pair.bids()` raises.
+while `pair.bids` raises.
 
 The same applies to the analysis methods, which are present on every instrument and have data to
 work on for only some of them.
@@ -79,7 +79,7 @@ That includes UBI's own REST API test page in a browser tab. If a long-running s
 `place_order` returning `outcome: "accepted"` means the broker took the order. The exchange can
 still refuse it afterwards, which is what happens to an ordinary order sent while the market is
 closed. Neither this project nor UBI checks market hours. Read the order's real fate from
-`orders()`.
+`orders`.
 
 ## HTTP 504 means the order may be live
 

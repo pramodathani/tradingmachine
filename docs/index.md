@@ -61,10 +61,10 @@ infosys = equities.Equity(exchange="nse", symbol="INFY")
 
 candles = infosys.prices(days=365)
 strength = infosys.relative_strength_index(window=14, days=365)
-spread = infosys.bid_offer_spread()
+spread = infosys.bid_offer_spread
 
 placed = infosys.buy_at_limit_price(quantity=1, price=1450.0, product="cnc")
-waiting = infosys.open_orders()
+waiting = infosys.open_orders
 infosys.cancel_open_orders()
 ```
 

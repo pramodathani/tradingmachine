@@ -28,7 +28,7 @@ contract = commodities.CommodityFutures(
     underlying_symbol="GOLD",
     expiry_date=expiries[0],
 )
-price = contract.last_price()
+price = contract.last_price
 strength = contract.relative_strength_index(window=14, days=90)
 ```
 

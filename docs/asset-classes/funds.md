@@ -18,12 +18,12 @@ UBI's vocabulary at all.
 from tradingmachine.assets import funds
 
 fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
-price = fund.last_price()
+price = fund.last_price
 strength = fund.relative_strength_index(window=14, days=90)
 row = fund.holdings
 
 trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
-level = trust.last_price()
+level = trust.last_price
 ```
 
 ## They behave like shares in every way that matters

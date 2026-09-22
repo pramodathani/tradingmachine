@@ -29,8 +29,8 @@ and it is not a broker that serves quotes.
 
 | Member | Result |
 | --- | --- |
-| `quote()`, `last_price()`, `ohlc()` | `ServiceUnavailableError` |
-| `bids()`, `asks()`, `best_bid()`, and every other order-book value | `ServiceUnavailableError` |
+| `quote`, `last_price`, `ohlc` | `ServiceUnavailableError` |
+| `bids`, `asks`, `best_bid`, and every other order-book value | `ServiceUnavailableError` |
 | `prices()` | `None`, because UBI stores no candles |
 | The roughly 190 analysis methods | Nothing to work on |
 
