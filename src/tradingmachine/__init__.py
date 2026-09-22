@@ -9,7 +9,7 @@ Typical usage example:
   from tradingmachine.assets import equities
 
   infosys = equities.Equity(exchange="nse", symbol="INFY")
-  print(infosys.last_price())
+  print(infosys.last_price)
 """
 
 import importlib.metadata

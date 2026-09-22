@@ -12,7 +12,7 @@ Typical usage example:
   frame = share.relative_strength_index(window=14, days=365)
 
   nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
-  level = nifty.last_price()
+  level = nifty.last_price
 
   option = equities.EquityIndexOption(
       exchange="nse",
@@ -21,7 +21,7 @@ Typical usage example:
       strike_price=25000,
       option_type="CE",
   )
-  premium = option.last_price()
+  premium = option.last_price
 """
 
 import datetime

@@ -24,7 +24,7 @@ Typical usage example:
       underlying_symbol="USDINR",
       expiry_date=expiries[0],
   )
-  rate = contract.last_price()
+  rate = contract.last_price
 
   chain = currencies.CurrencyOption.chain(
       exchange="nse",

@@ -20,7 +20,7 @@ Typical usage example:
       underlying_symbol="633GS2035",
       expiry_date="2026-09-24",
   )
-  price = contract.last_price()
+  price = contract.last_price
 
   expiries = fixed_income.FixedIncomeOption.expiries(
       exchange="nse",

@@ -11,12 +11,12 @@ The one difference between the two classes is what UBI stores. A fund's candles 
 Typical usage example:
 
   fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
-  price = fund.last_price()
+  price = fund.last_price
   frame = fund.relative_strength_index(window=14, days=90)
   row = fund.holdings
 
   trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
-  level = trust.last_price()
+  level = trust.last_price
 """
 
 import pandas as pd

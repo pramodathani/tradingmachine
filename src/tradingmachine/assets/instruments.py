@@ -8,14 +8,14 @@ Typical usage example:
 
   infosys = instruments.TradeableInstrument(exchange="nse", segment="equities", symbol="INFY")
   frame = infosys.relative_strength_index(window=14, days=365)
-  spread = infosys.bid_offer_spread()
+  spread = infosys.bid_offer_spread
 
   placed = infosys.buy_at_best_bid_price(quantity=1, product="cnc")
-  waiting = infosys.open_orders()
+  waiting = infosys.open_orders
   infosys.cancel_open_orders()
 
   nifty = instruments.NonTradeableInstrument(exchange="nse", segment="equity_indices", symbol="NIFTY")
-  level = nifty.last_price()
+  level = nifty.last_price
 """
 
 import datetime
@@ -64,6 +64,18 @@ POSITIONS_PATH = "/api/portfolio/positions"
 OPEN_ORDER_STATUSES = [
     "PENDING",
     "OPEN",
+]
+
+COMPLETED_ORDER_STATUSES = [
+    "COMPLETE",
+]
+
+REJECTED_ORDER_STATUSES = [
+    "REJECTED",
+]
+
+CANCELLED_ORDER_STATUSES = [
+    "CANCELLED",
 ]
 
 POSITION_PRODUCT_FOR_ORDER_PRODUCT = {
@@ -579,8 +591,9 @@ class Instrument(
         frame.insert(0, "exchange", self.exchange)
         return frame.sort_values("datetime").reset_index(drop=True)
 
+    @property
     def quote(self) -> dict:
-        """Fetches the instrument's full unified quote from UBI.
+        """The instrument's full unified quote, read from UBI on every access.
 
         Returns:
             The quote as a dict, with `last_price`, `average_price`, `ohlc`, `previous_close`, `change_percent`, `volume`, `oi`, `depth` and the other fields of UBI's unified quote.
@@ -596,8 +609,9 @@ class Instrument(
             },
         )
 
+    @property
     def last_price(self) -> float | None:
-        """Fetches the instrument's last traded price from UBI.
+        """The instrument's last traded price, read from UBI on every access.
 
         Returns:
             The float last price in rupees, or None when UBI has none.
@@ -614,8 +628,9 @@ class Instrument(
         )
         return response["last_price"]
 
+    @property
     def ohlc(self) -> dict:
-        """Fetches the day's open, high and low with the last and previous close prices from UBI.
+        """The day's open, high and low with the last and previous close prices, read from UBI on every access.
 
         Returns:
             A dict with `last_price`, `ohlc` (a dict of `open`, `high` and `low`), `previous_close`, `change_percent`, `last_trade_time` and the instrument's identity fields.
@@ -682,8 +697,9 @@ class TradeableInstrument(Instrument):
                 f"An index cannot be traded, so it is not a TradeableInstrument: {self!r}"
             )
 
+    @property
     def bids(self) -> list[dict]:
-        """Fetches the buy side of the order book.
+        """The buy side of the order book, read from UBI on every access.
 
         Returns:
             A list of up to five dicts with `price`, `quantity` and `orders`, best first, which is empty when nobody is bidding.
@@ -691,10 +707,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["depth"]["buy"]
+        return self.quote["depth"]["buy"]
 
+    @property
     def asks(self) -> list[dict]:
-        """Fetches the sell side of the order book.
+        """The sell side of the order book, read from UBI on every access.
 
         Returns:
             A list of up to five dicts with `price`, `quantity` and `orders`, best first, which is empty when nobody is offering.
@@ -702,10 +719,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["depth"]["sell"]
+        return self.quote["depth"]["sell"]
 
+    @property
     def best_bid(self) -> dict | None:
-        """Fetches the highest bid in the order book.
+        """The highest bid in the order book.
 
         Returns:
             A dict with `price`, `quantity` and `orders`, or None when nobody is bidding.
@@ -713,10 +731,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self._best_level(self.bids())
+        return self._best_level(self.bids)
 
+    @property
     def best_offer(self) -> dict | None:
-        """Fetches the lowest offer in the order book.
+        """The lowest offer in the order book.
 
         Returns:
             A dict with `price`, `quantity` and `orders`, or None when nobody is offering.
@@ -724,10 +743,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self._best_level(self.asks())
+        return self._best_level(self.asks)
 
+    @property
     def bid_offer_spread(self) -> float | None:
-        """Fetches one quote and measures the gap between its best offer and best bid.
+        """The gap between the best offer and the best bid, measured from one quote.
 
         Returns:
             The float spread in rupees, or None when either side of the order book is empty.
@@ -735,15 +755,16 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        depth = self.quote()["depth"]
+        depth = self.quote["depth"]
         best_bid = self._best_level(depth["buy"])
         best_offer = self._best_level(depth["sell"])
         if best_bid is None or best_offer is None:
             return None
         return best_offer["price"] - best_bid["price"]
 
+    @property
     def mid_price(self) -> float | None:
-        """Fetches one quote and finds the price halfway between its best bid and best offer.
+        """The price halfway between the best bid and the best offer, from one quote.
 
         Returns:
             The float mid price in rupees, or None when either side of the order book is empty.
@@ -751,15 +772,16 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        depth = self.quote()["depth"]
+        depth = self.quote["depth"]
         best_bid = self._best_level(depth["buy"])
         best_offer = self._best_level(depth["sell"])
         if best_bid is None or best_offer is None:
             return None
         return (best_bid["price"] + best_offer["price"]) / 2
 
+    @property
     def volume_weighted_average_price(self) -> float | None:
-        """Fetches today's volume weighted average price.
+        """Today's volume weighted average price.
 
         Returns:
             The float price in rupees, or None when the broker serving the quote does not report it.
@@ -767,10 +789,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["average_price"]
+        return self.quote["average_price"]
 
+    @property
     def last_quantity(self) -> int | None:
-        """Fetches the quantity of the last trade.
+        """The quantity of the last trade.
 
         Returns:
             The int quantity in underlying units, not lots, or None when unknown.
@@ -778,10 +801,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["last_quantity"]
+        return self.quote["last_quantity"]
 
+    @property
     def total_traded_volume(self) -> int | None:
-        """Fetches the quantity traded so far today.
+        """The quantity traded so far today.
 
         Returns:
             The int volume in underlying units, not lots, or None when unknown.
@@ -789,10 +813,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["volume"]
+        return self.quote["volume"]
 
+    @property
     def open_interest(self) -> int | None:
-        """Fetches the open interest of a future or option.
+        """The open interest of a future or an option.
 
         Returns:
             The int open interest in underlying units, or None for a security or when unknown.
@@ -800,10 +825,11 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        return self.quote()["oi"]
+        return self.quote["oi"]
 
+    @property
     def last_trade_time(self) -> datetime.datetime | None:
-        """Fetches when the last trade happened.
+        """When the last trade happened.
 
         Returns:
             The time as a datetime.datetime in India time, or None when the broker does not send one reliably.
@@ -811,7 +837,7 @@ class TradeableInstrument(Instrument):
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        epoch_seconds = self.quote()["last_trade_time"]
+        epoch_seconds = self.quote["last_trade_time"]
         if epoch_seconds is None:
             return None
         return datetime.datetime.fromtimestamp(epoch_seconds, INDIA_TIME_ZONE)
@@ -990,7 +1016,7 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: The order book could not be read for any other reason. A failure to cancel one order is reported in the frame instead.
         """
-        frame = self.open_orders()
+        frame = self.open_orders
         if frame is None:
             return None
         outcomes = []
@@ -1009,37 +1035,32 @@ class TradeableInstrument(Instrument):
             outcomes.append(outcome)
         return pd.DataFrame(outcomes)
 
-    def orders(self, status: str | None = None) -> pd.DataFrame | None:
-        """Fetches today's orders in this instrument.
+    @property
+    def orders(self) -> pd.DataFrame | None:
+        """Every one of today's orders in this instrument, whatever its status.
 
-        UBI serves the whole account's order book and has no endpoint for one instrument, so this reads the book and keeps its own rows. The book is not merged across brokers, so one order placed at one broker appears once, and the same instrument traded at two brokers gives a row from each.
+        UBI serves the whole account's order book and has no endpoint for one instrument, so reading this reads the whole book and keeps this instrument's own rows. The book is not merged across brokers, so one order placed at one broker appears once, and the same instrument traded at two brokers gives a row from each.
 
-        Args:
-            status: The str status to keep, one of `pending`, `open`, `complete`, `cancelled`, `rejected` or `expired` in any case, or None to keep every status. Note that an order still waiting in the market is `pending` at some brokers and `open` at others, so `open_orders` is the way to ask for those.
+        The `status` column holds UBI's own upper-case status, one of `PENDING`, `OPEN`, `COMPLETE`, `CANCELLED`, `REJECTED` or `EXPIRED`. An order still waiting in the market is `PENDING` at some brokers and `OPEN` at others, so `open_orders` is the way to ask for those, and `completed_orders`, `rejected_orders` and `cancelled_orders` give the other common groups already filtered. Any status without a member of its own, such as `EXPIRED`, is found by filtering this frame.
 
         Returns:
-            A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, or None when this instrument has no such orders today.
+            A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, or None when this instrument has no orders today.
 
         Raises:
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        if status is None:
-            wanted_statuses = None
-        else:
-            wanted_statuses = [
-                status.upper(),
-            ]
-        return self._orders_with_status(wanted_statuses)
+        return self._orders_with_status(None)
 
+    @property
     def open_orders(self) -> pd.DataFrame | None:
-        """Fetches today's orders in this instrument that can still be changed.
+        """Today's orders in this instrument that can still be changed.
 
         An order counts as open while it is waiting in the market, which UBI reports as `PENDING` at some brokers and `OPEN` at others. Those are the orders `modify_order` and `cancel_order` will accept; every other status is final.
 
         Returns:
-            A pandas.DataFrame shaped as `orders` returns, or None when nothing is waiting in the market for this instrument.
+            A pandas.DataFrame shaped like `orders`, or None when nothing is waiting in the market for this instrument.
 
         Raises:
             BrokerError: No broker's order book could be read.
@@ -1048,46 +1069,49 @@ class TradeableInstrument(Instrument):
         """
         return self._orders_with_status(OPEN_ORDER_STATUSES)
 
+    @property
     def completed_orders(self) -> pd.DataFrame | None:
-        """Fetches today's orders in this instrument that filled in full.
+        """Today's orders in this instrument that filled in full.
 
         Returns:
-            A pandas.DataFrame shaped as `orders` returns, or None when nothing filled in this instrument today.
+            A pandas.DataFrame shaped like `orders`, or None when nothing filled in this instrument today.
 
         Raises:
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        return self.orders(status="complete")
+        return self._orders_with_status(COMPLETED_ORDER_STATUSES)
 
+    @property
     def rejected_orders(self) -> pd.DataFrame | None:
-        """Fetches today's orders in this instrument that a broker or the exchange refused.
+        """Today's orders in this instrument that a broker or the exchange refused.
 
         The `status_message` column holds the reason each one was refused, in the words of whoever refused it.
 
         Returns:
-            A pandas.DataFrame shaped as `orders` returns, or None when nothing was refused in this instrument today.
+            A pandas.DataFrame shaped like `orders`, or None when nothing was refused in this instrument today.
 
         Raises:
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        return self.orders(status="rejected")
+        return self._orders_with_status(REJECTED_ORDER_STATUSES)
 
+    @property
     def cancelled_orders(self) -> pd.DataFrame | None:
-        """Fetches today's orders in this instrument that were cancelled.
+        """Today's orders in this instrument that were cancelled.
 
         Returns:
-            A pandas.DataFrame shaped as `orders` returns, or None when nothing was cancelled in this instrument today.
+            A pandas.DataFrame shaped like `orders`, or None when nothing was cancelled in this instrument today.
 
         Raises:
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        return self.orders(status="cancelled")
+        return self._orders_with_status(CANCELLED_ORDER_STATUSES)
 
     def _orders_with_status(
         self,
@@ -1115,8 +1139,9 @@ class TradeableInstrument(Instrument):
                 wanted_rows.append(row)
         return self._frame_for_this_instrument(wanted_rows)
 
+    @property
     def trades(self) -> pd.DataFrame | None:
-        """Fetches today's trades in this instrument.
+        """Today's trades in this instrument.
 
         UBI serves the whole account's trade book and has no endpoint for one instrument, so this reads the book and keeps its own rows. One order can produce several trades, and each trade names the order it came from.
 
@@ -1507,7 +1532,7 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.mid_price()
+        price = self.mid_price
         if price is None:
             raise exceptions.OrderError(
                 f"One side of the order book is empty, so there is no mid price to buy at: {self!r}"
@@ -1551,7 +1576,7 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.mid_price()
+        price = self.mid_price
         if price is None:
             raise exceptions.OrderError(
                 f"One side of the order book is empty, so there is no mid price to sell at: {self!r}"
@@ -1595,7 +1620,7 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.volume_weighted_average_price()
+        price = self.volume_weighted_average_price
         if price is None:
             raise exceptions.OrderError(
                 f"The broker serving the quote reports no volume weighted average price, so there is none to buy at: {self!r}"
@@ -1639,7 +1664,7 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.volume_weighted_average_price()
+        price = self.volume_weighted_average_price
         if price is None:
             raise exceptions.OrderError(
                 f"The broker serving the quote reports no volume weighted average price, so there is none to sell at: {self!r}"
@@ -2731,7 +2756,7 @@ class TradeableInstrument(Instrument):
             OrderError: The buy side holds fewer levels than that, which is what an empty book looks like.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        levels = self.bids()
+        levels = self.bids
         if len(levels) < position:
             raise exceptions.OrderError(
                 f"The buy side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"
@@ -2751,7 +2776,7 @@ class TradeableInstrument(Instrument):
             OrderError: The sell side holds fewer levels than that, which is what an empty book looks like.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
-        levels = self.asks()
+        levels = self.asks
         if len(levels) < position:
             raise exceptions.OrderError(
                 f"The sell side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"

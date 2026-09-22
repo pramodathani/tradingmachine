@@ -26,7 +26,7 @@ Typical usage example:
       underlying_symbol="GOLD",
       expiry_date=expiries[0],
   )
-  price = contract.last_price()
+  price = contract.last_price
   frame = contract.relative_strength_index(window=14, days=90)
 
   index = commodities.CommodityIndex(exchange="mcx", symbol="MCXBULLDEX")
