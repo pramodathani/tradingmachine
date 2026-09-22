@@ -1,6 +1,6 @@
 # Funds and trusts
 
-`assets.funds` is two classes rather than six, because UBI carries no futures or options on a fund
+`tradingmachine.assets.funds` is two classes rather than six, because UBI carries no futures or options on a fund
 or a trust and has no segment for them. Both of these trade on the exchange exactly as a share
 does.
 
@@ -15,15 +15,15 @@ the empty [currency index segments](currencies.md), the fund derivative segments
 UBI's vocabulary at all.
 
 ```python
-from assets import funds
+from tradingmachine.assets import funds
 
 fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
-price = fund.last_price()
+price = fund.last_price
 strength = fund.relative_strength_index(window=14, days=90)
 row = fund.holdings
 
 trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
-level = trust.last_price()
+level = trust.last_price
 ```
 
 ## They behave like shares in every way that matters

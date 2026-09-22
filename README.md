@@ -1,20 +1,20 @@
 # Trading Machine
 
-An Indian market instrument is a Python object here. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, about 190 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account.
+Trading Machine is a Python library, installed as `tradingmachine`, in which an Indian market instrument is a Python object. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, about 190 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account.
 
 Nothing in this project talks to a broker. Every call goes to the sibling project `unified_broker_interface`, which runs on the same machine, speaks to ten Indian retail brokers and normalises what they say. This project is the layer above that, where the vocabulary stops being HTTP routes and starts being instruments.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 infosys = equities.Equity(exchange="nse", symbol="INFY")
 
 candles = infosys.prices(days=365)
 strength = infosys.relative_strength_index(window=14, days=365)
-spread = infosys.bid_offer_spread()
+spread = infosys.bid_offer_spread
 
 placed = infosys.buy_at_limit_price(quantity=1, price=1450.0, product="cnc")
-waiting = infosys.open_orders()
+waiting = infosys.open_orders
 infosys.cancel_open_orders()
 ```
 
@@ -29,18 +29,18 @@ Four layers, each with one job, sitting on the UBI REST API.
 your script
     │
     ▼
-assets.equities, assets.fixed_income, assets.commodities,
-assets.currencies, assets.funds, assets.mutual_funds
+tradingmachine.assets.equities, tradingmachine.assets.fixed_income, tradingmachine.assets.commodities,
+tradingmachine.assets.currencies, tradingmachine.assets.funds, tradingmachine.assets.mutual_funds
     │   one named class per UBI segment
     ▼
-assets.instruments          ◄──── assets.analysis
+tradingmachine.assets.instruments          ◄──── tradingmachine.assets.analysis
     │   identity, candles,          thirteen classes Instrument
     │   quotes, order book,         inherits: ~190 methods over
     │   orders, positions           the candles
     ▼
-ubi_client                  ◄──── utilities.configuration
-    │   the session, the token,     .env and the MongoDB
-    │   one retry, typed errors     connection string
+tradingmachine.ubi_client   ◄──── tradingmachine.utilities.configuration
+    │   the session, the token,     the environment, .env and
+    │   one retry, typed errors     the MongoDB connection string
     ▼
 UBI REST API on 127.0.0.1:8080
     │
@@ -54,7 +54,7 @@ Three ideas shape everything above.
 
 **Nothing is cached and nothing is validated locally.** An instrument looks itself up once, at construction, and after that every candle, quote, order and position is fetched at the moment you ask. Prices and quantities reach UBI exactly as given, with no rounding to the tick size and no checking against the lot size, because UBI and the broker behind it hold those rules and this layer would only be guessing.
 
-**Duplication between asset classes is deliberate.** `assets/fixed_income.py` is a copy of `assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it.
+**Duplication between asset classes is deliberate.** `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it.
 
 ## Asset class coverage
 
@@ -79,7 +79,7 @@ The gaps are UBI's rather than work left undone. No broker that serves quotes ca
 | Requirement | Version used here | Why |
 | --- | --- | --- |
 | Python | 3.14 | The virtual environment in `.venv/` is built against it |
-| TA-Lib C library | 0.6 or later | The `TA-Lib` package in `requirements.txt` wraps it, and `pip` cannot install the C part |
+| TA-Lib C library | 0.6 or later | The `TA-Lib` package the library depends on wraps it, and `pip` cannot install the C part |
 | Unified Broker Interface | running on `127.0.0.1:8080` | Every price and every order comes from it |
 | MongoDB | 8.0.4 | Holds the api key and secret the UBI client authenticates with |
 | Redis | `redis:trixie` | Brought up by Compose, not yet read by any module |
@@ -91,15 +91,17 @@ Docker Compose runs the three stores, so none of them needs to be installed on t
 
 1. **Install the TA-Lib C library first.** The Python wrapper fails to build without it, with an error about a missing symbol or header rather than a missing package, which is confusing the first time. On macOS, `brew install ta-lib`; on Debian, build the newest source release from [the TA-Lib releases page](https://github.com/ta-lib/ta-lib/releases).
 
-2. **Create the virtual environment and install the dependencies.** The MkDocs packages are in the same file, so this installs the documentation toolchain too.
+2. **Create the virtual environment and install the library.** An editable install points the environment at `src/tradingmachine` where it sits, so an edit to a source file takes effect immediately, and it pulls in the seven packages the library imports. The two extras add the MkDocs toolchain and `ruff`.
 
    ```bash
    python3.14 -m venv .venv
    .venv/bin/python -m pip install --upgrade pip
-   .venv/bin/python -m pip install -r requirements.txt
+   .venv/bin/python -m pip install -e ".[docs,development]"
    ```
 
-3. **Write a `.env` file at the project root.** It needs a `PYTHONPATH` entry pointing at the project, because imports use full package paths and nothing installs the packages; `TRADINGMACHINE_UBI_BASE_URL`; and a host, port, database, username and password for each of Redis, MongoDB and TimescaleDB. `docs/getting-started/configuration.md` lists every variable. The file is excluded by `.gitignore` and should never be committed.
+   To reproduce the exact pinned environment this was developed in, install `requirements.txt` as well, then add the library on top of it with `--no-deps`.
+
+3. **Write a `.env` file at the project root.** It needs `TRADINGMACHINE_UBI_BASE_URL` and a host, port, database, username and password for each of Redis, MongoDB and TimescaleDB. `docs/getting-started/configuration.md` lists every variable. The file is excluded by `.gitignore` and should never be committed.
 
 4. **Bring the data stores up.** Docker Compose reads the same `.env`, so the ports and passwords come from the variables you just set. The containers use ports 2002 to 2004, chosen to stay clear of the sibling project's, which use 1002 to 1005 on the same machine.
 
@@ -119,11 +121,11 @@ Docker Compose runs the three stores, so none of them needs to be installed on t
 Once that is done, this proves the whole chain, from the credentials through UBI to a broker that serves quotes:
 
 ```bash
-PYTHONPATH=. .venv/bin/python -c "
-from assets import equities
+.venv/bin/python -c "
+from tradingmachine.assets import equities
 infosys = equities.Equity(exchange='nse', symbol='INFY')
 print(infosys)
-print(infosys.last_price())
+print(infosys.last_price)
 "
 ```
 
@@ -133,7 +135,7 @@ print(infosys.last_price())
 ## What is where
 
 ```text
-assets/
+src/tradingmachine/assets/
 ├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument
 ├── equities.py            the six equity classes, one per UBI equity segment
 ├── fixed_income.py        the six fixed income classes
@@ -144,20 +146,25 @@ assets/
 ├── exceptions.py          InstrumentError and its thirty-two subclasses
 └── analysis/              thirteen classes of candle analysis that Instrument inherits
 
-ubi_client/
+src/tradingmachine/ubi_client/
 ├── client.py              UnifiedBrokerInterface: connect, disconnect, status, get, post, …
 └── exceptions.py          one error class per HTTP status code UBI returns
 
-utilities/
-├── configuration.py       ubi_configuration and mongodb_configuration, read from .env
+src/tradingmachine/utilities/
+└── configuration.py       Configuration, which reads the environment and .env lazily
+
+scripts/
 ├── gen_ref_pages.py       builds the API reference at documentation build time
 └── documentation_hooks.py silences one griffe warning during a strict docs build
 
+pyproject.toml             the library's metadata, dependencies and build backend
 docs/                      the MkDocs site
 .claude/notes/             one Markdown note per source file, holding the reasoning
 ```
 
-This project keeps no explanatory comments in source files. Reasoning, trade-offs, dated live checks and the record of which alternative was turned down go into a sidecar note under `.claude/notes/`, mirroring the source tree, so `assets/equities.py` is documented by `.claude/notes/assets/equities.py.md`. Those notes are more detailed than the documentation site and are the place to look before changing anything.
+The library is installable and the three packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
+
+This project keeps no explanatory comments in source files. Reasoning, trade-offs, dated live checks and the record of which alternative was turned down go into a sidecar note under `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`. Those notes are more detailed than the documentation site and are the place to look before changing anything.
 
 ## Tests and lint
 
@@ -168,11 +175,11 @@ There is no test suite. `pytest` is not in `requirements.txt` and is not install
 .venv/bin/ruff format .
 ```
 
-Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reports all 31 files already formatted. Keep it that way.
+Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reports all 32 files already formatted. Keep it that way.
 
 ## Documentation
 
-The `docs/` directory is a full Material for MkDocs site and is the authoritative reference. Narrative pages are hand-written; the API reference is generated from the docstrings at build time by `utilities/gen_ref_pages.py`, one page per module, so a new module appears without any edit anywhere.
+The `docs/` directory is a full Material for MkDocs site and is the authoritative reference. Narrative pages are hand-written; the API reference is generated from the docstrings at build time by `scripts/gen_ref_pages.py`, one page per module, so a new module appears without any edit anywhere.
 
 ```bash
 .venv/bin/mkdocs serve           # http://127.0.0.1:8000, with live reload

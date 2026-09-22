@@ -1,8 +1,8 @@
 # Adding an asset class
 
 Every family module in `assets` was written the same way, and the next one should be too. The
-pattern is deliberately repetitive: `assets/fixed_income.py` is a copy of `assets/equities.py`,
-`assets/commodities.py` is a copy of that, and `assets/currencies.py` is a copy of that again.
+pattern is deliberately repetitive: `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py`,
+`src/tradingmachine/assets/commodities.py` is a copy of that, and `src/tradingmachine/assets/currencies.py` is a copy of that again.
 Nothing was factored out and no existing module was touched when each one arrived.
 
 ## Why the duplication is the design
@@ -15,7 +15,7 @@ inherits it.
 
 So each family module reads as one self-contained file, and the only mechanism that is shared is
 the mechanism that is genuinely identical for every instrument, which lives in
-`assets.instruments`.
+`tradingmachine.assets.instruments`.
 
 ## The steps
 
@@ -24,8 +24,8 @@ the mechanism that is genuinely identical for every instrument, which lives in
    pluralised, and it cannot be tidied because the string is baked into UBI's cash segment list,
    its Redis keys and its instrument table.
 
-2. **Copy the nearest existing module.** Start from `assets/equities.py` if the family is holdable
-   and from `assets/commodities.py` if it is not.
+2. **Copy the nearest existing module.** Start from `src/tradingmachine/assets/equities.py` if the family is holdable
+   and from `src/tradingmachine/assets/commodities.py` if it is not.
 
 3. **Write one class per segment.** Put each on the right base: the index class on
    `NonTradeableInstrument`, everything else on `TradeableInstrument`.
@@ -35,7 +35,7 @@ the mechanism that is genuinely identical for every instrument, which lives in
    and `option_type`. Never a segment string.
 
 5. **Add a segment constant per segment and one exception class per class**, in
-   `assets/exceptions.py`, inheriting `InstrumentError` directly.
+   `src/tradingmachine/assets/exceptions.py`, inheriting `InstrumentError` directly.
 
 6. **Re-raise the not-found error.** Catch `InstrumentError` from `super().__init__` and raise the
    class's own error naming what was looked for, then check that the resolved segment is the
@@ -49,7 +49,7 @@ the mechanism that is genuinely identical for every instrument, which lives in
    segment: `search` on the security and index classes, `expiries` and `contracts` on the futures
    classes, `expiries`, `strikes` and `chain` on the option classes.
 
-9. **Write the sidecar note** at `.claude/notes/assets/<module>.py.md`, and verify the whole thing
+9. **Write the sidecar note** at `.claude/notes/src/tradingmachine/assets/<module>.py.md`, and verify the whole thing
    against a running UBI.
 
 ## Write the empty segments anyway

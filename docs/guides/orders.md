@@ -14,7 +14,7 @@ Orders live on `TradeableInstrument`, so every class except the indices has them
 Everything else on this page is a wrapper that works out a price and then calls it.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 
@@ -80,7 +80,7 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
 
     It means the broker took it. The exchange can still refuse it afterwards, which is exactly what
     happens to an ordinary order sent while the market is closed. Neither this class nor UBI checks
-    market hours. The order's real fate is read from `orders()`, not from this answer, and
+    market hours. The order's real fate is read from `orders`, not from this answer, and
     `after_market=True` is how you deliberately queue one for the next session.
 
 ## The twenty-eight price wrappers
@@ -107,7 +107,7 @@ share.buy_at_best_bid_price(quantity=1, product="cnc")     # patient
 share.buy_at_best_offer_price(quantity=1, product="cnc")   # immediate
 ```
 
-Every wrapper that reads the order book raises `assets.exceptions.OrderError` when the side it
+Every wrapper that reads the order book raises `tradingmachine.assets.exceptions.OrderError` when the side it
 needs is empty, which is what the book looks like outside market hours.
 
 ## Changing and cancelling
@@ -138,20 +138,23 @@ the rest open.
 UBI serves the whole account's order book and has no endpoint for one instrument, so each of these
 reads the book and keeps this instrument's own rows.
 
-| Member | Keeps |
+| Property | Keeps |
 | --- | --- |
-| `orders(status=None)` | Everything today, or one status |
-| `open_orders()` | `PENDING` and `OPEN`, the ones that can still be changed |
-| `completed_orders()` | The ones that filled in full |
-| `rejected_orders()`, `cancelled_orders()` | As named |
-| `trades()` | The fills rather than the orders |
+| `orders` | Every order today, whatever its status |
+| `open_orders` | `PENDING` and `OPEN`, the ones that can still be changed |
+| `completed_orders` | The ones that filled in full |
+| `rejected_orders`, `cancelled_orders` | As named |
+| `trades` | The fills rather than the orders |
 
-Each returns a `pandas.DataFrame`, or `None` when no row matches.
+Each gives a `pandas.DataFrame`, or `None` when no row matches. All five are properties, so
+reading one sends a request to UBI every time.
 
-!!! note "Ask for open orders with `open_orders`, not `orders(status=...)`"
+!!! note "Ask for open orders with `open_orders`, not by filtering on `OPEN`"
 
     An order still waiting in the market is reported as `PENDING` by some brokers and `OPEN` by
-    others. `open_orders()` covers both; `orders(status="open")` covers only one.
+    others. `open_orders` covers both, while filtering `orders` on `OPEN` alone covers only one. A
+    status with no property of its own, such as `EXPIRED`, is found by filtering the `status`
+    column of `orders` yourself.
 
 The book is not merged across brokers, so one order placed at one broker appears once, and the same
 instrument traded at two brokers gives a row from each.

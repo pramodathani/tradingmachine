@@ -1,8 +1,8 @@
 # Mutual funds
 
-`assets.mutual_funds` holds one class, `MutualFund`, on UBI's `mutual_funds` segment. It is the
+`tradingmachine.assets.mutual_funds` holds one class, `MutualFund`, on UBI's `mutual_funds` segment. It is the
 only instrument in the project that is held rather than traded, and it is kept apart from
-[`assets.funds`](funds.md) for exactly that reason.
+[`tradingmachine.assets.funds`](funds.md) for exactly that reason.
 
 | Class | Base | Segment | Rows in UBI on 2026-09-20 |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ A scheme is named by the exchange's code for it, such as `ABSLFTTIDG`, rather th
 published name, so `search` is usually how you find one.
 
 ```python
-from assets import mutual_funds
+from tradingmachine.assets import mutual_funds
 
 fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
 row = fund.holdings
@@ -29,8 +29,8 @@ and it is not a broker that serves quotes.
 
 | Member | Result |
 | --- | --- |
-| `quote()`, `last_price()`, `ohlc()` | `ServiceUnavailableError` |
-| `bids()`, `asks()`, `best_bid()`, and every other order-book value | `ServiceUnavailableError` |
+| `quote`, `last_price`, `ohlc` | `ServiceUnavailableError` |
+| `bids`, `asks`, `best_bid`, and every other order-book value | `ServiceUnavailableError` |
 | `prices()` | `None`, because UBI stores no candles |
 | The roughly 190 analysis methods | Nothing to work on |
 

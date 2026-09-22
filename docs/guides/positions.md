@@ -10,7 +10,7 @@ Both are properties, and each sends a request to UBI every time it is read, beca
 whole account's positions and has no endpoint for one instrument.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 
@@ -66,7 +66,7 @@ the position itself.
 with no position to read a direction from, the method needs to be told which way to open, and it
 needs a `product` for the same reason.
 
-`assets.exceptions.PositionError` covers the three ways this can go wrong: there is no position to
+`tradingmachine.assets.exceptions.PositionError` covers the three ways this can go wrong: there is no position to
 act on, several are held and none was named, or a reduction is larger than the position. That last
 one is refused rather than sent, because closing more than you hold would open a new position the
 other way round.

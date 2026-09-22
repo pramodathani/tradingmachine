@@ -35,7 +35,7 @@ Docker Compose loads `.env` from the project folder automatically. The container
 
 The TimescaleDB variables are spelled `TIMESCALEDB` rather than `POSTGRES`, matching the service name and the `unified_broker_interface` convention. `.env` originally used `TRADINGMACHINE_POSTGRES_*`, and those keys were renamed when this file was added.
 
-The `PYTHONPATH = ...` line in `.env` refers to `$PYTHONPATH`, so Compose warns that the variable is not set. The warning is harmless because no container uses it.
+The `PYTHONPATH = ...` line in `.env` refers to `$PYTHONPATH`, so Compose warns that the variable is not set. The warning is harmless because no container uses it. Since the project became an installable library on 2026-09-20 the line serves no purpose at all, because imports resolve through the installed package rather than through the path, and it can be deleted whenever the warning becomes annoying.
 
 ## Details per service
 

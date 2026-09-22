@@ -6,12 +6,12 @@ fewer because UBI has no derivatives on a fund.
 
 | Module | Classes | Segments |
 | --- | --- | --- |
-| [`assets.equities`](equities.md) | 6 | `equities`, `equity_futures`, `equity_options`, `equity_indices`, `equity_index_futures`, `equity_index_options` |
-| [`assets.fixed_income`](fixed-income.md) | 6 | `fixed_income`, `fixed_income_futures`, `fixed_income_options`, `fixed_income_indices`, `fixed_income_index_futures`, `fixed_income_index_options` |
-| [`assets.commodities`](commodities.md) | 6 | `commodities`, `commodity_futures`, `commodity_options`, `commodity_indices`, `commodity_index_futures`, `commodity_index_options` |
-| [`assets.currencies`](currencies.md) | 6 | `currencies`, `currency_futures`, `currency_options`, `currency_indices`, `currency_index_futures`, `currency_index_options` |
-| [`assets.funds`](funds.md) | 2 | `exchange_traded_funds`, `investment_trusts` |
-| [`assets.mutual_funds`](mutual-funds.md) | 1 | `mutual_funds` |
+| [`tradingmachine.assets.equities`](equities.md) | 6 | `equities`, `equity_futures`, `equity_options`, `equity_indices`, `equity_index_futures`, `equity_index_options` |
+| [`tradingmachine.assets.fixed_income`](fixed-income.md) | 6 | `fixed_income`, `fixed_income_futures`, `fixed_income_options`, `fixed_income_indices`, `fixed_income_index_futures`, `fixed_income_index_options` |
+| [`tradingmachine.assets.commodities`](commodities.md) | 6 | `commodities`, `commodity_futures`, `commodity_options`, `commodity_indices`, `commodity_index_futures`, `commodity_index_options` |
+| [`tradingmachine.assets.currencies`](currencies.md) | 6 | `currencies`, `currency_futures`, `currency_options`, `currency_indices`, `currency_index_futures`, `currency_index_options` |
+| [`tradingmachine.assets.funds`](funds.md) | 2 | `exchange_traded_funds`, `investment_trusts` |
+| [`tradingmachine.assets.mutual_funds`](mutual-funds.md) | 1 | `mutual_funds` |
 
 The one segment left unported is UBI's `uncategorised` catch-all, which UBI does not accept orders
 for.

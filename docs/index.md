@@ -55,16 +55,16 @@ You build an instrument by naming it. The object looks itself up in UBI once, ke
 and from then on every price, order and position it reports is fetched fresh.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 infosys = equities.Equity(exchange="nse", symbol="INFY")
 
 candles = infosys.prices(days=365)
 strength = infosys.relative_strength_index(window=14, days=365)
-spread = infosys.bid_offer_spread()
+spread = infosys.bid_offer_spread
 
 placed = infosys.buy_at_limit_price(quantity=1, price=1450.0, product="cnc")
-waiting = infosys.open_orders()
+waiting = infosys.open_orders
 infosys.cancel_open_orders()
 ```
 
@@ -75,21 +75,21 @@ flowchart LR
     ENV[".env"] -. base url .-> CLIENT
     MONGO[("MongoDB<br/>settings")] -. api key and secret .-> CLIENT
 
-    YOU["Your script"] --> ASSETS["assets.equities.Equity<br/>and the other asset classes"]
-    ASSETS --> INSTR["assets.instruments<br/>Instrument, TradeableInstrument,<br/>NonTradeableInstrument"]
-    INSTR --> ANALYSIS["assets.analysis<br/>~190 methods over the candles"]
-    INSTR --> CLIENT["ubi_client.UnifiedBrokerInterface"]
+    YOU["Your script"] --> ASSETS["tradingmachine.assets.equities.Equity<br/>and the other asset classes"]
+    ASSETS --> INSTR["tradingmachine.assets.instruments<br/>Instrument, TradeableInstrument,<br/>NonTradeableInstrument"]
+    INSTR --> ANALYSIS["tradingmachine.assets.analysis<br/>~190 methods over the candles"]
+    INSTR --> CLIENT["tradingmachine.ubi_client.client<br/>UnifiedBrokerInterface"]
     CLIENT --> UBI["UBI REST API<br/>127.0.0.1:8080"]
     UBI --> BROKERS["Ten Indian retail brokers"]
 ```
 
 | Layer | Where | What it gives you |
 | --- | --- | --- |
-| Asset classes | `assets.equities`, `assets.fixed_income`, `assets.commodities`, `assets.currencies`, `assets.funds`, `assets.mutual_funds` | One named class per UBI segment, with a constructor that asks for exactly the fields that identify one of its own contracts. See [Asset classes](asset-classes/index.md) |
-| Instrument model | `assets.instruments` | Identity, candles, quotes, the order book, orders, trades and positions. See [The instrument model](architecture/instrument-model.md) |
-| Analysis | `assets.analysis` | TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, all inherited as methods. See [Analysis](guides/analysis.md) |
+| Asset classes | `tradingmachine.assets.equities`, `tradingmachine.assets.fixed_income`, `tradingmachine.assets.commodities`, `tradingmachine.assets.currencies`, `tradingmachine.assets.funds`, `tradingmachine.assets.mutual_funds` | One named class per UBI segment, with a constructor that asks for exactly the fields that identify one of its own contracts. See [Asset classes](asset-classes/index.md) |
+| Instrument model | `tradingmachine.assets.instruments` | Identity, candles, quotes, the order book, orders, trades and positions. See [The instrument model](architecture/instrument-model.md) |
+| Analysis | `tradingmachine.assets.analysis` | TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, all inherited as methods. See [Analysis](guides/analysis.md) |
 | REST client | `ubi_client` | The authenticated connection to UBI, and one exception class per failure it reports. See [The UBI client](architecture/ubi-client.md) |
-| Configuration | `utilities.configuration` | The UBI base url and the MongoDB connection string, read once from `.env`. See [Configuration](getting-started/configuration.md) |
+| Configuration | `tradingmachine.utilities.configuration` | The UBI base url and the MongoDB connection string, read lazily from the environment and `.env`. See [Configuration](getting-started/configuration.md) |
 
 ## The three ideas worth knowing first
 

@@ -1,6 +1,6 @@
 # Commodities
 
-`assets.commodities` is the same six classes again, on UBI's commodity segments. It is the first
+`tradingmachine.assets.commodities` is the same six classes again, on UBI's commodity segments. It is the first
 family outside equities where the inherited analysis methods actually return something, and the
 first where an order's quantity means something different from a count of units.
 
@@ -20,7 +20,7 @@ matches its underlying's symbol exactly, so this family has none of
 [fixed income's](fixed-income.md) ISIN awkwardness.
 
 ```python
-from assets import commodities
+from tradingmachine.assets import commodities
 
 expiries = commodities.CommodityFutures.expiries(exchange="mcx", underlying_symbol="GOLD")
 contract = commodities.CommodityFutures(
@@ -28,7 +28,7 @@ contract = commodities.CommodityFutures(
     underlying_symbol="GOLD",
     expiry_date=expiries[0],
 )
-price = contract.last_price()
+price = contract.last_price
 strength = contract.relative_strength_index(window=14, days=90)
 ```
 
@@ -84,7 +84,7 @@ from brokers' lot sizes, because the broker majority rule gave wrong answers in 
 its sources disagree, the contract cannot be traded that day at all.
 
 ```python
-from ubi_client import exceptions
+from tradingmachine.ubi_client import exceptions
 
 try:
     contract.buy_at_market_price(quantity=100, product="nrml")

@@ -9,7 +9,7 @@ tradeable one can also be asked about the order book.
 a number of days to count back, and UBI serves any range in one request.
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 
@@ -50,53 +50,56 @@ The frame comes back sorted by time, with a fresh index.
 
 ## Live prices
 
-Three methods ask about the present rather than the past, and they differ in how much they fetch.
+Three properties ask about the present rather than the past, and they differ in how much they
+fetch. Each one sends its own request to UBI every time it is read, so it is a live reading rather
+than a stored value.
 
-| Method | Returns | Use it for |
+| Property | Returns | Use it for |
 | --- | --- | --- |
-| `last_price()` | A `float`, or `None` | The one number, at the lowest cost |
-| `ohlc()` | A `dict` | The day's open, high and low with the last and previous close and the change |
-| `quote()` | A `dict` | Everything, including the order book under `depth` |
+| `last_price` | A `float`, or `None` | The one number, at the lowest cost |
+| `ohlc` | A `dict` | The day's open, high and low with the last and previous close and the change |
+| `quote` | A `dict` | Everything, including the order book under `depth` |
 
 ```python
-price = share.last_price()
+price = share.last_price
 
-day = share.ohlc()
+day = share.ohlc
 day["ohlc"]["open"], day["previous_close"], day["change_percent"]
 
-full = share.quote()
+full = share.quote
 full["volume"], full["oi"], full["depth"]
 ```
 
-Each of the three sends its own request. There is no cache between them, so reading `last_price()`
+Each of the three sends its own request. There is no cache between them, so reading `last_price`
 three times sends three requests. UBI is local and caches in its own Redis, which is what makes
 that acceptable.
 
 !!! note "`ServiceUnavailableError` is the normal answer for some instruments"
 
     A cash bond, a rate index, a commodity, a currency pair and a mutual fund have no quote at all,
-    so all three of these methods raise `ServiceUnavailableError` rather than returning `None`. That
+    so all three of these properties raise `ServiceUnavailableError` rather than returning `None`.
+    That
     is UBI reporting that no broker that serves quotes carries the instrument, not a fault. The
     [coverage table](../asset-classes/index.md#what-ubi-actually-carries) says which is which.
 
 ## The order book
 
-`TradeableInstrument` adds the values that come out of the quote's `depth`. Each one sends its own
-`quote()` request.
+`TradeableInstrument` adds the values that come out of the quote's `depth`. They are properties
+too, and each one sends its own `quote` request when it is read.
 
-| Member | Returns |
+| Property | Returns |
 | --- | --- |
-| `bids()`, `asks()` | Up to five `dict` levels with `price`, `quantity` and `orders`, best first |
-| `best_bid()`, `best_offer()` | The first level of each side, or `None` when that side is empty |
-| `bid_offer_spread()` | Best offer minus best bid, or `None` when either side is empty |
-| `mid_price()` | The midpoint of the two, or `None` |
-| `volume_weighted_average_price()` | The day's volume-weighted average |
-| `last_quantity()`, `total_traded_volume()`, `open_interest()` | The traded figures |
-| `last_trade_time()` | A timezone-aware `datetime`, or `None` |
+| `bids`, `asks` | Up to five `dict` levels with `price`, `quantity` and `orders`, best first |
+| `best_bid`, `best_offer` | The first level of each side, or `None` when that side is empty |
+| `bid_offer_spread` | Best offer minus best bid, or `None` when either side is empty |
+| `mid_price` | The midpoint of the two, or `None` |
+| `volume_weighted_average_price` | The day's volume-weighted average |
+| `last_quantity`, `total_traded_volume`, `open_interest` | The traded figures |
+| `last_trade_time` | A timezone-aware `datetime`, or `None` |
 
 ```python
-if share.best_bid() is not None:
-    print(share.best_bid()["price"], share.bid_offer_spread())
+if share.best_bid is not None:
+    print(share.best_bid["price"], share.bid_offer_spread)
 ```
 
 The order book is also where the price-named order wrappers get their prices, which is why they

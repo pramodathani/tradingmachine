@@ -6,11 +6,11 @@ A holding is what sits in the demat account for the long term, as opposed to a
 
 | Class | Module |
 | --- | --- |
-| `Equity` | `assets.equities` |
-| `FixedIncome` | `assets.fixed_income` |
-| `ExchangeTradedFund` | `assets.funds` |
-| `InvestmentTrust` | `assets.funds` |
-| `MutualFund` | `assets.mutual_funds` |
+| `Equity` | `tradingmachine.assets.equities` |
+| `FixedIncome` | `tradingmachine.assets.fixed_income` |
+| `ExchangeTradedFund` | `tradingmachine.assets.funds` |
+| `InvestmentTrust` | `tradingmachine.assets.funds` |
+| `MutualFund` | `tradingmachine.assets.mutual_funds` |
 
 Nothing in [commodities](../asset-classes/commodities.md) or
 [currencies](../asset-classes/currencies.md) has them, because those segments are not in UBI's
@@ -23,7 +23,7 @@ the project's standing choice about duplication between families.
 ## Reading
 
 ```python
-from assets import equities
+from tradingmachine.assets import equities
 
 share = equities.Equity(exchange="nse", symbol="RELIANCE")
 
@@ -90,7 +90,7 @@ free quantity = quantity - collateral_quantity
 `liquidate_holdings` therefore empties the holding only when nothing is pledged; otherwise it
 sells what it can and leaves the pledged units alone.
 
-`assets.exceptions.HoldingError` covers the three ways this fails, and each message names the
+`tradingmachine.assets.exceptions.HoldingError` covers the three ways this fails, and each message names the
 figures involved.
 
 | Situation | Message names |

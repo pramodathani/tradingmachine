@@ -13,7 +13,7 @@ applies; this page is for reading before you start rather than after.
     not cover the wrappers.
 
     Where order methods have been checked, it was done by replacing `place_order` with a recorder
-    and fabricating a holdings or positions row. The sidecar notes under `.claude/notes/assets/`
+    and fabricating a holdings or positions row. The sidecar notes under `.claude/notes/src/tradingmachine/assets/`
     record exactly which orders were recorded and state plainly that none was sent.
 
 ## Nothing is validated locally
@@ -47,9 +47,9 @@ Never divide by `lot_size` to compute an order quantity. See
 ## Having a method does not mean the method works
 
 `Commodity`, `Currency` and `FixedIncome` are all `TradeableInstrument` subclasses, so they carry
-`place_order`, the twenty-eight price wrappers and the order-book methods. None of those can
+`place_order`, the twenty-eight price wrappers and the order-book properties. None of those can
 succeed, because UBI has no cash market for those asset classes. `hasattr(pair, "bids")` is `True`
-while `pair.bids()` raises.
+while `pair.bids` raises.
 
 The same applies to the analysis methods, which are present on every instrument and have data to
 work on for only some of them.
@@ -79,7 +79,7 @@ That includes UBI's own REST API test page in a browser tab. If a long-running s
 `place_order` returning `outcome: "accepted"` means the broker took the order. The exchange can
 still refuse it afterwards, which is what happens to an ordinary order sent while the market is
 closed. Neither this project nor UBI checks market hours. Read the order's real fate from
-`orders()`.
+`orders`.
 
 ## HTTP 504 means the order may be live
 
@@ -109,7 +109,16 @@ A holding gives `day_change`, `day_change_percentage` and `unrealized`. A positi
 `633GS2035`, and those are what the futures and options are written on. Sovereign gold bonds are
 in this family rather than with commodities.
 
-## `PYTHONPATH` has to include the project root
+## The library has to be installed, not just checked out
 
-Imports use full package paths, so a script run without the root on the path fails at
-`from assets import equities` rather than anywhere informative.
+The source lives under `src/`, which is deliberately not importable from the repository root. A
+checkout you have not run `pip install -e .` in fails at `from tradingmachine.assets import
+equities`, and adding the root to `PYTHONPATH` will not rescue it, because there is no
+`tradingmachine` directory there to find.
+
+## `.env` is found relative to the working directory, not the library
+
+`Configuration` asks `dotenv` for a file named `.env` in the working directory or one of its
+parents. A script run from your home directory therefore gets `None` for the UBI base url and
+fails with `UBI base url is not configured`, even though the file exists in the repository. Pass
+`Configuration(environment_file=...)` or export the variables instead.

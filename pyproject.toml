@@ -1,3 +1,74 @@
+[build-system]
+requires = [
+    "hatchling>=1.27",
+]
+build-backend = "hatchling.build"
+
 [project]
 name = "tradingmachine"
 version = "0.1.0"
+description = "Indian market instruments as Python objects - candles, quotes, order book, analysis, orders, positions and holdings, all through the Unified Broker Interface."
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [
+    { name = "Pramod Athani", email = "pramod.r.athani@gmail.com" },
+]
+keywords = [
+    "trading",
+    "india",
+    "nse",
+    "bse",
+    "mcx",
+    "instruments",
+    "technical-analysis",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "backtesting>=0.6.5",
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "pymongo>=4.17.0",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "TA-Lib>=0.6.8",
+]
+
+[project.optional-dependencies]
+docs = [
+    "mkdocs==1.6.1",
+    "mkdocs-gen-files==0.5.0",
+    "mkdocs-literate-nav==0.6.2",
+    "mkdocs-material==9.6.9",
+    "mkdocs-section-index==0.3.9",
+    "mkdocstrings[python]==0.29.0",
+]
+development = [
+    "build>=1.5.0",
+    "ruff>=0.11.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/pramodathani/tradingmachine"
+Repository = "https://github.com/pramodathani/tradingmachine"
+Issues = "https://github.com/pramodathani/tradingmachine/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/tradingmachine",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/tradingmachine",
+    "docs",
+    "scripts",
+    "mkdocs.yml",
+    "README.md",
+]
