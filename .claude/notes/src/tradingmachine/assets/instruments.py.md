@@ -480,3 +480,29 @@ The crossed book, where the best bid sits 207.6 above the best offer, is UBI ser
 The five order and trade readers could only be shown to return None, since the account held no order that day. The path through `_orders_with_status` was exercised for each of the four status constants and for None, so the wiring is proved even though the filtering is not. The filtering itself was proved on 2026-09-20 against a book of five KWIL orders, recorded above, and the only thing that changed since is how the statuses reach `_orders_with_status`.
 
 `prices(days=5)` was read in the same run and returned candles, which confirms that the one member left as a method still works from the same object.
+
+## UBI's order engine, and what `place_order` gained on 2026-09-26
+
+On 2026-09-23 UBI gained an order engine, a separate process that places orders on the REST API's behalf and can keep working an order after the request has been answered. With it, `POST /api/orders/place` reads three new optional objects: `price_reference`, which describes a price for UBI to work out from the live quote; `quantity_reference`, which describes a quantity for UBI to work out from the positions; and `synthetic`, which turns the order into one of forty-two order types such as a bracket or a trailing stop. The user decided that order types belong in UBI rather than here, so tradingmachine now passes these objects through instead of computing prices and quantities itself.
+
+`place_order` takes the three as its last arguments, after `dry_run`, so every existing positional caller keeps working. `quantity` became `int | None` and is omitted from the body when it is None, like the other optional fields, because a quantity reference that liquidates a position supplies the quantity itself. It stays in its position in the signature and has no default, so a caller who wants no quantity has to say so.
+
+### Why there is a check for engine mode, and how it works
+
+In direct mode, which is UBI's default, the route checks the three objects' shapes and then ignores them. UBI's own documentation says so directly: a `LIMIT` order carrying only a `price_reference` is built with a price of 0, an order carrying only a `quantity_reference` is built with a quantity of 0, and a bracket or an iceberg is silently placed as one plain order. None of these is refused. The user's UBI runs in engine mode today, but a UBI restarted without its `.env`, or run on another machine, would fall back to direct mode without any sign, and the first order after that would be wrong in a way that costs money.
+
+UBI has no route that reports its mode. What engine mode does do is add an `intent_id` to every answer, including dry runs and the engine's own refusals, because `IntentHandoff.engine_answer` writes it into every body; direct mode never adds one. The handoff happens before UBI reads `dry_run`, so a dry run goes through the engine too. That makes a dry run a reliable, free probe.
+
+So when a live order carries any of the three objects and the client does not already know it is talking to an engine, `_probe_placement_mode` sends the same body once with `dry_run` set to True:
+
+1. An answer carrying `intent_id` sets `placement_mode` to `engine` on the shared client, and the real order is then sent.
+2. An answer without one sets it to `direct` and raises `DirectPlacementError`, so nothing live goes out.
+3. A refusal is re-raised, because the real order would have been refused the same way. When the refusal's body carries an `intent_id` the mode is recorded as `engine` first. A 400 for a malformed body comes from validation that runs before the handoff and has no `intent_id`, so the mode stays unknown.
+
+After every live order carrying one of the objects, `_record_placement_mode` looks at the answer again. An answer without an `intent_id` means UBI was switched to direct mode after the probe, and the order has already gone out as a plain order, so it records `direct` and raises `DirectPlacementError` with a message saying the order was sent and the order book should be read. That is the backstop; it cannot undo the order, but it stops the caller carrying on as if a bracket were protecting a position.
+
+A dry run that carries one of the objects is not probed first, because it is itself the probe: it is sent once and then checked the same way, and an answer without `intent_id` raises rather than returning a request that would behave differently from what the caller asked for.
+
+The mode is stored on the client rather than on the instrument because every instrument shares one client and the mode belongs to the server. The probe therefore costs one dry run per client, not one per order. A plain order with none of the three objects never probes, never checks and works in either mode, which keeps every order that worked before 2026-09-23 exactly as it was.
+
+The cleaner fix would be one field on an authenticated UBI route that reports the mode, which would turn the probe into a single cached read. That belongs to the sibling project and is recorded in `docs/contributing/known-issues.md`.

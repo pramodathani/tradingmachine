@@ -846,7 +846,7 @@ class TradeableInstrument(Instrument):
         self,
         transaction_type: str,
         order_type: str,
-        quantity: int,
+        quantity: int | None,
         product: str,
         price: float | None = None,
         trigger_price: float | None = None,
@@ -855,59 +855,131 @@ class TradeableInstrument(Instrument):
         after_market: bool = False,
         tag: str | None = None,
         dry_run: bool = False,
+        price_reference: dict | None = None,
+        quantity_reference: dict | None = None,
+        synthetic: dict | None = None,
     ) -> dict:
         """Places one order in this instrument through UBI.
 
         UBI chooses the broker itself, so no broker is named here. The values are sent exactly as given, without rounding the price to the tick size or checking the quantity against the lot size, because UBI and the broker behind it hold those rules.
 
-        UBI couples the price fields to the order type and answers HTTP 400 when they do not agree: a `limit` or `sl` order needs a price, an `sl` or `sl-m` order needs a trigger price, and a `market` or `sl-m` order must carry no price at all.
+        UBI couples the price fields to the order type and answers HTTP 400 when they do not agree: a `limit` or `sl` order needs a price, an `sl` or `sl-m` order needs a trigger price, and a `market` or `sl-m` order must carry no price at all. A `price_reference` stands in for the price and a `quantity_reference` for the quantity.
 
         An outcome of `accepted` means the broker took the order, not that the order survived. The exchange can still refuse it afterwards, which is what happens to an ordinary order sent while the market is closed, so the order's real fate is read from `orders` rather than from this answer. Neither this class nor UBI checks the market's hours, so use `after_market` to queue an order for the next session.
 
+        A `price_reference`, a `quantity_reference` or a `synthetic` object is acted on only by UBI's order engine, and UBI in direct mode would validate it and then ignore it. So before the first such order a client sends, the same body is sent once as a dry run, and the order goes ahead only when the answer shows the engine handled it. The finding is kept on the shared client as `placement_mode`, so the check costs one dry run per client.
+
         Args:
-            transaction_type: The str side of the order, `buy` or `sell`.
+            transaction_type: The str side of the order, `buy` or `sell`. UBI overrides it for a quantity reference that reduces or closes a position.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
-            quantity: The int quantity in underlying units, not lots.
+            quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
             product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
-            price: The float limit price in rupees, or None for an order type that takes no price.
+            price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees, or None for an order type that takes no trigger.
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             disclosed_quantity: The int quantity to show on the exchange, or None to disclose the whole order.
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
             dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
+            price_reference: A dict that describes the price instead of stating it, such as `{"kind": "offer_level", "level": 2}`, which UBI resolves from the live quote and rounds to the tick, or None. Its `kind` is `absolute`, `bid_level`, `offer_level`, `mid`, `vwap`, `last` or `marketable`, and it may carry `price`, `level`, `buffer_percent`, `offset_percent` and `offset_ticks`.
+            quantity_reference: A dict that describes the quantity instead of stating it, such as `{"kind": "liquidate_position", "product": "intraday"}`, which UBI resolves from the positions, or None. Its `kind` is `add_to_position`, `reduce_position` or `liquidate_position`, and its optional `product` is spelled the positions' way.
+            synthetic: A dict that makes the order one of UBI's synthetic order types, such as `{"type": "bracket", "stop_price": 990, "stop_limit_price": 988, "target_price": 1010}`, or None for a plain order. The classes in `tradingmachine.orders` build it.
 
         Returns:
-            A dict with `broker`, `instrument_id`, `order_id`, `outcome`, `status_message`, `broker_response`, `skipped` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. The `order_id` is None unless the outcome is `accepted`.
+            A dict with `broker`, `instrument_id`, `order_id`, `outcome`, `status_message`, `broker_response`, `skipped` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. The `order_id` is None unless the outcome is `accepted`. In engine mode the dict also has `intent_id`, and `parent_id` for an order the engine recorded; `freeze_slicer` and `ladder` orders add a list of `order_ids`; and a synthetic order that is waiting for a price or a time answers with an outcome of `armed` or `scheduled` and a `broker` and `order_id` of None.
 
         Raises:
-            BadRequestError: A field is invalid, or the price fields do not fit the order type.
+            BadRequestError: A field is invalid, the price fields do not fit the order type, or a synthetic order's own fields are wrong.
+            LossLockoutError: The day's loss is past UBI's daily loss limit.
             NotFoundError: No broker has a mapping for this instrument.
+            ConflictError: A quantity reference asked to reduce or close a position that is not held, or the engine read the order too late to place it.
             OrderRejectedError: The broker refused the order, and the detail holds its answer.
-            ServiceUnavailableError: No broker could take the order.
+            RateLimitError: The broker's daily order cap has no room for this order.
+            ServiceUnavailableError: No broker could take the order, or a price reference could not be resolved.
             OrderOutcomeUnknownError: The order was sent but its outcome is unknown, so read the order book before sending it again.
+            DirectPlacementError: The order carries a reference or a synthetic object and UBI is placing orders directly.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         body = {
             "instrument_id": self.instrument_id,
             "transaction_type": transaction_type,
             "order_type": order_type,
-            "quantity": quantity,
             "product": product,
             "after_market": after_market,
             "dry_run": dry_run,
         }
         optional_fields = {
+            "quantity": quantity,
             "price": price,
             "trigger_price": trigger_price,
             "validity": validity,
             "disclosed_quantity": disclosed_quantity,
             "tag": tag,
+            "price_reference": price_reference,
+            "quantity_reference": quantity_reference,
+            "synthetic": synthetic,
         }
         for field, value in optional_fields.items():
             if value is not None:
                 body[field] = value
-        return self._unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
+        needs_engine = (
+            price_reference is not None
+            or quantity_reference is not None
+            or synthetic is not None
+        )
+        unified_broker_interface = self._unified_broker_interface
+        if needs_engine and not dry_run:
+            if unified_broker_interface.placement_mode != "engine":
+                self._probe_placement_mode(body)
+        answer = unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
+        if needs_engine:
+            self._record_placement_mode(answer, was_sent=not dry_run)
+        return answer
+
+    def _probe_placement_mode(self, body: dict) -> None:
+        """Sends an order body once as a dry run to learn whether UBI's order engine will handle it.
+
+        Args:
+            body: The dict order body that is about to be sent for real.
+
+        Raises:
+            DirectPlacementError: UBI answered without an `intent_id`, so it is placing orders directly and nothing was sent.
+            UnifiedBrokerInterfaceError: UBI refused the dry run, which it would also have done to the real order.
+        """
+        unified_broker_interface = self._unified_broker_interface
+        probe_body = dict(body)
+        probe_body["dry_run"] = True
+        try:
+            answer = unified_broker_interface.post(
+                ORDER_PLACE_PATH,
+                body=probe_body,
+            )
+        except ubi_exceptions.UnifiedBrokerInterfaceError as error:
+            if isinstance(error.detail, dict) and "intent_id" in error.detail:
+                unified_broker_interface.placement_mode = "engine"
+            raise
+        self._record_placement_mode(answer, was_sent=False)
+
+    def _record_placement_mode(self, answer: dict, was_sent: bool) -> None:
+        """Stores which placement mode an answer shows UBI to be in, and refuses direct mode.
+
+        Args:
+            answer: The dict UBI answered an order with.
+            was_sent: A bool that is True when the order was sent for real rather than as a dry run.
+
+        Raises:
+            DirectPlacementError: The answer has no `intent_id`, so UBI placed or would place the order without its order engine.
+        """
+        unified_broker_interface = self._unified_broker_interface
+        if isinstance(answer, dict) and "intent_id" in answer:
+            unified_broker_interface.placement_mode = "engine"
+            return
+        unified_broker_interface.placement_mode = "direct"
+        if was_sent:
+            message = "UBI placed this order directly, without its order engine, so it went out as a plain order and its price reference, quantity reference or synthetic object was ignored; read the order book before doing anything else"
+        else:
+            message = "UBI is placing orders directly, without its order engine, so it would ignore this order's price reference, quantity reference or synthetic object; nothing was sent"
+        raise ubi_exceptions.DirectPlacementError(message, detail=answer)
 
     def modify_order(
         self,

@@ -31,15 +31,18 @@ placed = share.place_order(
 | --- | --- | --- |
 | `transaction_type` | `buy`, `sell` | Required |
 | `order_type` | `market`, `limit`, `sl`, `sl-m` | Required |
-| `quantity` | an `int` | In underlying units, not lots |
+| `quantity` | an `int` | In underlying units, not lots. `None` only when a `quantity_reference` supplies it |
 | `product` | `cnc`, `mis`, `nrml` | Required, so delivery or intraday is always stated |
-| `price` | a `float` | Required for `limit` and `sl`, forbidden for `market` and `sl-m` |
+| `price` | a `float` | Required for `limit` and `sl`, forbidden for `market` and `sl-m`, unless a `price_reference` supplies it |
 | `trigger_price` | a `float` | Required for `sl` and `sl-m` |
 | `validity` | `day`, `ioc` | `None` lets UBI use `day` |
 | `disclosed_quantity` | an `int` | `None` discloses the whole order |
 | `after_market` | a `bool` | Queue the order for the next session |
 | `tag` | up to twenty letters and digits | Your own label |
 | `dry_run` | a `bool` | Build the request without sending it |
+| `price_reference` | a `dict` | Describe the price rather than state it, such as the second best offer. Engine mode only |
+| `quantity_reference` | a `dict` | Describe the quantity rather than state it, such as the whole position. Engine mode only |
+| `synthetic` | a `dict` | Make the order one of UBI's synthetic order types. Engine mode only; see [Synthetic orders](synthetic-orders.md) |
 
 UBI chooses the broker itself, so no broker is named. The vocabulary is passed as plain strings,
 with no enums, because UBI validates it and would have to be asked anyway.
@@ -61,6 +64,53 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
 | `sl` | required | required |
 | `sl-m` | must be absent | required |
 
+### Describing the price or the quantity instead of stating it
+
+UBI's order engine can work a price out from the live order book, or a quantity out from the
+positions, at the moment it sends the order. You describe what you want, and UBI resolves it.
+
+```python
+share.place_order(
+    transaction_type="buy",
+    order_type="limit",
+    quantity=1,
+    product="cnc",
+    price_reference={"kind": "offer_level", "level": 2},
+)
+```
+
+| `price_reference` kind | Price used |
+| --- | --- |
+| `bid_level`, `offer_level` | That level of the named side, with `level` from 1 to 5 |
+| `mid` | Halfway between the best bid and the best offer |
+| `vwap` | The day's volume-weighted average price |
+| `last` | The last traded price |
+| `marketable` | The best price on the other side, which is what it takes to fill now |
+| `absolute` | The `price` inside the reference, rounded to the tick |
+
+Every price UBI works out is rounded to the tick, towards the passive side except for
+`marketable`. Three optional fields nudge it: `buffer_percent`, `offset_percent` and
+`offset_ticks`, each of which moves the price towards filling, up for a buy and down for a sell.
+
+| `quantity_reference` kind | Quantity used |
+| --- | --- |
+| `reduce_position` | Up to `quantity`, but never more than is held, and UBI chooses the side |
+| `liquidate_position` | The whole net position, and UBI chooses the side |
+| `add_to_position` | Exactly the `quantity` given; it does not read the position |
+
+A `quantity_reference` may name a `product` the positions' way, `delivery`, `intraday` or `carry`.
+Asking to reduce or close a position that is not held raises `ConflictError`.
+
+!!! danger "These only work when UBI runs its order engine"
+
+    In direct mode, UBI checks the shape of a `price_reference`, a `quantity_reference` or a
+    `synthetic` object and then ignores it. A limit order carrying only a price reference would go
+    out at price 0, and a bracket would go out as an unprotected entry. So before the first such
+    order, `place_order` sends the same body once as a dry run. Only an answer carrying an
+    `intent_id`, which the engine adds to everything it answers, lets the order go ahead;
+    otherwise it raises `DirectPlacementError` and nothing is sent. The finding is kept as
+    `placement_mode` on the shared client, so this costs one dry run per session.
+
 ### Reading the answer
 
 ```python
@@ -75,6 +125,11 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
     "timing_ms": 123,
 }
 ```
+
+In engine mode the answer also carries an `intent_id`, and a `parent_id` for an order the engine
+recorded. A synthetic order that waits for a price or a time comes back with HTTP 202, an `outcome`
+of `armed` or `scheduled`, and a `broker` and `order_id` of `None`, because nothing has reached a
+broker yet. Keep its `parent_id`.
 
 !!! warning "`accepted` does not mean the order survived"
 
