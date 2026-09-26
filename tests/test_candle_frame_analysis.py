@@ -1,5 +1,6 @@
 """Tests for CandleFrameAnalysis and the Mulloy TEMA method."""
 
+import importlib.util
 import inspect
 import math
 import warnings
@@ -10,6 +11,8 @@ import pytest
 import talib
 
 from tradingmachine.assets.analysis import candle_frame_analysis
+
+MATPLOTLIB_INSTALLED = importlib.util.find_spec("matplotlib") is not None
 
 
 def build_frame(count: int) -> pd.DataFrame:
@@ -52,6 +55,8 @@ class TestCandleFrameAnalysis:
     def test_every_method_without_required_arguments_runs(self) -> None:
         """Checks that each such method returns a frame, a series or a number from the given candles.
 
+        The three histogram methods draw with matplotlib, which the library does not declare as a dependency, so they are left out where matplotlib is not installed.
+
         Raises:
             AssertionError: A method failed or returned nothing.
         """
@@ -68,6 +73,8 @@ class TestCandleFrameAnalysis:
                 if parameter.name != "self" and parameter.default is parameter.empty:
                     required.append(parameter.name)
             if required:
+                continue
+            if name.endswith("_histogram") and not MATPLOTLIB_INSTALLED:
                 continue
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
