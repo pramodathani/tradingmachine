@@ -86,6 +86,24 @@ closed. Neither this project nor UBI checks market hours. Read the order's real 
 `OrderOutcomeUnknownError` means UBI sent the order and then lost track of it. Read the order book
 before sending anything again, or you will place the same order twice.
 
+## References and synthetic orders need UBI's order engine
+
+A `price_reference`, a `quantity_reference` or a `synthetic` object is acted on only when UBI runs
+its order engine, `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. In direct mode UBI would
+ignore it, so a limit order would go out at price 0 and a bracket as an unprotected entry, and it
+would refuse none of them. `place_order` guards against that by sending a dry run first, and raises
+`DirectPlacementError` without sending anything when the engine is not there. The twenty-four
+book-based price wrappers, `reduce_position`, `liquidate_position` and every class in
+`tradingmachine.orders` depend on it; the market and limit wrappers and the holdings methods do not.
+
+## A synthetic order keeps trading after `place()` returns
+
+A trigger fires when the price arrives, a scheduled order goes out at its time, a bracket places
+its exits as the entry fills, and a good-till-triggered order can wait for a month. Each of those is
+a real order placed with nobody watching. A type that waits answers HTTP 202 with a `broker` and an
+`order_id` of `None`, and its `parent_id` is then the only handle on it, which UBI offers no route to
+cancel. Send `dry_run=True` first.
+
 ## Three position products cannot be closed through UBI
 
 A position under `margin_trading`, `cover` or `bracket` is invisible to `add_to_position`,

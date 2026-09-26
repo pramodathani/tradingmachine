@@ -132,7 +132,7 @@ A segment ending in `_indices` is an index and cannot be traded; every other seg
 
 ## The order surface
 
-`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `net_positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `src/tradingmachine/assets/equities.py`, where they belong.
+`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `net_positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `src/tradingmachine/assets/equities.py`, where they belong. (Since then the surface has grown: the property readers for each status, the price wrappers, the position methods, and on 2026-09-26 the references and synthetic objects described in the sections at the end of this note. Holdings later spread to four more classes, as the notes on `funds.py`, `mutual_funds.py` and `fixed_income.py` record.)
 
 This is a fresh build against UBI's current contract, not a port. The old project's order methods were written against a much earlier UBI, and every name in them has since changed:
 
@@ -145,7 +145,7 @@ This is a fresh build against UBI's current contract, not a port. The old projec
 | Filtering to one instrument | Matched `exchange` and `symbol` | Every row carries UBI's `instrument_id` |
 | Positions | Never implemented | `/api/portfolio/positions`, with `net` and `day` buckets |
 
-The old project also had sixteen convenience wrappers over `place_order`, such as `buy_at_market_price` and `buy_at_midprice`. The user decided on 2026-09-20 not to bring them across; a caller writes the `place_order` call itself.
+The old project also had sixteen convenience wrappers over `place_order`, such as `buy_at_market_price` and `buy_at_midprice`. The user decided on 2026-09-20 not to bring them across; a caller writes the `place_order` call itself. The user reversed that later the same day, and the wrappers were written after all, as the section "Naming the price instead of working it out" below records.
 
 ### Vocabulary is plain strings
 
@@ -183,7 +183,7 @@ The net bucket's member is called `net_positions` rather than plain `positions`,
 
 ### No new exception classes
 
-`src/tradingmachine/assets/exceptions.py` did not change. Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/ubi_client/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
+`src/tradingmachine/assets/exceptions.py` did not change on 2026-09-20. (`OrderError` was added later that day with the wrappers, and removed on 2026-09-26 when they moved onto price references; `PositionError` and `HoldingError` came with the position and holdings methods.) Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/ubi_client/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
 
 Two of them deserve care from callers. A 504 `OrderOutcomeUnknownError` means the order was sent and its fate is unknown, so the order book must be read before sending it again. A 503 from a read route does not mean a broker is down; it means UBI's own background aggregator stopped writing the document.
 
@@ -266,13 +266,13 @@ Four wrappers were added at the same time, bringing the count to thirty-two: `bu
 
 On 2026-09-22 the `status` argument was dropped, because `orders` became a property and a property takes no arguments. The user chose this over keeping `orders` as the one method among the readers and over adding `pending_orders` and `expired_orders` to cover the two statuses that lose their shortcut. `orders` now gives the whole book for this instrument, and the five readers each filter through the private `_orders_with_status`, which now takes one of `OPEN_ORDER_STATUSES`, `COMPLETED_ORDER_STATUSES`, `REJECTED_ORDER_STATUSES`, `CANCELLED_ORDER_STATUSES` or None. A caller wanting `PENDING` or `EXPIRED` on its own filters the `status` column of the frame, which is a single pandas expression and needs no extra request.
 
-`cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. This is the one place in the project that catches `UnifiedBrokerInterfaceError` itself. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
+`cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. It was the first place in the project to catch `UnifiedBrokerInterfaceError` itself; `liquidate_all_positions`, written later, does the same for the same reason. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
 
 ### Acting on a position
 
 Four members were added on 2026-09-20 so that a position can be changed and not only read: `add_to_position`, `reduce_position`, `liquidate_position` and `liquidate_all_positions`. Before them, closing a futures position meant reading `net_positions`, working out which way it pointed, taking its absolute size and flipping the side by hand, and getting that sign wrong doubles a position instead of closing it.
 
-This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and are still deferred to a separate `Equity` change. Only the shape of the three was borrowed.
+This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and were deferred to a separate `Equity` change, since made. Only the shape of the three was borrowed.
 
 #### What a position is worth, and what it has made
 

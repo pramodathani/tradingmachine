@@ -151,6 +151,7 @@ nav:
       - Analysis: guides/analysis.md
       - Finding instruments: guides/discovery.md
       - Orders: guides/orders.md
+      - Synthetic orders: guides/synthetic-orders.md
       - Positions: guides/positions.md
       - Holdings: guides/holdings.md
       - The account: guides/account.md
