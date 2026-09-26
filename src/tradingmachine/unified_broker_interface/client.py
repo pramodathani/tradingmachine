@@ -1,6 +1,6 @@
 """A thin REST client for the Unified Broker Interface.
 
-The client exchanges the api key and secret for an access token, sends every request with that token, reconnects once when the token is refused, and raises a class from `tradingmachine.ubi_client.exceptions` for every failed response.
+The client exchanges the api key and secret for an access token, sends every request with that token, reconnects once when the token is refused, and raises a class from `tradingmachine.unified_broker_interface.exceptions` for every failed response.
 
 Typical usage example:
 
@@ -14,7 +14,7 @@ from typing import Any
 import pymongo
 import requests
 
-from tradingmachine.ubi_client import exceptions
+from tradingmachine.unified_broker_interface import exceptions
 from tradingmachine.utilities import configuration
 
 DEFAULT_TIMEOUT_SECONDS = 30

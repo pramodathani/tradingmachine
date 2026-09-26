@@ -39,7 +39,7 @@ import pandas as pd
 
 from tradingmachine.assets import exceptions
 from tradingmachine.assets import instruments
-from tradingmachine.ubi_client import client
+from tradingmachine.unified_broker_interface import client
 
 SEARCH_LIMIT = 50
 

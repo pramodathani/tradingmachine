@@ -25,9 +25,9 @@ The user chose on 2026-09-20 to declare only the seven packages the source actua
 | `backtesting` | `src/tradingmachine/assets/analysis/strategy_backtests.py` |
 | `numpy` | `src/tradingmachine/assets/analysis/signals.py` |
 | `pandas` | Almost every module |
-| `pymongo` | `src/tradingmachine/ubi_client/client.py`, to read the api key and secret |
+| `pymongo` | `src/tradingmachine/unified_broker_interface/client.py`, to read the api key and secret |
 | `python-dotenv` | `src/tradingmachine/utilities/configuration.py` |
-| `requests` | `src/tradingmachine/ubi_client/client.py` |
+| `requests` | `src/tradingmachine/unified_broker_interface/client.py` |
 | `TA-Lib` | Twelve of the thirteen analysis modules |
 
 `requirements.txt` has around a hundred pins, most of them for features that do not exist yet: `streamlit`, `Flask` and `textual` for interfaces, `selenium` and `yfinance` for market data from outside UBI, `SQLAlchemy` and `peewee` for storage. Forcing those on anyone who installs the library would be absurd, so the file stays as the pinned development environment and is not referenced from here.

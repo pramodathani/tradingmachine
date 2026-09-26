@@ -1,4 +1,4 @@
-# src/tradingmachine/ubi_client/exceptions.py
+# src/tradingmachine/unified_broker_interface/exceptions.py
 
 This module defines the errors the UBI client raises. It was adapted from `src/tradingmachine/ubi_client/exceptions.py` in the old tradingmachine project, kept at `/run/media/pramod/6959D90B1DAD7E59/backup_20260910/pramod/Downloads/tradingmachine-master/`.
 

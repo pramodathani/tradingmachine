@@ -38,8 +38,8 @@ from tradingmachine.assets.analysis import statistic_functions
 from tradingmachine.assets.analysis import strategy_backtests
 from tradingmachine.assets.analysis import volatility_indicators
 from tradingmachine.assets.analysis import volume_indicators
-from tradingmachine.ubi_client import client
-from tradingmachine.ubi_client import exceptions as ubi_exceptions
+from tradingmachine.unified_broker_interface import client
+from tradingmachine.unified_broker_interface import exceptions as ubi_exceptions
 
 INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 

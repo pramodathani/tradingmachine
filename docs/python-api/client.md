@@ -19,7 +19,7 @@ You rarely use either class directly, because every instrument and the account a
 
 <div class="endpoint" markdown><span class="member class">class</span> `UnifiedBrokerInterface(base_url=None, timeout_seconds=30, project_configuration=None)`</div>
 
-The constructor finds UBI's address and reads UBI's api key and secret from MongoDB. It does not connect: the first request connects on its own. It lives in `tradingmachine.ubi_client.client`.
+The constructor finds UBI's address and reads UBI's api key and secret from MongoDB. It does not connect: the first request connects on its own. It lives in `tradingmachine.unified_broker_interface.client`.
 
 #### Parameters
 
@@ -36,7 +36,7 @@ This example builds a client of its own and reads the session status. It sends a
 === "Python"
 
     ```python
-    from tradingmachine.ubi_client import client
+    from tradingmachine.unified_broker_interface import client
 
     unified_broker_interface = client.UnifiedBrokerInterface()
     print(unified_broker_interface.status())
@@ -300,7 +300,7 @@ The three ways to point the library at its settings are shown below. The last on
 
     ```python
     from tradingmachine.assets import equities
-    from tradingmachine.ubi_client import client
+    from tradingmachine.unified_broker_interface import client
     from tradingmachine.utilities import configuration
 
     from_working_directory = configuration.Configuration()
@@ -327,4 +327,4 @@ The three ways to point the library at its settings are shown below. The last on
 Nothing. A missing variable is reported as `None`, and it is the client that raises `ValueError` when the base url or the credentials are missing.
 
 ??? note "Under the hood"
-    Every request goes through one private method that adds the `access-token` header, sends it with `requests.request`, and on a first 401 clears the token and calls itself once more. A `requests.RequestException` such as a refused connection or a timeout becomes `UnreachableError`, chained so the original error is kept. See [Session](https://pramodathani.github.io/unified_broker_interface/rest-api/session/) on the UBI site for the three session routes, and `.claude/notes/src/tradingmachine/ubi_client/client.py.md` for the reasoning behind the client.
+    Every request goes through one private method that adds the `access-token` header, sends it with `requests.request`, and on a first 401 clears the token and calls itself once more. A `requests.RequestException` such as a refused connection or a timeout becomes `UnreachableError`, chained so the original error is kept. See [Session](https://pramodathani.github.io/unified_broker_interface/rest-api/session/) on the UBI site for the three session routes, and `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md` for the reasoning behind the client.

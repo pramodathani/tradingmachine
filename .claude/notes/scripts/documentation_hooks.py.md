@@ -21,7 +21,7 @@ Sixteen docstrings in the project are written this way, of which four are on pub
 
 ## Why the warning is filtered rather than the docstrings changed
 
-The convention is the user's, it is applied consistently across `assets`, `ubi_client` and `utilities`, and it satisfies the project's own rule that every docstring has a `Raises:` section. Rewriting sixteen docstrings to suit a parser would be changing the source to please the documentation build, which is the wrong way round. Dropping `--strict` instead would give up the check on broken cross-references, which is the main thing `--strict` is worth having for.
+The convention is the user's, it is applied consistently across `assets`, `unified_broker_interface` and `utilities`, and it satisfies the project's own rule that every docstring has a `Raises:` section. Rewriting sixteen docstrings to suit a parser would be changing the source to please the documentation build, which is the wrong way round. Dropping `--strict` instead would give up the check on broken cross-references, which is the main thing `--strict` is worth having for.
 
 So exactly one message is filtered, matched by its text, and every other warning still fails a strict build.
 

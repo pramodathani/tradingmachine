@@ -1,6 +1,6 @@
 # Errors
 
-The library raises two separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.ubi_client.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`.
+The library raises two separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.unified_broker_interface.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`.
 
 The two families do not share a base class, so `except UnifiedBrokerInterfaceError` never catches an `EquityError`, and the other way round. Where one causes the other, the instrument error is raised `from` the UBI error, so the original stays in the traceback as `__cause__`.
 
@@ -152,7 +152,7 @@ flowchart LR
 
 ## The UBI client errors
 
-These classes live in `tradingmachine.ubi_client.exceptions`. Catch the base class to handle every failure the same way, or one subclass to handle one case.
+These classes live in `tradingmachine.unified_broker_interface.exceptions`. Catch the base class to handle every failure the same way, or one subclass to handle one case.
 
 ### UnifiedBrokerInterfaceError
 
@@ -169,7 +169,7 @@ The example below catches one subclass and reads all three. It is built from the
 === "Python"
 
     ```python
-    from tradingmachine.ubi_client import exceptions
+    from tradingmachine.unified_broker_interface import exceptions
 
     try:
         reliance.place_order("buy", "limit", 1, "cnc")
@@ -400,4 +400,4 @@ A few failures come from Python or from the configuration rather than from eithe
 | `AttributeError` | An index class | Reading an order-book or order member, which an index does not have |
 
 ??? note "Under the hood"
-    The status mapping is `EXCEPTION_FOR_STATUS_CODE` in `src/tradingmachine/ubi_client/exceptions.py`, and the choice is made by the client's `_raise_for_failure`. The reasoning behind each class, including why the 403 class is named for the loss lockout rather than called `ForbiddenError`, is in `.claude/notes/src/tradingmachine/ubi_client/exceptions.py.md`.
+    The status mapping is `EXCEPTION_FOR_STATUS_CODE` in `src/tradingmachine/unified_broker_interface/exceptions.py`, and the choice is made by the client's `_raise_for_failure`. The reasoning behind each class, including why the 403 class is named for the loss lockout rather than called `ForbiddenError`, is in `.claude/notes/src/tradingmachine/unified_broker_interface/exceptions.py.md`.
