@@ -52,7 +52,7 @@ The user fixed this inside UBI in a separate session on 2026-09-14. UBI's mappin
 
 ## Shared client
 
-UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/ubi_client/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `_get_shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
+UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/ubi_client/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
 
 ## No caching and no batching
 
@@ -132,7 +132,7 @@ A segment ending in `_indices` is an index and cannot be traded; every other seg
 
 ## The order surface
 
-`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `net_positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `src/tradingmachine/assets/equities.py`, where they belong.
+`TradeableInstrument` gained seven members on 2026-09-20: `place_order`, `modify_order`, `cancel_order`, `orders`, `trades`, and the `net_positions` and `day_positions` properties. They sit on `TradeableInstrument` rather than on `Instrument` because an index has no orders, no trades and no position. Holdings and funds were left out of this change, and holdings stay on `Equity` in `src/tradingmachine/assets/equities.py`, where they belong. (Since then the surface has grown: the property readers for each status, the price wrappers, the position methods, and on 2026-09-26 the references and synthetic objects described in the sections at the end of this note. Holdings later spread to four more classes, as the notes on `funds.py`, `mutual_funds.py` and `fixed_income.py` record.)
 
 This is a fresh build against UBI's current contract, not a port. The old project's order methods were written against a much earlier UBI, and every name in them has since changed:
 
@@ -145,7 +145,7 @@ This is a fresh build against UBI's current contract, not a port. The old projec
 | Filtering to one instrument | Matched `exchange` and `symbol` | Every row carries UBI's `instrument_id` |
 | Positions | Never implemented | `/api/portfolio/positions`, with `net` and `day` buckets |
 
-The old project also had sixteen convenience wrappers over `place_order`, such as `buy_at_market_price` and `buy_at_midprice`. The user decided on 2026-09-20 not to bring them across; a caller writes the `place_order` call itself.
+The old project also had sixteen convenience wrappers over `place_order`, such as `buy_at_market_price` and `buy_at_midprice`. The user decided on 2026-09-20 not to bring them across; a caller writes the `place_order` call itself. The user reversed that later the same day, and the wrappers were written after all, as the section "Naming the price instead of working it out" below records.
 
 ### Vocabulary is plain strings
 
@@ -183,7 +183,7 @@ The net bucket's member is called `net_positions` rather than plain `positions`,
 
 ### No new exception classes
 
-`src/tradingmachine/assets/exceptions.py` did not change. Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/ubi_client/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
+`src/tradingmachine/assets/exceptions.py` did not change on 2026-09-20. (`OrderError` was added later that day with the wrappers, and removed on 2026-09-26 when they moved onto price references; `PositionError` and `HoldingError` came with the position and holdings methods.) Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/ubi_client/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
 
 Two of them deserve care from callers. A 504 `OrderOutcomeUnknownError` means the order was sent and its fate is unknown, so the order book must be read before sending it again. A 503 from a read route does not mean a broker is down; it means UBI's own background aggregator stopped writing the document.
 
@@ -246,7 +246,19 @@ Three choices differ deliberately from the old project:
 - **Every wrapper takes the same arguments.** In the old project only the two limit wrappers let you set `validity`, and the other ten silently used the default. Here all of them take `quantity`, `product`, `validity`, `after_market` and `tag`. Anything beyond that, such as a disclosed quantity or a stop loss, is a reason to call `place_order` directly.
 - **They live in `instruments.py`** rather than in a mixin module of their own, which the user chose on 2026-09-20 over following the pattern that `src/tradingmachine/assets/analysis/` uses. The file grows to about 2,200 lines, and everything about orders stays in one place.
 
-Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of one side through the existing `bids` and `asks` and raise `OrderError` when the book is not that deep. They keep each wrapper to a few lines without putting an abstraction in front of the twenty-eight public names, which is the same bargain `_best_level` already makes.
+Two private helpers, `_bid_price_at` and `_offer_price_at`, originally read one level of one side through the existing `bids` and `asks` and raised `OrderError` when the book was not that deep. They were removed on 2026-09-26, as the next section explains.
+
+#### Moved into UBI on 2026-09-26
+
+UBI's order engine can now work a price out itself from a `price_reference`, and the commit that added it (`01aafb4` in the sibling project) names this class's wrappers as the reason: they "are not thirty-three order types. They are a side, a price reference and a quantity reference crossed with each other". The user decided that order types belong in UBI, so the wrappers kept their names and signatures and stopped reading the book. Each of the twenty-four book-based wrappers now sends `order_type` `limit`, no `price`, and a reference: `bid_level` or `offer_level` with `level` 1 to 5, `mid`, or `vwap`. The two market and two limit wrappers are unchanged and still send a plain price, so they work in either of UBI's placement modes, and the holdings members, which only call those four, are untouched.
+
+Three things changed for a caller, and each is deliberate.
+
+1. **The price is read when the order is sent, not when the method is called.** Before, the quote was read in one request and the order sent in another, so the price could already be stale. UBI reads the quote inside the engine, immediately before placing.
+2. **The price is rounded to the tick.** A midpoint used to be sent exactly, so a one-tick spread produced a price between ticks that the exchange refused. UBI rounds towards the passive side, down for a buy and up for a sell, so a midpoint order never crosses the spread. The day's average price is rounded too.
+3. **An empty or shallow book is UBI's 503.** `OrderError` existed only for the wrappers to raise when the book could not supply a price. Nothing in this package reads a price from the book any more, so the class was deleted, and the wrappers' docstrings name `ServiceUnavailableError` and `DirectPlacementError` instead.
+
+Four wrappers were added at the same time, bringing the count to thirty-two: `buy_at_marketable_price` and `sell_at_marketable_price`, which send `{"kind": "marketable"}` with an optional `buffer_percent`, and `buy_at_last_price` and `sell_at_last_price`, which send `{"kind": "last"}`. They cover the two price kinds UBI offers that no wrapper named. The marketable pair matters most, because the Synthetic Order Atlas that UBI's engine was designed from lists "marketable limit" as one of the eight order types that need no class of their own, and it is what a market order has become in India: brokers convert API market orders to protected limit orders, and Flattrade's API refuses them outright. `buffer_percent` goes last in the signature so the five arguments every wrapper shares keep the same positions.
 
 ### Asking for orders by status
 
@@ -254,13 +266,13 @@ Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of on
 
 On 2026-09-22 the `status` argument was dropped, because `orders` became a property and a property takes no arguments. The user chose this over keeping `orders` as the one method among the readers and over adding `pending_orders` and `expired_orders` to cover the two statuses that lose their shortcut. `orders` now gives the whole book for this instrument, and the five readers each filter through the private `_orders_with_status`, which now takes one of `OPEN_ORDER_STATUSES`, `COMPLETED_ORDER_STATUSES`, `REJECTED_ORDER_STATUSES`, `CANCELLED_ORDER_STATUSES` or None. A caller wanting `PENDING` or `EXPIRED` on its own filters the `status` column of the frame, which is a single pandas expression and needs no extra request.
 
-`cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. This is the one place in the project that catches `UnifiedBrokerInterfaceError` itself. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
+`cancel_open_orders` attempts every open order, naming the broker from each row so a shared order id cannot raise a `ConflictError`, and returns one row per order with `cancelled` and `error` columns. The old project stopped at the first failure, which both left the remaining orders open and lost the record of what had already been cancelled. It was the first place in the project to catch `UnifiedBrokerInterfaceError` itself; `liquidate_all_positions`, written later, does the same for the same reason. That is deliberate and is what the Google style guide allows a broad catch for: an isolation point where the error is recorded rather than swallowed.
 
 ### Acting on a position
 
 Four members were added on 2026-09-20 so that a position can be changed and not only read: `add_to_position`, `reduce_position`, `liquidate_position` and `liquidate_all_positions`. Before them, closing a futures position meant reading `net_positions`, working out which way it pointed, taking its absolute size and flipping the side by hand, and getting that sign wrong doubles a position instead of closing it.
 
-This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and are still deferred to a separate `Equity` change. Only the shape of the three was borrowed.
+This is not a port. The old project had no position surface at all: the word `positions` does not appear in a single Python file in it, and its own notes list `/api/portfolio/positions` as unbuilt. The user believed on 2026-09-20 that it had `add_to_positions` and its siblings; what it actually had was `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` on `ListedSecurity`, which are a different thing and were deferred to a separate `Equity` change, since made. Only the shape of the three was borrowed.
 
 #### What a position is worth, and what it has made
 
@@ -480,3 +492,55 @@ The crossed book, where the best bid sits 207.6 above the best offer, is UBI ser
 The five order and trade readers could only be shown to return None, since the account held no order that day. The path through `_orders_with_status` was exercised for each of the four status constants and for None, so the wiring is proved even though the filtering is not. The filtering itself was proved on 2026-09-20 against a book of five KWIL orders, recorded above, and the only thing that changed since is how the statuses reach `_orders_with_status`.
 
 `prices(days=5)` was read in the same run and returned candles, which confirms that the one member left as a method still works from the same object.
+
+## UBI's order engine, and what `place_order` gained on 2026-09-26
+
+On 2026-09-23 UBI gained an order engine, a separate process that places orders on the REST API's behalf and can keep working an order after the request has been answered. With it, `POST /api/orders/place` reads three new optional objects: `price_reference`, which describes a price for UBI to work out from the live quote; `quantity_reference`, which describes a quantity for UBI to work out from the positions; and `synthetic`, which turns the order into one of forty-two order types such as a bracket or a trailing stop. The user decided that order types belong in UBI rather than here, so tradingmachine now passes these objects through instead of computing prices and quantities itself.
+
+`place_order` takes the three as its last arguments, after `dry_run`, so every existing positional caller keeps working. `quantity` became `int | None` and is omitted from the body when it is None, like the other optional fields, because a quantity reference that liquidates a position supplies the quantity itself. It stays in its position in the signature and has no default, so a caller who wants no quantity has to say so.
+
+### Why there is a check for engine mode, and how it works
+
+In direct mode, which is UBI's default, the route checks the three objects' shapes and then ignores them. UBI's own documentation says so directly: a `LIMIT` order carrying only a `price_reference` is built with a price of 0, an order carrying only a `quantity_reference` is built with a quantity of 0, and a bracket or an iceberg is silently placed as one plain order. None of these is refused. The user's UBI runs in engine mode today, but a UBI restarted without its `.env`, or run on another machine, would fall back to direct mode without any sign, and the first order after that would be wrong in a way that costs money.
+
+UBI has no route that reports its mode. What engine mode does do is add an `intent_id` to every answer, including dry runs and the engine's own refusals, because `IntentHandoff.engine_answer` writes it into every body; direct mode never adds one. The handoff happens before UBI reads `dry_run`, so a dry run goes through the engine too. That makes a dry run a reliable, free probe.
+
+So when a live order carries any of the three objects and the client does not already know it is talking to an engine, `_probe_placement_mode` sends the same body once with `dry_run` set to True:
+
+1. An answer carrying `intent_id` sets `placement_mode` to `engine` on the shared client, and the real order is then sent.
+2. An answer without one sets it to `direct` and raises `DirectPlacementError`, so nothing live goes out.
+3. A refusal is re-raised, because the real order would have been refused the same way. When the refusal's body carries an `intent_id` the mode is recorded as `engine` first. A 400 for a malformed body comes from validation that runs before the handoff and has no `intent_id`, so the mode stays unknown.
+
+After every live order carrying one of the objects, `_record_placement_mode` looks at the answer again. An answer without an `intent_id` means UBI was switched to direct mode after the probe, and the order has already gone out as a plain order, so it records `direct` and raises `DirectPlacementError` with a message saying the order was sent and the order book should be read. That is the backstop; it cannot undo the order, but it stops the caller carrying on as if a bracket were protecting a position.
+
+A dry run that carries one of the objects is not probed first, because it is itself the probe: it is sent once and then checked the same way, and an answer without `intent_id` raises rather than returning a request that would behave differently from what the caller asked for.
+
+The mode is stored on the client rather than on the instrument because every instrument shares one client and the mode belongs to the server. The probe therefore costs one dry run per client, not one per order. A plain order with none of the three objects never probes, never checks and works in either mode, which keeps every order that worked before 2026-09-23 exactly as it was.
+
+The cleaner fix would be one field on an authenticated UBI route that reports the mode, which would turn the probe into a single cached read. That belongs to the sibling project and is recorded in `docs/contributing/known-issues.md`.
+
+## The position methods moved onto quantity references on 2026-09-26
+
+UBI's order engine resolves a `quantity_reference` from the positions when it sends the order. `reduce_position` sends `min(quantity, held)` and chooses the side that closes; `liquidate_position` sends the whole net position and chooses the side; both answer HTTP 409 when nothing is held under the product. The source is `../unified_broker_interface/docs/rest-api/price-quantity-references.md`. Following the user's decision that order behaviour belongs in UBI, `reduce_position` and `liquidate_position` now send one order carrying the reference instead of reading the position and working the direction out here.
+
+`_place_to_close_position` is the shared mechanism, and it keeps one local read. A reference without a `product` makes UBI add every product's position together, which would not match the order's own `product` field, so when the caller names no product the positions are still read once here to find the only one held. That keeps the old `PositionError` for "several are held and none was named", which is a mistake the caller should hear about rather than one UBI should guess at. When a product is named, nothing is read here at all, and a product that is not held comes back as `ConflictError` from UBI's 409 rather than as a `PositionError`. That is a change for a caller who caught `PositionError`, recorded in `docs/guides/positions.md`.
+
+The body carries `transaction_type` `sell` as a placeholder, because the route requires a side before the engine sees the reference, and the engine replaces it. It also carries `synthetic` `{"type": "simple", "closes_position": true}`. `simple` is the plain order type the engine runs anyway when no `synthetic` object is sent, so the order is unchanged; `closes_position` tells the engine the order is an exit, so it may use the share of a broker's daily order cap kept for exits (`UNIFIED_BROKER_INTERFACE_API_ORDER_DAILY_CAP_EXIT_RESERVE`). Without it, a day that had used its cap on entries could not close its positions through these methods, which is the one day closing matters most.
+
+One behaviour changed on purpose. A reduction larger than the position used to be refused with `PositionError`, because sending it would have opened a position the other way round. UBI caps it at what is held, so it now closes the whole position, which is the outcome the old refusal was protecting. The refusal had no other purpose, so it was not kept.
+
+`add_to_position` is unchanged. UBI's `add_to_position` kind is documented as the same as `absolute`: it does not read the position, so it cannot work out the direction, and the local logic is still what does the work. `_place_to_change_position` and `_open_a_new_position` now serve only it.
+
+`liquidate_all_positions` still reads `net_positions` once, because it must report the `margin_trading`, `cover` and `bracket` positions as ignored, and then calls `liquidate_position` with each tradeable product named, so each close is one request and reads nothing further here. It still catches `PositionError` alongside `UnifiedBrokerInterfaceError`, because an unrecognised product can still raise it. It deliberately does not call UBI's `POST /api/orders/flatten`, which the user chose on 2026-09-26: flatten cancels every open order and closes every position in the whole account, which is a different request from closing this instrument's positions. It lives on `tradingmachine.accounts.account.Account` instead.
+
+The accessor was named `_get_shared_unified_broker_interface` and private until 2026-09-26, when `tradingmachine.accounts.account.Account` needed the same client for `POST /api/orders/flatten`. An `Account` with a client of its own would connect separately and log every instrument out, so it had to share this one, and the method was made public as `shared_unified_broker_interface` rather than reached into from another module.
+
+### The dry runs against the real UBI on 2026-09-26
+
+Every order kind was sent to the real UBI as a dry run on 2026-09-26, a Saturday, through a scratchpad client that refused any request that was not a dry run to `/api/orders/place` or `/api/orders/flatten`, and refused every modify and cancel. No order was sent. The wrappers and position methods have no `dry_run` argument, so they were checked only offline, against a recording client, as the rule in "A check that placed real orders by accident" requires; that offline check passed 136 of 136 assertions, including every one of the forty-two classes' `synthetic` object against the JSON example for its type in UBI's glossary.
+
+Every dry run that went through the engine, which in engine mode is every placement, came back as HTTP 504 with an `intent_id` and the message "the order engine did not answer within 5.0 seconds, so this order may still be placed". UBI's `.env` sets `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`, but the engine's own service, `unified-orders@order_engine.service`, was inactive and disabled, so the API handed every order to a process that was not there. The flatten dry run, which does not go through the engine, answered normally. The queued dry runs are harmless: they are dry runs, and the engine refuses any intent it reads more than 30 seconds after the caller stopped waiting.
+
+Two things were fixed from that run. The error's message had read only "UBI returned HTTP 504", which the client now takes from `status_message`. And a refusal carrying an `intent_id` on the main send, not only on the probe, now records `engine` as the placement mode, through `_record_engine_refusal`, which both paths share.
+
+Whether UBI accepts each class's settings, rather than only their shape matching its glossary, therefore still has to be checked with dry runs once the engine is running.

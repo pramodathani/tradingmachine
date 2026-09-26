@@ -67,7 +67,7 @@ size that day rather than that UBI is unavailable.
 
 ## A currency pair cannot be ordered or quoted
 
-`Currency` is a `TradeableInstrument`, so it carries `place_order`, the twenty-eight price
+`Currency` is a `TradeableInstrument`, so it carries `place_order`, the thirty-two price
 wrappers and the order-book methods, and none of them can work. Its rows are the exchange's
 underlying reference records rather than tradeable spot contracts, no broker declares a cash market
 for currencies, and UBI's contract size check refuses any order in this family that is not a future

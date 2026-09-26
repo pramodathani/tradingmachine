@@ -24,8 +24,10 @@ flowchart TD
 | `tradingmachine.assets.instruments` | Be one instrument: identity, candles, quotes, order book, orders, positions | Cache, batch, round prices or check quantities |
 | `tradingmachine.assets.analysis` | Turn candles into indicators, patterns and statistics | Fetch anything. It calls `prices` and is given it by the instrument |
 | The six family modules | Put a named class on each UBI segment, and add what only that family has | Share a base class between families, even where the code is identical |
+| `tradingmachine.orders` | Describe one of UBI's forty-two synthetic order types each, and send it through `place_order` | Place, watch or re-price anything itself. UBI's order engine does that |
+| `tradingmachine.accounts` | Act on the whole account, which today means UBI's kill switch | Act on one instrument, which is the instruments' job |
 
-## Three decisions that shape everything above
+## Four decisions that shape everything above
 
 **There is no caching anywhere.** An instrument looks itself up in UBI once, in its constructor,
 and keeps the identity that comes back. Everything else, from a year of daily candles down to the
@@ -45,6 +47,12 @@ is identical lives in `tradingmachine.assets.instruments`.
 through as they are written, with no enums and no constants, because UBI validates them and would
 have to be asked anyway. The same reasoning applies to prices and quantities, which reach UBI
 exactly as given. See [Orders](../guides/orders.md).
+
+**Order types are built in UBI, not here.** Since UBI gained its order engine, anything it can work
+out itself is sent to it as a description rather than computed here: a price read from the order
+book, a quantity read from a position, or a whole synthetic order such as a bracket. The price
+wrappers, the position methods and `tradingmachine.orders` are therefore thin, and a new kind of
+order belongs in UBI first. See [Synthetic orders](../guides/synthetic-orders.md).
 
 ## Where to go next
 

@@ -47,7 +47,7 @@ Never divide by `lot_size` to compute an order quantity. See
 ## Having a method does not mean the method works
 
 `Commodity`, `Currency` and `FixedIncome` are all `TradeableInstrument` subclasses, so they carry
-`place_order`, the twenty-eight price wrappers and the order-book properties. None of those can
+`place_order`, the thirty-two price wrappers and the order-book properties. None of those can
 succeed, because UBI has no cash market for those asset classes. `hasattr(pair, "bids")` is `True`
 while `pair.bids` raises.
 
@@ -85,6 +85,34 @@ closed. Neither this project nor UBI checks market hours. Read the order's real 
 
 `OrderOutcomeUnknownError` means UBI sent the order and then lost track of it. Read the order book
 before sending anything again, or you will place the same order twice.
+
+## References and synthetic orders need UBI's order engine
+
+A `price_reference`, a `quantity_reference` or a `synthetic` object is acted on only when UBI runs
+its order engine, `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. In direct mode UBI would
+ignore it, so a limit order would go out at price 0 and a bracket as an unprotected entry, and it
+would refuse none of them. `place_order` guards against that by sending a dry run first, and raises
+`DirectPlacementError` without sending anything when the engine is not there. The twenty-four
+book-based price wrappers, `reduce_position`, `liquidate_position` and every class in
+`tradingmachine.orders` depend on it; the market and limit wrappers and the holdings methods do not.
+
+## Engine mode without the engine makes every order time out
+
+UBI's API and its order engine are two processes. When the API is set to engine mode but the engine,
+`unified-orders@order_engine.service`, is not running, every placement is handed to a process that
+is not there, plain orders included, and UBI answers HTTP 504 after five seconds with "the order
+engine did not answer within 5.0 seconds, so this order may still be placed". That is raised as
+`OrderOutcomeUnknownError`. In this one situation nothing is placed later, because the engine
+refuses any order it reads more than 30 seconds after the caller stopped waiting, but the error
+cannot tell you that, so check the engine's service before assuming it.
+
+## A synthetic order keeps trading after `place()` returns
+
+A trigger fires when the price arrives, a scheduled order goes out at its time, a bracket places
+its exits as the entry fills, and a good-till-triggered order can wait for a month. Each of those is
+a real order placed with nobody watching. A type that waits answers HTTP 202 with a `broker` and an
+`order_id` of `None`, and its `parent_id` is then the only handle on it, which UBI offers no route to
+cancel. Send `dry_run=True` first.
 
 ## Three position products cannot be closed through UBI
 

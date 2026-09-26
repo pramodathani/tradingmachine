@@ -19,15 +19,17 @@ Each class matches one HTTP status code, and anything with no match becomes `Ser
 | --- | --- | --- |
 | 400 | `BadRequestError` | A field is wrong: an incomplete lookup, a price on a market order, a quantity that is not a whole number of lots |
 | 401 | `AuthenticationError` | The key or secret was refused, or a retried token was refused again |
+| 403 | `LossLockoutError` | The day's loss is past UBI's daily loss limit, so the order engine refuses every new order |
 | 404 | `NotFoundError` | No such instrument, order or broker mapping |
-| 409 | `ConflictError` | The request conflicts with the current state |
+| 409 | `ConflictError` | The request conflicts with the current state: an order that is no longer open, a position that is not held, or an order the engine read too late to place |
 | 422 | `OrderRejectedError` | The broker refused the order, and its answer is in `detail` |
-| 429 | `RateLimitError` | Too many requests |
+| 429 | `RateLimitError` | Too many requests, or the broker's daily order cap is used up |
 | 502 | `BrokerError` | The broker failed |
-| 503 | `ServiceUnavailableError` | No broker could serve it: no recent quote, no broker able to take the order, or a contract whose size UBI does not trust today |
+| 503 | `ServiceUnavailableError` | No broker could serve it: no recent quote, no broker able to take the order, a contract whose size UBI does not trust today, or a price reference UBI cannot resolve because the book is too thin |
 | 504 | `OrderOutcomeUnknownError` | The order was sent, and nobody knows what happened to it |
 | anything else | `ServerError` | Including HTTP 405, which is what a `PATCH` gets today |
 | no response at all | `UnreachableError` | A refused connection or a timeout, so nothing was sent |
+| none, raised by the client | `DirectPlacementError` | UBI is placing orders directly, so it would ignore a price reference, a quantity reference or a synthetic order; nothing live was sent |
 
 Every one of them carries three attributes.
 
@@ -52,9 +54,14 @@ wording there, and a commodity or currency order refused for its contract size c
     live. Read the order book with `orders` before sending anything again, or you will place the
     same order twice.
 
+Two answers that look unusual are not failures, so nothing is raised for them. HTTP 202 means
+the order engine has recorded a synthetic order that is waiting for a price or a time, and HTTP
+207 means `POST /api/orders/flatten` did only part of what it was asked. Read `outcome` in the
+first answer and `flat` in the second.
+
 ## Failures from the instrument classes
 
-`tradingmachine.assets.exceptions` has `InstrumentError` and thirty-two subclasses. Five of them are about what
+`tradingmachine.assets.exceptions` has `InstrumentError` and thirty-one subclasses. Four of them are about what
 you asked for, and the rest are one per instrument class, raised when that class's own lookup
 finds nothing or returns an instrument outside the class's segment.
 
@@ -63,7 +70,6 @@ finds nothing or returns an instrument outside the class's segment.
 | `InstrumentError` | UBI has no instrument matching the lookup. It is also the base of every class below |
 | `TradeableInstrumentError` | You built a `TradeableInstrument` on an index segment |
 | `NonTradeableInstrumentError` | You built a `NonTradeableInstrument` on something that is not an index |
-| `OrderError` | A price-named order wrapper has no price to use, because the order book is empty on that side |
 | `PositionError` | There is no position to act on, several are held and none was named, or a reduction is larger than the position |
 | `HoldingError` | The share is not held, the sale is larger than the free quantity, or the whole holding is pledged |
 

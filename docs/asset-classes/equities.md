@@ -105,4 +105,4 @@ otherwise mean 214 lookups. Build the few you actually want from the rows. See
 | `EquityError` and its five siblings | UBI has nothing matching, or the instrument found is outside the class's segment |
 | `TradeableInstrumentError` | You reached for an index through a tradeable class |
 | `HoldingError` | The share is not held, the sale exceeds the free quantity, or everything is pledged |
-| `OrderError` | A price-named wrapper found the order book empty on the side it needed |
+| `ServiceUnavailableError` | A price-named wrapper asked UBI for a level of the order book that is empty or not that deep |

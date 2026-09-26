@@ -1,6 +1,6 @@
 """Errors raised by the instrument classes in `tradingmachine.assets.instruments`, `tradingmachine.assets.equities`, `tradingmachine.assets.fixed_income`, `tradingmachine.assets.commodities`, `tradingmachine.assets.currencies`, `tradingmachine.assets.funds` and `tradingmachine.assets.mutual_funds`.
 
-These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or an order asked for at a price the order book cannot supply. Failures of the request to UBI stay as the classes in `tradingmachine.ubi_client.exceptions`, chained onto these where one caused the other.
+These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or a position or holding that cannot be changed as asked. Failures of the request to UBI stay as the classes in `tradingmachine.ubi_client.exceptions`, chained onto these where one caused the other.
 
 Typical usage example:
 
@@ -21,10 +21,6 @@ class TradeableInstrumentError(InstrumentError):
 
 class NonTradeableInstrumentError(InstrumentError):
     """An instrument asked for as non-tradeable that can in fact be traded."""
-
-
-class OrderError(InstrumentError):
-    """An order that cannot be priced, because the value it asks for is not there."""
 
 
 class PositionError(InstrumentError):

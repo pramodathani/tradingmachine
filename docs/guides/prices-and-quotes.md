@@ -102,5 +102,6 @@ if share.best_bid is not None:
     print(share.best_bid["price"], share.bid_offer_spread)
 ```
 
-The order book is also where the price-named order wrappers get their prices, which is why they
-raise `OrderError` when the side they need is empty. See [Orders](orders.md).
+The price-named order wrappers price their orders from this same book, but they do not read it
+here. They describe the level they want and UBI reads the book itself when it sends the order, so
+an empty side comes back from UBI as `ServiceUnavailableError`. See [Orders](orders.md).

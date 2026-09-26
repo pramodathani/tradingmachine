@@ -108,7 +108,7 @@ own expiry rules to get wrong.
 ## The trading split
 
 `TradeableInstrument` adds everything that assumes a live, orderable contract: the order book,
-`place_order` and its twenty-eight wrappers, the order and trade readers, and the position
+`place_order` and its thirty-two wrappers, the order and trade readers, and the position
 members. Its constructor raises `TradeableInstrumentError` when the segment ends in `_indices`.
 
 `NonTradeableInstrument` is the mirror image. It adds nothing, and its constructor raises

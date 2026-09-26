@@ -57,7 +57,7 @@ than from here.
 ## Neither a commodity nor a commodity index can be ordered
 
 `Commodity` is a `TradeableInstrument`, because its segment does not end in `_indices`, so it
-inherits `place_order` and all twenty-eight price wrappers. Every one of them will be refused, for
+inherits `place_order` and all thirty-two price wrappers. Every one of them will be refused, for
 two independent reasons on UBI's side: no broker declares a cash market for the commodity asset
 class, so broker selection passes every broker over, and UBI's contract size check refuses any
 non-securities order whose shape is not a future or an option.

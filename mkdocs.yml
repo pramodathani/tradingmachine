@@ -151,8 +151,10 @@ nav:
       - Analysis: guides/analysis.md
       - Finding instruments: guides/discovery.md
       - Orders: guides/orders.md
+      - Synthetic orders: guides/synthetic-orders.md
       - Positions: guides/positions.md
       - Holdings: guides/holdings.md
+      - The account: guides/account.md
   - Contributing:
       - Adding an asset class: contributing/adding-an-asset-class.md
       - Pitfalls: contributing/pitfalls.md

@@ -1,6 +1,6 @@
 # Trading Machine
 
-Trading Machine is a Python library, installed as `tradingmachine`, in which an Indian market instrument is a Python object. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, about 190 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account.
+Trading Machine is a Python library, installed as `tradingmachine`, in which an Indian market instrument is a Python object. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, about 190 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account. It can also send any of the forty-two synthetic order types UBI's order engine runs, such as a bracket, a trailing stop or an iceberg.
 
 Nothing in this project talks to a broker. Every call goes to the sibling project `unified_broker_interface`, which runs on the same machine, speaks to ten Indian retail brokers and normalises what they say. This project is the layer above that, where the vocabulary stops being HTTP routes and starts being instruments.
 
@@ -19,7 +19,7 @@ infosys.cancel_open_orders()
 ```
 
 > [!CAUTION]
-> This project places real orders with real money. `place_order` and its twenty-eight wrappers, the position methods and the holdings methods all reach a live broker account, and there is no paper trading mode and no simulator. `place_order(dry_run=True)` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
+> This project places real orders with real money. `place_order` and its thirty-two wrappers, the position methods, the holdings methods, every class in `tradingmachine.orders` and `Account.flatten` all reach a live broker account, and there is no paper trading mode and no simulator. A synthetic order can go on placing orders long after the call returns. `dry_run=True` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
 
 ## How it fits together
 
@@ -48,11 +48,15 @@ UBI REST API on 127.0.0.1:8080
 ten Indian retail brokers
 ```
 
-Three ideas shape everything above.
+`tradingmachine.orders` holds one class per synthetic order type and `tradingmachine.accounts` holds `Account`, whose `flatten` is UBI's kill switch; both send through the same client.
+
+Four ideas shape everything above.
 
 **The class is the contract type.** There is no `segment="equity_options"` string passed by hand. `EquityOption` is a class, and its constructor asks for an exchange, an underlying symbol, an expiry date, a strike price and an option type, because that is what identifies one equity option. A class that cannot be traded, such as `EquityIndex`, simply does not offer the order methods.
 
 **Nothing is cached and nothing is validated locally.** An instrument looks itself up once, at construction, and after that every candle, quote, order and position is fetched at the moment you ask. Prices and quantities reach UBI exactly as given, with no rounding to the tick size and no checking against the lot size, because UBI and the broker behind it hold those rules and this layer would only be guessing.
+
+**Order types are built in UBI, not here.** UBI's order engine can work a price out from the order book, a quantity out from a position, and run a bracket or a trailing stop on its own. So the price wrappers, the position methods and `tradingmachine.orders` only describe what is wanted and let UBI do it, and they need UBI to run in engine mode; `place_order` checks that before sending anything that depends on it.
 
 **Duplication between asset classes is deliberate.** `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it.
 
@@ -143,8 +147,17 @@ src/tradingmachine/assets/
 ├── currencies.py          the six currency classes
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
-├── exceptions.py          InstrumentError and its thirty-two subclasses
+├── exceptions.py          InstrumentError and its thirty-one subclasses
 └── analysis/              thirteen classes of candle analysis that Instrument inherits
+
+src/tradingmachine/orders/
+├── synthetic_order.py     SyntheticOrder, the shared base
+├── order_candidate.py     OrderCandidate, one leg of a multi-instrument order
+├── exposure_watch.py      ExposureWatch, one watched instrument of an exposure hedge
+└── bracket.py, …          one module per UBI synthetic order type, forty-two in all
+
+src/tradingmachine/accounts/
+└── account.py             Account, whose flatten is UBI's kill switch
 
 src/tradingmachine/ubi_client/
 ├── client.py              UnifiedBrokerInterface: connect, disconnect, status, get, post, …
@@ -162,7 +175,7 @@ docs/                      the MkDocs site
 .claude/notes/             one Markdown note per source file, holding the reasoning
 ```
 
-The library is installable and the three packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
+The library is installable and the five packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
 
 This project keeps no explanatory comments in source files. Reasoning, trade-offs, dated live checks and the record of which alternative was turned down go into a sidecar note under `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`. Those notes are more detailed than the documentation site and are the place to look before changing anything.
 

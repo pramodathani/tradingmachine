@@ -10,7 +10,9 @@ Every asset class's errors are flat siblings directly under `InstrumentError`, w
 
 Transport failures stay as `tradingmachine.ubi_client.exceptions` classes and are chained onto these with `raise ... from error` where one causes the other, as in the old design. That keeps "UBI could not answer" separate from "the instrument is wrong".
 
-## OrderError
+## OrderError, removed on 2026-09-26
+
+`OrderError` no longer exists. On 2026-09-26 the price-named wrappers stopped reading the order book themselves and started sending UBI a `price_reference` instead, because UBI's order engine now works the price out from the live quote and rounds it to the tick. Once nothing in this package read a price from the book, nothing could find the value missing, and an empty or shallow book comes back from UBI as HTTP 503, `ServiceUnavailableError`. The class was deleted rather than kept unused, which leaves `InstrumentError` with thirty-one subclasses. What follows is the history of why it existed.
 
 `OrderError` was added on 2026-09-20 with the buy and sell wrapper methods. It means an order cannot be priced, because the value it asks for is not there: a level the order book does not have, a mid price when one side of the book is empty, or a volume weighted average price the serving broker does not report. Nothing else raises it, and in particular `place_order`, `modify_order` and `cancel_order` do not, because they send what they are given and let UBI answer.
 

@@ -31,15 +31,18 @@ placed = share.place_order(
 | --- | --- | --- |
 | `transaction_type` | `buy`, `sell` | Required |
 | `order_type` | `market`, `limit`, `sl`, `sl-m` | Required |
-| `quantity` | an `int` | In underlying units, not lots |
+| `quantity` | an `int` | In underlying units, not lots. `None` only when a `quantity_reference` supplies it |
 | `product` | `cnc`, `mis`, `nrml` | Required, so delivery or intraday is always stated |
-| `price` | a `float` | Required for `limit` and `sl`, forbidden for `market` and `sl-m` |
+| `price` | a `float` | Required for `limit` and `sl`, forbidden for `market` and `sl-m`, unless a `price_reference` supplies it |
 | `trigger_price` | a `float` | Required for `sl` and `sl-m` |
 | `validity` | `day`, `ioc` | `None` lets UBI use `day` |
 | `disclosed_quantity` | an `int` | `None` discloses the whole order |
 | `after_market` | a `bool` | Queue the order for the next session |
 | `tag` | up to twenty letters and digits | Your own label |
 | `dry_run` | a `bool` | Build the request without sending it |
+| `price_reference` | a `dict` | Describe the price rather than state it, such as the second best offer. Engine mode only |
+| `quantity_reference` | a `dict` | Describe the quantity rather than state it, such as the whole position. Engine mode only |
+| `synthetic` | a `dict` | Make the order one of UBI's synthetic order types. Engine mode only; see [Synthetic orders](synthetic-orders.md) |
 
 UBI chooses the broker itself, so no broker is named. The vocabulary is passed as plain strings,
 with no enums, because UBI validates it and would have to be asked anyway.
@@ -61,6 +64,53 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
 | `sl` | required | required |
 | `sl-m` | must be absent | required |
 
+### Describing the price or the quantity instead of stating it
+
+UBI's order engine can work a price out from the live order book, or a quantity out from the
+positions, at the moment it sends the order. You describe what you want, and UBI resolves it.
+
+```python
+share.place_order(
+    transaction_type="buy",
+    order_type="limit",
+    quantity=1,
+    product="cnc",
+    price_reference={"kind": "offer_level", "level": 2},
+)
+```
+
+| `price_reference` kind | Price used |
+| --- | --- |
+| `bid_level`, `offer_level` | That level of the named side, with `level` from 1 to 5 |
+| `mid` | Halfway between the best bid and the best offer |
+| `vwap` | The day's volume-weighted average price |
+| `last` | The last traded price |
+| `marketable` | The best price on the other side, which is what it takes to fill now |
+| `absolute` | The `price` inside the reference, rounded to the tick |
+
+Every price UBI works out is rounded to the tick, towards the passive side except for
+`marketable`. Three optional fields nudge it: `buffer_percent`, `offset_percent` and
+`offset_ticks`, each of which moves the price towards filling, up for a buy and down for a sell.
+
+| `quantity_reference` kind | Quantity used |
+| --- | --- |
+| `reduce_position` | Up to `quantity`, but never more than is held, and UBI chooses the side |
+| `liquidate_position` | The whole net position, and UBI chooses the side |
+| `add_to_position` | Exactly the `quantity` given; it does not read the position |
+
+A `quantity_reference` may name a `product` the positions' way, `delivery`, `intraday` or `carry`.
+Asking to reduce or close a position that is not held raises `ConflictError`.
+
+!!! danger "These only work when UBI runs its order engine"
+
+    In direct mode, UBI checks the shape of a `price_reference`, a `quantity_reference` or a
+    `synthetic` object and then ignores it. A limit order carrying only a price reference would go
+    out at price 0, and a bracket would go out as an unprotected entry. So before the first such
+    order, `place_order` sends the same body once as a dry run. Only an answer carrying an
+    `intent_id`, which the engine adds to everything it answers, lets the order go ahead;
+    otherwise it raises `DirectPlacementError` and nothing is sent. The finding is kept as
+    `placement_mode` on the shared client, so this costs one dry run per session.
+
 ### Reading the answer
 
 ```python
@@ -76,6 +126,11 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
 }
 ```
 
+In engine mode the answer also carries an `intent_id`, and a `parent_id` for an order the engine
+recorded. A synthetic order that waits for a price or a time comes back with HTTP 202, an `outcome`
+of `armed` or `scheduled`, and a `broker` and `order_id` of `None`, because nothing has reached a
+broker yet. Keep its `parent_id`.
+
 !!! warning "`accepted` does not mean the order survived"
 
     It means the broker took it. The exchange can still refuse it afterwards, which is exactly what
@@ -83,7 +138,7 @@ UBI couples the price fields to the order type and answers HTTP 400 when they do
     market hours. The order's real fate is read from `orders`, not from this answer, and
     `after_market=True` is how you deliberately queue one for the next session.
 
-## The twenty-eight price wrappers
+## The thirty-two price wrappers
 
 Each wrapper names where the price comes from instead of making you work it out. They all take the
 same five arguments — `quantity`, `product`, `validity`, `after_market` and `tag` — with `product`
@@ -97,6 +152,8 @@ required, so delivery or intraday is always a deliberate choice.
 | Deeper in the book | `buy_at_second_best_bid_price` through `sell_at_fifth_best_offer_price` | Levels 2 to 5 of the named side, sixteen methods in all |
 | Derived | `buy_at_mid_price`, `sell_at_mid_price` | The midpoint of the spread |
 | Derived | `buy_at_volume_weighted_average_price`, `sell_at_volume_weighted_average_price` | The day's volume-weighted average |
+| Derived | `buy_at_last_price`, `sell_at_last_price` | The last traded price |
+| Marketable | `buy_at_marketable_price`, `sell_at_marketable_price` | The best price on the other side, plus an optional `buffer_percent` |
 
 The naming is literal, and the pairing is what makes it useful. Buying at the best **bid** joins
 the queue and saves the spread but only fills when the market comes to you; buying at the best
@@ -107,8 +164,21 @@ share.buy_at_best_bid_price(quantity=1, product="cnc")     # patient
 share.buy_at_best_offer_price(quantity=1, product="cnc")   # immediate
 ```
 
-Every wrapper that reads the order book raises `tradingmachine.assets.exceptions.OrderError` when the side it
-needs is empty, which is what the book looks like outside market hours.
+Apart from the market and limit pairs, no wrapper reads the order book itself. Each sends UBI a
+`price_reference` naming the price it wants, and UBI reads the book and rounds the price to the
+tick at the moment it sends the order, so the price is never stale. `buy_at_third_best_offer_price`
+sends `{"kind": "offer_level", "level": 3}`, for example. Two consequences follow.
+
+- An empty or shallow book comes back from UBI as `ServiceUnavailableError`, which is what the book
+  looks like outside market hours.
+- These wrappers need UBI's order engine, as described above, and raise `DirectPlacementError`
+  when UBI is placing orders directly. The market and limit pairs send a plain price and work
+  either way.
+
+`buy_at_marketable_price` is what a market order has become in India. Brokers convert an API market
+order into a limit order with price protection, and some refuse market orders outright, so a limit
+at the other side's best price, capped by `buffer_percent`, states that protection yourself. Pair it
+with `validity="ioc"` to cancel whatever cannot fill at once.
 
 ## Changing and cancelling
 

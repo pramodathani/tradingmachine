@@ -50,6 +50,49 @@ there is missing from the holdings document entirely.
 Its fixed divisor is a hundred times wrong for four-decimal pairs, so UBI leaves them out rather
 than publishing wrong prices.
 
+### No route says whether the order engine is running
+
+A `price_reference`, a `quantity_reference` or a `synthetic` object only works when UBI runs its
+order engine, and in direct mode UBI checks their shape and then silently ignores them. UBI has no
+route that reports which mode it is in, so `place_order` sends a dry run first and looks for the
+`intent_id` the engine adds to every answer. One field on an authenticated route would make that a
+single read. See [Orders](../guides/orders.md).
+
+### An engine order cannot be listed or cancelled
+
+A synthetic order that is waiting, such as a hidden stop or a scheduled order, has a `parent_id` but
+no broker order yet, and UBI has no REST route to list parents or cancel one. The only way to stop
+one today is inside UBI itself.
+
+### `flatten` leaves the engine's orders armed
+
+`POST /api/orders/flatten` reads only the brokers' order books and positions, so an armed hidden
+stop, grid, exposure hedge or any other waiting synthetic order survives it and can trade again
+afterwards. In engine mode its closing orders also go wherever UBI's broker selector sends them,
+rather than to the broker holding each position, and they are not marked as closing a position, so
+they cannot use the exit share of a broker's daily order cap.
+
+### `flatten` reads `dry_run` loosely
+
+UBI reads the field with Python's `bool()`, so the string `"false"` counts as a dry run and `0` as a
+real one. `Account.flatten` always sends a real JSON boolean, so this only matters to other callers.
+
+### Most of the Atlas's extra order types are not built
+
+UBI's order engine was designed from the Synthetic Order Atlas, and it builds every type in the
+Atlas's first six groups that can be built at all. The Atlas's seventh group, G, is seventeen more
+types from a second sweep of broker catalogues. It is outside that count, and as of 2026-09-26 most of
+it is missing:
+
+| Status | Group G types |
+| --- | --- |
+| Covered under another name | Snap order (a price reference on a plain order), midprice order (`peg` at the midpoint), scale order with profit-taker (`grid`) |
+| Partly covered | Adjustable stop (only `scale_out`'s move to breakeven), stops triggered by something other than the last price (`hidden_stop` watches the bid and offer, `indicator_triggered` watches a quote field), reduce-only (only the `reduce_position` quantity reference), close-on-trigger (only `square_off` and `flatten` cancel first), attached hedge (`exposure_hedge`, with no delta) |
+| Missing | Opening-auction order, closing-price order, limit that turns into market at a time, pegged to underlying, volatility order, trailing take-profit with an activation price, stop-and-reverse, two-sided quote, account-state conditional |
+
+Order types are built in UBI rather than here, so these belong in the sibling project. The status
+column comes from reading UBI's engine source for each type, not from placing orders.
+
 ## In this project
 
 ### There is no test suite

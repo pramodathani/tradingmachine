@@ -55,12 +55,16 @@ class AuthenticationError(UnifiedBrokerInterfaceError):
     """The api key or secret was wrong, or the access token was missing, invalid or expired (HTTP 401)."""
 
 
+class LossLockoutError(UnifiedBrokerInterfaceError):
+    """The day's loss is past UBI's daily loss limit, so the order engine refuses every new order (HTTP 403)."""
+
+
 class NotFoundError(UnifiedBrokerInterfaceError):
     """The requested instrument, profile or order does not exist (HTTP 404)."""
 
 
 class ConflictError(UnifiedBrokerInterfaceError):
-    """The order is no longer pending or open, so it cannot be changed (HTTP 409)."""
+    """The request conflicts with the account's state, such as an order no longer open, a position that is not held, or an order the engine read too late (HTTP 409)."""
 
 
 class OrderRejectedError(UnifiedBrokerInterfaceError):
@@ -68,7 +72,7 @@ class OrderRejectedError(UnifiedBrokerInterfaceError):
 
 
 class RateLimitError(UnifiedBrokerInterfaceError):
-    """The broker chosen for the order is at its order limit (HTTP 429)."""
+    """The broker chosen for the order is at its order limit, or has used its daily order cap (HTTP 429)."""
 
 
 class BrokerError(UnifiedBrokerInterfaceError):
@@ -76,7 +80,7 @@ class BrokerError(UnifiedBrokerInterfaceError):
 
 
 class ServiceUnavailableError(UnifiedBrokerInterfaceError):
-    """The requested data is stale or not being kept, or no broker can take the order (HTTP 503)."""
+    """The requested data is stale or not being kept, no broker can take the order, or a price reference cannot be resolved (HTTP 503)."""
 
 
 class OrderOutcomeUnknownError(UnifiedBrokerInterfaceError):
@@ -91,9 +95,14 @@ class UnreachableError(UnifiedBrokerInterfaceError):
     """The Unified Broker Interface could not be reached, so no response arrived."""
 
 
+class DirectPlacementError(UnifiedBrokerInterfaceError):
+    """UBI places orders directly rather than through its order engine, so it would ignore a price reference, a quantity reference or a synthetic order."""
+
+
 EXCEPTION_FOR_STATUS_CODE = {
     400: BadRequestError,
     401: AuthenticationError,
+    403: LossLockoutError,
     404: NotFoundError,
     409: ConflictError,
     422: OrderRejectedError,
