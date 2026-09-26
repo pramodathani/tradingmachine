@@ -373,6 +373,8 @@ class UnifiedBrokerInterface:
     ) -> None:
         """Raises the exception class that matches a failed response's status code.
 
+        The message is the body's `error` field, or its `status_message` when there is no `error`, which is how UBI's order engine explains a 504, or a generic message naming the status code.
+
         Args:
             response: The failed requests.Response.
             response_body: The parsed JSON body of the response, of any JSON type, or None.
@@ -383,6 +385,8 @@ class UnifiedBrokerInterface:
         message = None
         if isinstance(response_body, dict):
             message = response_body.get("error")
+            if not message:
+                message = response_body.get("status_message")
         if not message:
             message = f"UBI returned HTTP {response.status_code}"
         exception_class = exceptions.EXCEPTION_FOR_STATUS_CODE.get(

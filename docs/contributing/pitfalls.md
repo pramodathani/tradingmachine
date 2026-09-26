@@ -96,6 +96,16 @@ would refuse none of them. `place_order` guards against that by sending a dry ru
 book-based price wrappers, `reduce_position`, `liquidate_position` and every class in
 `tradingmachine.orders` depend on it; the market and limit wrappers and the holdings methods do not.
 
+## Engine mode without the engine makes every order time out
+
+UBI's API and its order engine are two processes. When the API is set to engine mode but the engine,
+`unified-orders@order_engine.service`, is not running, every placement is handed to a process that
+is not there, plain orders included, and UBI answers HTTP 504 after five seconds with "the order
+engine did not answer within 5.0 seconds, so this order may still be placed". That is raised as
+`OrderOutcomeUnknownError`. In this one situation nothing is placed later, because the engine
+refuses any order it reads more than 30 seconds after the caller stopped waiting, but the error
+cannot tell you that, so check the engine's service before assuming it.
+
 ## A synthetic order keeps trading after `place()` returns
 
 A trigger fires when the price arrives, a scheduled order goes out at its time, a bracket places

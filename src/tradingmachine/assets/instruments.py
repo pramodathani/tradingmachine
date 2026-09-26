@@ -931,7 +931,12 @@ class TradeableInstrument(Instrument):
         if needs_engine and not dry_run:
             if unified_broker_interface.placement_mode != "engine":
                 self._probe_placement_mode(body)
-        answer = unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
+        try:
+            answer = unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
+        except ubi_exceptions.UnifiedBrokerInterfaceError as error:
+            if needs_engine:
+                self._record_engine_refusal(error)
+            raise
         if needs_engine:
             self._record_placement_mode(answer, was_sent=not dry_run)
         return answer
@@ -955,10 +960,26 @@ class TradeableInstrument(Instrument):
                 body=probe_body,
             )
         except ubi_exceptions.UnifiedBrokerInterfaceError as error:
-            if isinstance(error.detail, dict) and "intent_id" in error.detail:
-                unified_broker_interface.placement_mode = "engine"
+            self._record_engine_refusal(error)
             raise
         self._record_placement_mode(answer, was_sent=False)
+
+    def _record_engine_refusal(
+        self,
+        error: ubi_exceptions.UnifiedBrokerInterfaceError,
+    ) -> None:
+        """Stores engine mode when a refusal shows UBI's order engine answered it.
+
+        A refusal says nothing about the mode unless its body carries an `intent_id`, because a malformed body is refused before the engine sees it.
+
+        Args:
+            error: The ubi_exceptions.UnifiedBrokerInterfaceError UBI answered an order with.
+
+        Raises:
+            Nothing.
+        """
+        if isinstance(error.detail, dict) and "intent_id" in error.detail:
+            self._unified_broker_interface.placement_mode = "engine"
 
     def _record_placement_mode(self, answer: dict, was_sent: bool) -> None:
         """Stores which placement mode an answer shows UBI to be in, and refuses direct mode.
