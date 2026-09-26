@@ -105,6 +105,7 @@ class FakeUnifiedBrokerInterfaceServer:
         issued_tokens: A list of the str tokens the connect route has issued, in order.
         valid_tokens: A set of the str tokens currently accepted.
         connect_answer: A PreparedAnswer that replaces the normal connect answer, or None.
+        connect_listener: A callable taking the new str token and its str expiry, called after each token is issued, as UBI stores each new token in its Redis, or None.
     """
 
     def __init__(self):
@@ -118,6 +119,7 @@ class FakeUnifiedBrokerInterfaceServer:
         self._lock = threading.Lock()
         self.valid_tokens = set()
         self.connect_answer = None
+        self.connect_listener = None
         self._answers = {}
         self._http_server = None
         self._thread = None
@@ -320,13 +322,16 @@ class FakeUnifiedBrokerInterfaceServer:
                 },
             )
         token = f"token-{len(self.issued_tokens) + 1}"
+        expires_at = "2099-01-01 07:00:00.000000"
         self.issued_tokens.append(token)
         self.valid_tokens.add(token)
+        if self.connect_listener is not None:
+            self.connect_listener(token, expires_at)
         return PreparedAnswer(
             200,
             {
                 "access-token": token,
-                "expires_at": "2099-01-01 07:00:00.000000",
+                "expires_at": expires_at,
             },
         )
 

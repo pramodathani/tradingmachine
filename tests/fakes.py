@@ -5,7 +5,11 @@ Typical usage example:
   monkeypatch.setattr(pymongo, "MongoClient", fakes.FakeMongoClientFactory(documents))
 """
 
+import json
 from typing import Any
+
+import pymongo.errors
+import redis
 
 from tests import fake_ubi_server
 
@@ -16,6 +20,7 @@ class FakeCollection:
     Attributes:
         documents: A list of dict documents.
         queries: A list of the dict filters passed to find_one, in order.
+        failing: A bool that is True to make find_one raise pymongo.errors.ServerSelectionTimeoutError.
     """
 
     def __init__(self, documents: list[dict]):
@@ -29,6 +34,7 @@ class FakeCollection:
         """
         self.documents = documents
         self.queries = []
+        self.failing = False
 
     def find_one(self, query: dict, projection: dict | None = None) -> dict | None:
         """Finds the first document whose fields match every field of the query.
@@ -41,9 +47,13 @@ class FakeCollection:
             A copy of the matching dict document, or None.
 
         Raises:
-            Nothing.
+            pymongo.errors.ServerSelectionTimeoutError: The collection is set to fail.
         """
         self.queries.append(query)
+        if self.failing:
+            raise pymongo.errors.ServerSelectionTimeoutError(
+                "MongoDB is down in this test"
+            )
         for document in self.documents:
             matches = True
             for name, value in query.items():
@@ -210,6 +220,164 @@ class SettingsDatabase:
         }
 
 
+class FakeRedisClient:
+    """A Redis client over prepared hashes, offering only the reads the library uses.
+
+    Attributes:
+        hashes: A dict of hash name to a dict of field to str value.
+        failing: A bool that is True to make every command raise redis.ConnectionError.
+        commands: A list of tuples (command name, hash name, fields) in the order received.
+        closed: A bool that is True once the client has been closed.
+        keyword_arguments: A dict of the keyword arguments the client was created with.
+    """
+
+    def __init__(self, hashes: dict, keyword_arguments: dict):
+        """Initialises the client.
+
+        Args:
+            hashes: A dict of hash name to a dict of field to str value, shared with the factory.
+            keyword_arguments: A dict of the keyword arguments redis.Redis was called with.
+
+        Raises:
+            Nothing.
+        """
+        self.hashes = hashes
+        self.failing = False
+        self.commands = []
+        self.closed = False
+        self.keyword_arguments = keyword_arguments
+
+    def hget(self, name: str, field: str) -> str | None:
+        """Reads one field of a hash.
+
+        Args:
+            name: The str hash name.
+            field: The str field.
+
+        Returns:
+            The str value, or None when the hash or field does not exist.
+
+        Raises:
+            redis.ConnectionError: The client is set to fail.
+        """
+        self._check("hget", name, [field])
+        return self.hashes.get(name, {}).get(field)
+
+    def hmget(self, name: str, fields: list[str]) -> list[str | None]:
+        """Reads several fields of a hash.
+
+        Args:
+            name: The str hash name.
+            fields: A list of str fields.
+
+        Returns:
+            A list of str values or None, one per field, in order.
+
+        Raises:
+            redis.ConnectionError: The client is set to fail.
+        """
+        self._check("hmget", name, list(fields))
+        stored = self.hashes.get(name, {})
+        values = []
+        for field in fields:
+            values.append(stored.get(field))
+        return values
+
+    def close(self) -> None:
+        """Closes the client.
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing.
+        """
+        self.closed = True
+
+    def _check(self, command: str, name: str, fields: list[str]) -> None:
+        """Records a command and raises when the client is set to fail.
+
+        Args:
+            command: The str command name.
+            name: The str hash name.
+            fields: A list of the str fields.
+
+        Returns:
+            None.
+
+        Raises:
+            redis.ConnectionError: The client is set to fail.
+        """
+        self.commands.append((command, name, fields))
+        if self.failing:
+            raise redis.ConnectionError("Redis is down in this test")
+
+
+class FakeRedisFactory:
+    """A replacement for redis.Redis that hands out FakeRedisClient objects over shared hashes.
+
+    Attributes:
+        hashes: A dict of hash name to a dict of field to str value.
+        clients: A list of every FakeRedisClient created, in order.
+    """
+
+    def __init__(self):
+        """Initialises the factory with no hashes.
+
+        Raises:
+            Nothing.
+        """
+        self.hashes = {}
+        self.clients = []
+
+    def __call__(self, **keyword_arguments: Any) -> FakeRedisClient:
+        """Creates a client, as redis.Redis would.
+
+        Args:
+            **keyword_arguments: The keyword arguments given to redis.Redis.
+
+        Returns:
+            A new FakeRedisClient over the shared hashes.
+
+        Raises:
+            Nothing.
+        """
+        created = FakeRedisClient(self.hashes, keyword_arguments)
+        self.clients.append(created)
+        return created
+
+    def set_failing(self, failing: bool) -> None:
+        """Makes every client created so far fail, or work again.
+
+        Args:
+            failing: A bool that is True to make commands raise.
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing.
+        """
+        for created in self.clients:
+            created.failing = failing
+
+    def store_json(self, name: str, field: str, value: Any) -> None:
+        """Stores a value as JSON in one field of a hash.
+
+        Args:
+            name: The str hash name.
+            field: The str field.
+            value: The value, of any JSON type.
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing.
+        """
+        self.hashes.setdefault(name, {})[field] = json.dumps(value)
+
+
 class FixedClock:
     """A clock that reports a time the test sets.
 
@@ -238,3 +406,17 @@ class FixedClock:
             Nothing.
         """
         return self.current
+
+    def advance(self, seconds: float) -> None:
+        """Moves the clock forward.
+
+        Args:
+            seconds: The float number of seconds to move by.
+
+        Returns:
+            None.
+
+        Raises:
+            Nothing.
+        """
+        self.current += seconds
