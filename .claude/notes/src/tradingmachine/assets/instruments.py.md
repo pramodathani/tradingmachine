@@ -52,7 +52,7 @@ The user fixed this inside UBI in a separate session on 2026-09-14. UBI's mappin
 
 ## Shared client
 
-UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/ubi_client/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `_get_shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
+UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/ubi_client/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
 
 ## No caching and no batching
 
@@ -532,3 +532,5 @@ One behaviour changed on purpose. A reduction larger than the position used to b
 `add_to_position` is unchanged. UBI's `add_to_position` kind is documented as the same as `absolute`: it does not read the position, so it cannot work out the direction, and the local logic is still what does the work. `_place_to_change_position` and `_open_a_new_position` now serve only it.
 
 `liquidate_all_positions` still reads `net_positions` once, because it must report the `margin_trading`, `cover` and `bracket` positions as ignored, and then calls `liquidate_position` with each tradeable product named, so each close is one request and reads nothing further here. It still catches `PositionError` alongside `UnifiedBrokerInterfaceError`, because an unrecognised product can still raise it. It deliberately does not call UBI's `POST /api/orders/flatten`, which the user chose on 2026-09-26: flatten cancels every open order and closes every position in the whole account, which is a different request from closing this instrument's positions. It lives on `tradingmachine.accounts.account.Account` instead.
+
+The accessor was named `_get_shared_unified_broker_interface` and private until 2026-09-26, when `tradingmachine.accounts.account.Account` needed the same client for `POST /api/orders/flatten`. An `Account` with a client of its own would connect separately and log every instrument out, so it had to share this one, and the method was made public as `shared_unified_broker_interface` rather than reached into from another module.

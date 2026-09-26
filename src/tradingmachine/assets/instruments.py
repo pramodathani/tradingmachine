@@ -161,7 +161,7 @@ class Instrument(
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         if unified_broker_interface is None:
-            unified_broker_interface = Instrument._get_shared_unified_broker_interface()
+            unified_broker_interface = Instrument.shared_unified_broker_interface()
         self._unified_broker_interface = unified_broker_interface
         lookup = {
             "instrument_id": instrument_id,
@@ -191,12 +191,12 @@ class Instrument(
         self.carried_by = details["carried_by"]
 
     @classmethod
-    def _get_shared_unified_broker_interface(
+    def shared_unified_broker_interface(
         cls,
     ) -> client.UnifiedBrokerInterface:
         """Returns the one client all instruments share, creating it on first use.
 
-        UBI holds a single access token, so separate clients would keep replacing each other's token. The client is stored on `Instrument` itself rather than on cls, so subclasses share the same one.
+        UBI holds a single access token, so separate clients would keep replacing each other's token. The client is stored on `Instrument` itself rather than on cls, so subclasses share the same one. It is public so that code outside the instruments, such as `tradingmachine.accounts.account.Account`, can share it too.
 
         Returns:
             The shared client.UnifiedBrokerInterface.
@@ -238,7 +238,7 @@ class Instrument(
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         if unified_broker_interface is None:
-            unified_broker_interface = cls._get_shared_unified_broker_interface()
+            unified_broker_interface = cls.shared_unified_broker_interface()
         answer = unified_broker_interface.get(
             SEARCH_PATH,
             params={
@@ -274,7 +274,7 @@ class Instrument(
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         if unified_broker_interface is None:
-            unified_broker_interface = cls._get_shared_unified_broker_interface()
+            unified_broker_interface = cls.shared_unified_broker_interface()
         rows = unified_broker_interface.get(
             MASTER_PATH,
             params={
