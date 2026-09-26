@@ -28,6 +28,7 @@ class RecordedRequest:
         query: A dict of the query string, with one str value per name.
         headers: A dict of the request headers, with lower-case str names.
         body: The parsed JSON body, of any JSON type, or None when there was none.
+        client_port: The int local port the request came from, which stays the same while a connection is reused.
     """
 
     def __init__(
@@ -37,6 +38,7 @@ class RecordedRequest:
         query: dict,
         headers: dict,
         body: Any,
+        client_port: int,
     ):
         """Initialises the record.
 
@@ -46,6 +48,7 @@ class RecordedRequest:
             query: A dict of the query string, with one str value per name.
             headers: A dict of the request headers, with lower-case str names.
             body: The parsed JSON body, of any JSON type, or None.
+            client_port: The int local port the request came from.
 
         Raises:
             Nothing.
@@ -55,6 +58,7 @@ class RecordedRequest:
         self.query = query
         self.headers = headers
         self.body = body
+        self.client_port = client_port
 
 
 class PreparedAnswer:
@@ -111,6 +115,7 @@ class FakeUnifiedBrokerInterfaceServer:
         """
         self.requests = []
         self.issued_tokens = []
+        self._lock = threading.Lock()
         self.valid_tokens = set()
         self.connect_answer = None
         self._answers = {}
@@ -267,9 +272,10 @@ class FakeUnifiedBrokerInterfaceServer:
         Raises:
             Nothing.
         """
-        self.requests.append(request)
-        if request.method == "POST" and request.path == "/api/session/connect":
-            return self._connect(request)
+        with self._lock:
+            self.requests.append(request)
+            if request.method == "POST" and request.path == "/api/session/connect":
+                return self._connect(request)
         if request.path != "/api/":
             token = request.headers.get("access-token")
             if token not in self.valid_tokens:
@@ -427,6 +433,7 @@ class _FakeRequestHandler(http.server.BaseHTTPRequestHandler):
             query,
             headers,
             body,
+            self.client_address[1],
         )
         prepared = self.fake_server.handle(request)
         self._write(prepared)
