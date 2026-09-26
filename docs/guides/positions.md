@@ -66,10 +66,30 @@ the position itself.
 with no position to read a direction from, the method needs to be told which way to open, and it
 needs a `product` for the same reason.
 
-`tradingmachine.assets.exceptions.PositionError` covers the three ways this can go wrong: there is no position to
-act on, several are held and none was named, or a reduction is larger than the position. That last
-one is refused rather than sent, because closing more than you hold would open a new position the
-other way round.
+### Who works out the direction
+
+`add_to_position` reads the position here and works the direction out itself, because UBI's own
+`add_to_position` reference does not read the position.
+
+`reduce_position` and `liquidate_position` hand that work to UBI. Each sends one order carrying a
+`quantity_reference`, `reduce_position` or `liquidate_position`, and UBI reads the position at the
+moment it sends the order, chooses the side and sizes the order. Two behaviours follow from that.
+
+| Situation | What happens |
+| --- | --- |
+| `reduce_position` asks for more than is held | UBI closes the whole position. It never sends more than is held, so it never opens a new position the other way round |
+| A product is named that is not held | UBI answers HTTP 409, raised as `ConflictError` |
+| No product is named | The positions are read here once, to find the only one held |
+
+Both orders are marked as closing a position, so they may use the share of a broker's daily order
+cap that UBI keeps for exits. Because they rely on a quantity reference, they need UBI's order
+engine and raise `DirectPlacementError` when UBI is placing orders directly. See
+[Orders](orders.md).
+
+`tradingmachine.assets.exceptions.PositionError` covers what is still checked here: there is no
+position to act on and none was named, several are held and none was named, a product was named
+that is not `cnc`, `mis` or `nrml`, or `add_to_position` was given a side that would reduce the
+position rather than add to it.
 
 ## The product name changes between reading and ordering
 
@@ -99,8 +119,11 @@ every position, including these three, because they are still real money.
 
 ## What `liquidate_all_positions` returns
 
-It closes each position separately and attempts every one even when an earlier one fails, so a
-single refusal does not leave the rest open. The outcome is a frame with one row per position, or
+It reads the positions once to list them, then closes each one with its own
+`liquidate_position` order, and attempts every one even when an earlier one fails, so a single
+refusal does not leave the rest open. It closes only this instrument's positions. To cancel every
+open order and close every position in the whole account, use `Account.flatten`; see
+[Account](account.md). The outcome is a frame with one row per position, or
 `None` when the instrument holds no position at all.
 
 | Column | What it holds |

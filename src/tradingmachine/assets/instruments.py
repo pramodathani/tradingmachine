@@ -2759,12 +2759,12 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Makes an existing position smaller, without turning it around.
 
-        The direction is the opposite of the position: a long position is reduced by selling and a short one by buying. Asking for more than the position holds is refused rather than sent, because that would close the position and open a new one the other way round.
+        UBI works the direction out from the position when it sends the order: a long position is reduced by selling and a short one by buying. It also caps the order at what is held, so asking for more than the position closes the whole position and never opens a new one the other way round.
 
-        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`.
+        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`. When no product is named, the positions are read once to find the only one held; when one is named, nothing is read here and UBI reads the positions itself.
 
         Args:
-            quantity: The int quantity to close, in underlying units and always positive, whichever way the position points.
+            quantity: The int largest quantity to close, in underlying units and always positive, whichever way the position points.
             product: The str product of the position to reduce, `cnc`, `mis` or `nrml`, or None when only one position is held.
             price: The float limit price in rupees, or None to send a market order.
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
@@ -2775,23 +2775,15 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            PositionError: Nothing is held in this instrument, or several positions are held and none was named, or the quantity is larger than the position.
-            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+            PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
+            ConflictError: The product named is not held in this instrument.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the quantity reference; nothing was sent.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        row = self._position_row(product)
-        held = abs(row["quantity"])
-        if quantity > held:
-            raise exceptions.PositionError(
-                f"The position under {row['product']} is {row['quantity']}, so {quantity} cannot be closed without opening a new position the other way round: {self!r}"
-            )
-        if row["quantity"] > 0:
-            direction = "sell"
-        else:
-            direction = "buy"
-        return self._place_to_change_position(
-            transaction_type=direction,
+        return self._place_to_close_position(
+            kind="reduce_position",
             quantity=quantity,
-            product=ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]],
+            product=product,
             price=price,
             validity=validity,
             after_market=after_market,
@@ -2808,9 +2800,9 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Closes one position in this instrument completely.
 
-        This is `reduce_position` by the whole size of the position, so a long position is sold and a short one is bought back.
+        UBI reads the position when it sends the order and closes the whole of it, so a long position is sold and a short one is bought back.
 
-        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`.
+        Only positions held under `cnc`, `mis` and `nrml` are visible here, for the reason given on `add_to_position`. When no product is named, the positions are read once to find the only one held; when one is named, nothing is read here and UBI reads the positions itself.
 
         Args:
             product: The str product of the position to close, `cnc`, `mis` or `nrml`, or None when only one position is held.
@@ -2823,17 +2815,80 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            PositionError: Nothing is held in this instrument, or several positions are held and none was named.
-            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+            PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
+            ConflictError: The product named is not held in this instrument.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the quantity reference; nothing was sent.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        row = self._position_row(product)
-        return self.reduce_position(
-            quantity=int(abs(row["quantity"])),
-            product=ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]],
+        return self._place_to_close_position(
+            kind="liquidate_position",
+            quantity=None,
+            product=product,
             price=price,
             validity=validity,
             after_market=after_market,
             tag=tag,
+        )
+
+    def _place_to_close_position(
+        self,
+        kind: str,
+        quantity: int | None,
+        product: str | None,
+        price: float | None,
+        validity: str | None,
+        after_market: bool,
+        tag: str | None,
+    ) -> dict:
+        """Sends an order that UBI sizes and directs from the position it closes.
+
+        The side sent is only a placeholder, because UBI replaces it with the one that closes the position. The order is marked as closing a position, so it may use the part of a broker's daily order cap that UBI keeps for exits.
+
+        Args:
+            kind: The str quantity reference kind, `reduce_position` or `liquidate_position`.
+            quantity: The int largest quantity to close, or None to close the whole position.
+            product: The str order product of the position, `cnc`, `mis` or `nrml`, or None to use the only position held.
+            price: The float limit price in rupees, or None to send a market order.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns.
+
+        Raises:
+            PositionError: No product was named and there is not exactly one position, or the product is not `cnc`, `mis` or `nrml`.
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        if product is None:
+            row = self._position_row(None)
+            product = ORDER_PRODUCT_FOR_POSITION_PRODUCT[row["product"]]
+        position_product = POSITION_PRODUCT_FOR_ORDER_PRODUCT.get(product.lower())
+        if position_product is None:
+            raise exceptions.PositionError(
+                f"Positions can be closed only under cnc, mis or nrml, not {product!r}: {self!r}"
+            )
+        if price is None:
+            order_type = "market"
+        else:
+            order_type = "limit"
+        return self.place_order(
+            transaction_type="sell",
+            order_type=order_type,
+            quantity=quantity,
+            product=product,
+            price=price,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+            quantity_reference={
+                "kind": kind,
+                "product": position_product,
+            },
+            synthetic={
+                "type": "simple",
+                "closes_position": True,
+            },
         )
 
     def liquidate_all_positions(
@@ -2845,7 +2900,7 @@ class TradeableInstrument(Instrument):
     ) -> pd.DataFrame | None:
         """Closes every position this instrument holds, under every product.
 
-        Each position is closed on its own, and every one is attempted even when an earlier one fails, so a single refusal does not leave the rest open. A position held under a product UBI cannot send an order for, which is `margin_trading`, `cover` or `bracket`, is reported as ignored rather than passed over in silence, and has to be closed at the broker directly.
+        The positions are read once to list them, and each is then closed with its own order, which UBI sizes and directs from the position when it sends it. Every one is attempted even when an earlier one fails, so a single refusal does not leave the rest open. A position held under a product UBI cannot send an order for, which is `margin_trading`, `cover` or `bracket`, is reported as ignored rather than passed over in silence, and has to be closed at the broker directly.
 
         Args:
             price: The float limit price in rupees for every order, or None to send market orders.
