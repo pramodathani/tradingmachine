@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state of the repository
 
-The repository is a git repository on the `main` branch, tracking `origin/main`. It is an installable Python library named `tradingmachine`, converted from a flat script layout on 2026-09-20. It holds a `pyproject.toml` with the library's metadata, dependencies and hatchling build backend, a `requirements.txt` pinning the wider development environment, a `README.md` describing the project, a `docker-compose.yml` for the local databases, an `mkdocs.yml`, a `docs/` tree and a `.github/workflows/docs.yml` for the documentation site, a `scripts/` directory for the documentation build tooling, and a Python 3.14 virtual environment in `.venv/` with the library installed editable. There is no `ruff.toml`, no `[tool.ruff]` section and no test suite. There is no `LICENSE` file either, and `pyproject.toml` deliberately declares no licence until one is chosen.
+The repository is a git repository on the `main` branch, tracking `origin/main`. It is an installable Python library named `tradingmachine`, converted from a flat script layout on 2026-09-20. It holds a `pyproject.toml` with the library's metadata, dependencies and hatchling build backend, a `requirements.txt` pinning the wider development environment, a `README.md` describing the project, a `docker-compose.yml` for the local databases, an `mkdocs.yml`, a `docs/` tree and a `.github/workflows/docs.yml` for the documentation site, a `scripts/` directory for the documentation build tooling, and a Python 3.14 virtual environment in `.venv/` with the library installed editable. There is no `ruff.toml` and no `[tool.ruff]` section. A `tests/` directory holds a pytest suite that runs offline, against a fake UBI server on a local port, so it never places an order. There is no `LICENSE` file either, and `pyproject.toml` deliberately declares no licence until one is chosen.
 
 All library code lives under `src/tradingmachine`, so the repository root is not importable and the library must be installed before it can be used. The source code so far is the client for the sibling project's REST API, the configuration it reads, the instrument classes built on it, the synthetic order classes and the account:
 
@@ -89,7 +89,7 @@ Use the interpreter and tools inside `.venv/` directly rather than any system-wi
 
 `pyproject.toml` declares only the seven packages the library imports: `backtesting`, `numpy`, `pandas`, `pymongo`, `python-dotenv`, `requests` and `TA-Lib`. The `docs` extra holds the MkDocs toolchain and the `development` extra holds `ruff` and `build`. Everything else the project may eventually want, such as `streamlit`, `selenium` and `yfinance`, stays pinned in `requirements.txt` as the development environment and is not a dependency of the library.
 
-`pytest` is in neither file and is not installed, so it must be added before tests can be run.
+`pytest` is in the `development` extra and its settings are under `[tool.pytest.ini_options]` in `pyproject.toml`. Run the suite with `.venv/bin/python -m pytest`. The tests send real HTTP requests to `tests/fake_ubi_server.py`, which issues its own tokens, and replace `pymongo.MongoClient` with the fakes in `tests/fakes.py`, so nothing reaches UBI, a broker or a database.
 
 `TA-Lib` is a Python wrapper around a native C library. It imports correctly in the current `.venv`, but recreating the environment on another machine requires the TA-Lib C library to be installed first.
 

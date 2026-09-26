@@ -182,7 +182,7 @@ This project keeps no explanatory comments in source files. Reasoning, trade-off
 
 ## Tests and lint
 
-There is no test suite. `pytest` is not in `requirements.txt` and is not installed, and that is not only inertia: exercising the order routes against UBI means placing real orders at a real broker. What verification exists is recorded in the sidecar notes, as live checks against a running UBI on a stated date, and each note says plainly whether any order was sent.
+The test suite in `tests/` runs offline with `.venv/bin/python -m pytest`, after installing the `development` extra. It covers the REST client, the read-only market data classes and the analysis over a given candle frame, against a fake UBI server on a local port, so it never places an order. The order routes are not covered, because exercising them against UBI means placing real orders at a real broker; what verification exists for them is recorded in the sidecar notes, as live checks against a running UBI on a stated date, and each note says plainly whether any order was sent.
 
 ```bash
 .venv/bin/ruff check .          # ruff 0.11.2, no config file, so default rules

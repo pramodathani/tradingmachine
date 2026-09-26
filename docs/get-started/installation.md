@@ -85,7 +85,7 @@ A quick check that the Python version, the TA-Lib wrapper and the library are al
     ```
 
 !!! note "The repository root is not importable"
-    All library code lives under `src/tradingmachine`, so `from tradingmachine.assets import equities` works only once the library is installed. There is no test suite, and `pytest` is not installed, because exercising the order routes means placing real orders.
+    All library code lives under `src/tradingmachine`, so `from tradingmachine.assets import equities` works only once the library is installed. The offline test suite in `tests/` runs with `.venv/bin/python -m pytest` once the `development` extra is installed. It never places an order, because it talks to a fake UBI server on a local port.
 
 ## 4. Start the containers
 
