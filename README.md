@@ -38,7 +38,7 @@ tradingmachine.assets.instruments          ◄──── tradingmachine.assets
     │   quotes, order book,         inherits: ~190 methods over
     │   orders, positions           the candles
     ▼
-tradingmachine.ubi_client   ◄──── tradingmachine.utilities.configuration
+tradingmachine.unified_broker_interface    ◄──── tradingmachine.utilities.configuration
     │   the session, the token,     the environment, .env and
     │   one retry, typed errors     the MongoDB connection string
     ▼
@@ -159,7 +159,7 @@ src/tradingmachine/orders/
 src/tradingmachine/accounts/
 └── account.py             Account, whose flatten is UBI's kill switch
 
-src/tradingmachine/ubi_client/
+src/tradingmachine/unified_broker_interface/
 ├── client.py              UnifiedBrokerInterface: connect, disconnect, status, get, post, …
 └── exceptions.py          one error class per HTTP status code UBI returns
 

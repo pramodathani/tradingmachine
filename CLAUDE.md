@@ -9,26 +9,26 @@ The repository is a git repository on the `main` branch, tracking `origin/main`.
 All library code lives under `src/tradingmachine`, so the repository root is not importable and the library must be installed before it can be used. The source code so far is the client for the sibling project's REST API, the configuration it reads, the instrument classes built on it, the synthetic order classes and the account:
 
 ```
-src/tradingmachine/utilities/configuration.py   Configuration, which reads the environment and .env lazily
-src/tradingmachine/ubi_client/client.py         UnifiedBrokerInterface: connect, disconnect, status, get, post, put, patch, delete
-src/tradingmachine/ubi_client/exceptions.py     one error class per HTTP status code UBI returns
-src/tradingmachine/assets/instruments.py        Instrument, TradeableInstrument, NonTradeableInstrument
-src/tradingmachine/assets/equities.py           the six equity-family classes, one per UBI equity segment
-src/tradingmachine/assets/fixed_income.py       the six fixed income classes, one per UBI fixed income segment
-src/tradingmachine/assets/commodities.py        the six commodity classes, one per UBI commodity segment
-src/tradingmachine/assets/currencies.py         the six currency classes, one per UBI currency segment
-src/tradingmachine/assets/funds.py              ExchangeTradedFund and InvestmentTrust, which trade like shares
-src/tradingmachine/assets/mutual_funds.py       MutualFund, which is held rather than traded
-src/tradingmachine/assets/exceptions.py         InstrumentError and its thirty-one subclasses
-src/tradingmachine/assets/analysis/             thirteen classes of candle analysis that Instrument inherits
-src/tradingmachine/orders/synthetic_order.py    SyntheticOrder, the shared base of the synthetic order types
-src/tradingmachine/orders/order_candidate.py    OrderCandidate, one leg of a multi-instrument synthetic order
-src/tradingmachine/orders/exposure_watch.py     ExposureWatch, one watched instrument of an exposure hedge
-src/tradingmachine/orders/                      one module per UBI synthetic order type, forty-two in all
-src/tradingmachine/accounts/account.py          Account, whose flatten is UBI's account-wide kill switch
-scripts/gen_ref_pages.py                        builds the API reference at documentation build time
-scripts/documentation_hooks.py                  silences one griffe warning during a strict docs build
-.github/workflows/docs.yml                      builds the documentation site and publishes it on GitHub Pages
+src/tradingmachine/utilities/configuration.py               Configuration, which reads the environment and .env lazily
+src/tradingmachine/unified_broker_interface/client.py       UnifiedBrokerInterface: connect, disconnect, status, get, post, put, patch, delete
+src/tradingmachine/unified_broker_interface/exceptions.py   one error class per HTTP status code UBI returns
+src/tradingmachine/assets/instruments.py                    Instrument, TradeableInstrument, NonTradeableInstrument
+src/tradingmachine/assets/equities.py                       the six equity-family classes, one per UBI equity segment
+src/tradingmachine/assets/fixed_income.py                   the six fixed income classes, one per UBI fixed income segment
+src/tradingmachine/assets/commodities.py                    the six commodity classes, one per UBI commodity segment
+src/tradingmachine/assets/currencies.py                     the six currency classes, one per UBI currency segment
+src/tradingmachine/assets/funds.py                          ExchangeTradedFund and InvestmentTrust, which trade like shares
+src/tradingmachine/assets/mutual_funds.py                   MutualFund, which is held rather than traded
+src/tradingmachine/assets/exceptions.py                     InstrumentError and its thirty-one subclasses
+src/tradingmachine/assets/analysis/                         thirteen classes of candle analysis that Instrument inherits
+src/tradingmachine/orders/synthetic_order.py                SyntheticOrder, the shared base of the synthetic order types
+src/tradingmachine/orders/order_candidate.py                OrderCandidate, one leg of a multi-instrument synthetic order
+src/tradingmachine/orders/exposure_watch.py                 ExposureWatch, one watched instrument of an exposure hedge
+src/tradingmachine/orders/                                  one module per UBI synthetic order type, forty-two in all
+src/tradingmachine/accounts/account.py                      Account, whose flatten is UBI's account-wide kill switch
+scripts/gen_ref_pages.py                                    builds the API reference at documentation build time
+scripts/documentation_hooks.py                              silences one griffe warning during a strict docs build
+.github/workflows/docs.yml                                  builds the documentation site and publishes it on GitHub Pages
 ```
 
 `scripts/` is deliberately outside the package, because those two files only run inside a MkDocs build and should not ship to anyone installing the library.
@@ -43,7 +43,7 @@ On top of `place_order` sit thirty-two wrappers whose names say where the price 
 
 The `positions_value` and `positions_pnl` properties add up what the instrument's positions are worth and what they have made. UBI prices a holding but not a position, so the value is the signed quantity times the last price, added across products, and it is None when any position has no last price rather than a total quietly missing a part. Both count every position, including the three kinds UBI cannot place an order for, because they are still real money.
 
-UBI gained an order engine on 2026-09-23, and the user decided on 2026-09-26 that order types are built in UBI rather than here. So anything UBI can work out itself is sent as a description: `place_order` takes `price_reference`, `quantity_reference` and `synthetic` dicts after `dry_run`, and `quantity` may be None when a reference supplies it. UBI acts on those only in engine mode and silently ignores them in direct mode, so before the first such order `place_order` sends the same body as a dry run and raises `tradingmachine.ubi_client.exceptions.DirectPlacementError`, sending nothing, unless the answer carries the `intent_id` the engine adds; the finding is kept on the shared client as `placement_mode`. Plain orders are untouched and work in either mode.
+UBI gained an order engine on 2026-09-23, and the user decided on 2026-09-26 that order types are built in UBI rather than here. So anything UBI can work out itself is sent as a description: `place_order` takes `price_reference`, `quantity_reference` and `synthetic` dicts after `dry_run`, and `quantity` may be None when a reference supplies it. UBI acts on those only in engine mode and silently ignores them in direct mode, so before the first such order `place_order` sends the same body as a dry run and raises `tradingmachine.unified_broker_interface.exceptions.DirectPlacementError`, sending nothing, unless the answer carries the `intent_id` the engine adds; the finding is kept on the shared client as `placement_mode`. Plain orders are untouched and work in either mode.
 
 `src/tradingmachine/orders/` holds one self-contained class for each of the forty-two synthetic order types in UBI's registry, each in its own module with UBI's abbreviations spelled out (`oto` is `one_triggers_other`, `gtt` is `good_till_triggered`, `atr_trail` is `average_true_range_trail`). Each takes an instrument, the order template's fields and its own settings, all by keyword, and `place()` sends it through `place_order`; nothing is validated locally. In the price-trigger types and the hidden stops UBI's synthetic `trigger_price` is the level that fires the order, so those classes store it as `trigger_level`. The multi-instrument types take `OrderCandidate` or `ExposureWatch` objects, and the first candidate anchors the request. UBI's count of forty-eight order types comes from the "Synthetic Order Atlas" artifact: forty are classes, `simple` and `virtual_limit` are classes that are not Atlas rows, and eight need no class and are reached through the price wrappers, `validity`, plain `sl` orders, `Account.flatten` and `LossLockoutError`. The Atlas's group G is mostly unbuilt in UBI, as the former Known issues page lists; the documentation rebuild of 2026-09-26 removed that page, and `git show b5761c0:docs/contributing/known-issues.md` still prints it.
 
@@ -65,7 +65,7 @@ With these seven modules, every asset class the old project had is ported. What 
 
 Instruments can also be found rather than only named. `Equity.search` and `EquityIndex.search` look a symbol up by part of its name, and the four derivative classes offer `expiries`, `contracts`, `strikes` and `chain`, each supplying its own segment. These read `/api/instruments/master` rather than `/api/instruments/search`, because the search route sorts by expiry ascending, caps at 200 rows and takes no offset, so every live contract sits behind thousands of expired ones. They return a pandas DataFrame of identities rather than instrument objects, since a 214-contract option chain would otherwise mean 214 lookups, and expired contracts are left out unless `include_expired=True`.
 
-Imports use full package paths from the top-level package (`from tradingmachine.ubi_client import client`), and they work from any directory once the library is installed. Reasoning behind each file is in `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`.
+Imports use full package paths from the top-level package (`from tradingmachine.unified_broker_interface import client`), and they work from any directory once the library is installed. Reasoning behind each file is in `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`.
 
 ## The Unified Broker Interface (UBI)
 
@@ -73,7 +73,7 @@ The sibling project `../unified_broker_interface` exposes REST APIs for trading 
 
 `UnifiedBrokerInterface` reads UBI's api key and secret from this project's MongoDB, from the `settings` document `{"broker_name": "unified_broker_interface", "api_key": ..., "api_secret": ...}`, which must match the same document in UBI's own MongoDB. It was seeded by hand and is not created by any code.
 
-UBI holds one access token for the whole application, and it expires after a day by default. Every `connect` replaces it, which logs out any other client using UBI, including UBI's REST API test page. The client reconnects and retries once when a request gets HTTP 401. See `.claude/notes/src/tradingmachine/ubi_client/client.py.md`.
+UBI holds one access token for the whole application, and it expires after a day by default. Every `connect` replaces it, which logs out any other client using UBI, including UBI's REST API test page. The client reconnects and retries once when a request gets HTTP 401. See `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md`.
 
 The library assumes UBI runs with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`, which the user's UBI `.env` sets. The price-reference wrappers, `reduce_position`, `liquidate_position` and every class in `tradingmachine.orders` depend on it, and `place_order` refuses to send their orders otherwise.
 
@@ -133,7 +133,7 @@ The pinned dependencies suggest what the project is for. Apart from the UBI clie
 | Area | Packages |
 |---|---|
 | Market data | UBI's REST API through `tradingmachine.assets.instruments`, which is implemented; `yfinance`, `beautifulsoup4`, `selenium`, `websocket-client`, `websockets` |
-| Broker access | `requests` through `ubi_client`, which is implemented; `pyotp` (time-based one-time passwords) |
+| Broker access | `requests` through `unified_broker_interface`, which is implemented; `pyotp` (time-based one-time passwords) |
 | Analysis and backtesting | `pandas`, `numpy`, `TA-Lib` and `backtesting` through `tradingmachine.assets.analysis`, which is implemented; `opstrat` |
 | Storage | `redis`, `pymongo`, `psycopg2-binary`, `SQLAlchemy`, `peewee` |
 | Interfaces | `streamlit`, `Flask`, `textual`, `uvicorn`, `gunicorn` |

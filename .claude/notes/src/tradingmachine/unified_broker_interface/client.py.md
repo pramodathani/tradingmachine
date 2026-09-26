@@ -1,6 +1,6 @@
-# src/tradingmachine/ubi_client/client.py
+# src/tradingmachine/unified_broker_interface/client.py
 
-This module holds `UnifiedBrokerInterface`, a thin wrapper around the REST API of the sibling project `unified_broker_interface` (UBI). It adds no knowledge of UBI's routes: callers pass the path, such as `/api/orders/place`, and get the parsed JSON back. It was adapted from `src/tradingmachine/ubi_client/client.py` in the old tradingmachine project, kept at `/run/media/pramod/6959D90B1DAD7E59/backup_20260910/pramod/Downloads/tradingmachine-master/`, and it adds a `patch` method.
+This module holds `UnifiedBrokerInterface`, a thin wrapper around the REST API of the sibling project `unified_broker_interface` (UBI). It adds no knowledge of UBI's routes: callers pass the path, such as `/api/orders/place`, and get the parsed JSON back. It was adapted from `src/tradingmachine/ubi_client/client.py` in the old tradingmachine project, kept at `/run/media/pramod/6959D90B1DAD7E59/backup_20260910/pramod/Downloads/tradingmachine-master/`, and it adds a `patch` method. The package was called `tradingmachine.ubi_client` until 2026-09-26, when the user renamed it `tradingmachine.unified_broker_interface` to spell the name out in full.
 
 ## How a request flows
 

@@ -1,6 +1,6 @@
 """Errors raised by the instrument classes in `tradingmachine.assets.instruments`, `tradingmachine.assets.equities`, `tradingmachine.assets.fixed_income`, `tradingmachine.assets.commodities`, `tradingmachine.assets.currencies`, `tradingmachine.assets.funds` and `tradingmachine.assets.mutual_funds`.
 
-These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or a position or holding that cannot be changed as asked. Failures of the request to UBI stay as the classes in `tradingmachine.ubi_client.exceptions`, chained onto these where one caused the other.
+These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or a position or holding that cannot be changed as asked. Failures of the request to UBI stay as the classes in `tradingmachine.unified_broker_interface.exceptions`, chained onto these where one caused the other.
 
 Typical usage example:
 

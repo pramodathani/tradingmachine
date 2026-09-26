@@ -26,7 +26,7 @@ The sibling's version is a module-level script, with the loop and the conditiona
 
 `EXCLUDED_PARTS` used to list `gen_ref_pages` and `documentation_hooks` as well. Both entries went away when the two files moved to `scripts/`, because a file outside the tree being walked cannot be found in the first place.
 
-`src/tradingmachine/assets/__init__.py`, `src/tradingmachine/assets/analysis/__init__.py`, `src/tradingmachine/ubi_client/__init__.py` and `src/tradingmachine/utilities/__init__.py` are all empty today, so all four are skipped and get no index page. `src/tradingmachine/__init__.py`, `src/tradingmachine/accounts/__init__.py` and `src/tradingmachine/orders/__init__.py` have docstrings, so `tradingmachine`, `accounts` and `orders` each get an index page. A subpackage that gains a docstring later will get one without any edit here.
+`src/tradingmachine/assets/__init__.py`, `src/tradingmachine/assets/analysis/__init__.py`, `src/tradingmachine/unified_broker_interface/__init__.py` and `src/tradingmachine/utilities/__init__.py` are all empty today, so all four are skipped and get no index page. `src/tradingmachine/__init__.py`, `src/tradingmachine/accounts/__init__.py` and `src/tradingmachine/orders/__init__.py` have docstrings, so `tradingmachine`, `accounts` and `orders` each get an index page. A subpackage that gains a docstring later will get one without any edit here.
 
 ## Two roots, not one
 

@@ -45,7 +45,7 @@ Three entries moved when the project became an installable library on 2026-09-20
 | `hooks` | `scripts/documentation_hooks.py` | `scripts/documentation_hooks.py` |
 | `gen-files` `scripts` | `scripts/gen_ref_pages.py` | `scripts/gen_ref_pages.py` |
 | mkdocstrings `paths` | `[.]` | `[src]` |
-| `watch` | `assets`, `ubi_client`, `utilities` | `src` |
+| `watch` | `assets`, `unified_broker_interface`, `utilities` | `src` |
 
 `paths: [src]` is the one that is easy to get wrong. It is the import path mkdocstrings resolves an identifier such as `tradingmachine.assets.equities` against. Leaving it at `[.]` happens to keep working while the library is installed editable, because the identifier then resolves through the installed package instead, and it fails on a machine where it is not installed. Naming `src` makes the build depend on the source tree rather than on the state of the environment.
 

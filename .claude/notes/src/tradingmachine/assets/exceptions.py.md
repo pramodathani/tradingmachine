@@ -8,7 +8,7 @@ Every asset class's errors are flat siblings directly under `InstrumentError`, w
 
 `TradeableInstrumentError` and `NonTradeableInstrumentError` inherit from `InstrumentError`, so `except InstrumentError` catches every instrument problem. In the old hierarchy they inherited from the root instead.
 
-Transport failures stay as `tradingmachine.ubi_client.exceptions` classes and are chained onto these with `raise ... from error` where one causes the other, as in the old design. That keeps "UBI could not answer" separate from "the instrument is wrong".
+Transport failures stay as `tradingmachine.unified_broker_interface.exceptions` classes and are chained onto these with `raise ... from error` where one causes the other, as in the old design. That keeps "UBI could not answer" separate from "the instrument is wrong".
 
 ## OrderError, removed on 2026-09-26
 
@@ -18,7 +18,7 @@ Transport failures stay as `tradingmachine.ubi_client.exceptions` classes and ar
 
 It inherits from `InstrumentError`, which the user chose on 2026-09-20. The old project deliberately did the opposite: its `OrderException` descended straight from the root, on the reasoning that an order problem is not an instrument problem, so `except InstrumentException` did not catch it. The choice here keeps one catch, `except InstrumentError`, working for every domain problem this package raises, which is the same reasoning that put the six equity errors under it.
 
-A broker's refusal of an order is not an `OrderError`. That is `tradingmachine.ubi_client.exceptions.OrderRejectedError`, from HTTP 422, and it stays on the transport side along with `ConflictError` and `OrderOutcomeUnknownError`.
+A broker's refusal of an order is not an `OrderError`. That is `tradingmachine.unified_broker_interface.exceptions.OrderRejectedError`, from HTTP 422, and it stays on the transport side along with `ConflictError` and `OrderOutcomeUnknownError`.
 
 ## PositionError
 

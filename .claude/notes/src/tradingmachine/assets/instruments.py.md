@@ -52,7 +52,7 @@ The user fixed this inside UBI in a separate session on 2026-09-14. UBI's mappin
 
 ## Shared client
 
-UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/ubi_client/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
+UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
 
 ## No caching and no batching
 
@@ -183,7 +183,7 @@ The net bucket's member is called `net_positions` rather than plain `positions`,
 
 ### No new exception classes
 
-`src/tradingmachine/assets/exceptions.py` did not change on 2026-09-20. (`OrderError` was added later that day with the wrappers, and removed on 2026-09-26 when they moved onto price references; `PositionError` and `HoldingError` came with the position and holdings methods.) Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/ubi_client/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
+`src/tradingmachine/assets/exceptions.py` did not change on 2026-09-20. (`OrderError` was added later that day with the wrappers, and removed on 2026-09-26 when they moved onto price references; `PositionError` and `HoldingError` came with the position and holdings methods.) Because nothing is validated locally, there is no domain error to raise, and `src/tradingmachine/unified_broker_interface/exceptions.py` already maps every status these routes return: 409 to `ConflictError`, 422 to `OrderRejectedError`, 429 to `RateLimitError` and 504 to `OrderOutcomeUnknownError`. Those four classes were added in September for exactly this, before any order method existed.
 
 Two of them deserve care from callers. A 504 `OrderOutcomeUnknownError` means the order was sent and its fate is unknown, so the order book must be read before sending it again. A 503 from a read route does not mean a broker is down; it means UBI's own background aggregator stopped writing the document.
 

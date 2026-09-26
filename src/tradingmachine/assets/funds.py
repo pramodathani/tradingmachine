@@ -23,7 +23,7 @@ import pandas as pd
 
 from tradingmachine.assets import exceptions
 from tradingmachine.assets import instruments
-from tradingmachine.ubi_client import client
+from tradingmachine.unified_broker_interface import client
 
 HOLDINGS_PATH = "/api/portfolio/holdings"
 
