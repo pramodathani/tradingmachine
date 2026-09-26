@@ -31,7 +31,7 @@ As with commodities, and for the same reason: UBI's `CASH_SEGMENTS` does not inc
 
 ## A currency pair cannot be ordered or quoted
 
-`Currency` is built on `TradeableInstrument`, because its segment does not end in `_indices`, so it inherits `place_order`, the twenty-eight price wrappers and the order-book methods. None of them can work. Its rows are the exchange's underlying reference records, reached through Kotak's `UNDCUR` and Stoxkart's `UNDCUR` and `CUR` instrument types, rather than tradeable spot contracts; no broker declares a cash market for the currency asset class; and UBI's contract size check refuses any order in this family that is not a future or an option.
+`Currency` is built on `TradeableInstrument`, because its segment does not end in `_indices`, so it inherits `place_order`, the thirty-two price wrappers and the order-book methods. None of them can work. Its rows are the exchange's underlying reference records, reached through Kotak's `UNDCUR` and Stoxkart's `UNDCUR` and `CUR` instrument types, rather than tradeable spot contracts; no broker declares a cash market for the currency asset class; and UBI's contract size check refuses any order in this family that is not a future or an option.
 
 Having a method is not the same as the method working. The live check confirms that `Currency` reports `hasattr(pair, "bids")` as True while `last_price` raises `ServiceUnavailableError`, because no broker's tick stream resolves a token to a `currencies` row: every currency venue code maps to the derivative family, and a `currencies` row is not in it.
 

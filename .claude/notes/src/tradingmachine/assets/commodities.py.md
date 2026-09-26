@@ -41,7 +41,7 @@ UBI's own documentation records that these markets were opened on 2026-09-15 bef
 
 ## Neither a commodity nor a commodity index can be ordered
 
-`Commodity` is built on `TradeableInstrument`, because its segment does not end in `_indices`, so it inherits `place_order` and all twenty-eight price wrappers. Every one of them will be refused, for two independent reasons found in UBI's source: no broker declares a cash market for the commodity asset class, so broker selection passes every broker over, and UBI's contract size check refuses any non-securities order whose shape is not a future or an option. The rows in `commodities` are the exchange's underlying reference records, reached through Stoxkart's `SPOT` instrument type and Kotak's `COM` and `UNDCOM` types, not tradeable spot contracts.
+`Commodity` is built on `TradeableInstrument`, because its segment does not end in `_indices`, so it inherits `place_order` and all thirty-two price wrappers. Every one of them will be refused, for two independent reasons found in UBI's source: no broker declares a cash market for the commodity asset class, so broker selection passes every broker over, and UBI's contract size check refuses any non-securities order whose shape is not a future or an option. The rows in `commodities` are the exchange's underlying reference records, reached through Stoxkart's `SPOT` instrument type and Kotak's `COM` and `UNDCOM` types, not tradeable spot contracts.
 
 `CommodityIndex` cannot be traded either, by the ordinary rule that an `_indices` segment is a `NonTradeableInstrument`, and UBI agrees: the indices are absent from its tradeable segment table altogether.
 

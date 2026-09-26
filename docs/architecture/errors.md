@@ -61,7 +61,7 @@ first answer and `flat` in the second.
 
 ## Failures from the instrument classes
 
-`tradingmachine.assets.exceptions` has `InstrumentError` and thirty-two subclasses. Five of them are about what
+`tradingmachine.assets.exceptions` has `InstrumentError` and thirty-one subclasses. Four of them are about what
 you asked for, and the rest are one per instrument class, raised when that class's own lookup
 finds nothing or returns an instrument outside the class's segment.
 
@@ -70,7 +70,6 @@ finds nothing or returns an instrument outside the class's segment.
 | `InstrumentError` | UBI has no instrument matching the lookup. It is also the base of every class below |
 | `TradeableInstrumentError` | You built a `TradeableInstrument` on an index segment |
 | `NonTradeableInstrumentError` | You built a `NonTradeableInstrument` on something that is not an index |
-| `OrderError` | A price-named order wrapper has no price to use, because the order book is empty on that side |
 | `PositionError` | There is no position to act on, several are held and none was named, or a reduction is larger than the position |
 | `HoldingError` | The share is not held, the sale is larger than the free quantity, or the whole holding is pledged |
 

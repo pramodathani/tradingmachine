@@ -246,7 +246,19 @@ Three choices differ deliberately from the old project:
 - **Every wrapper takes the same arguments.** In the old project only the two limit wrappers let you set `validity`, and the other ten silently used the default. Here all of them take `quantity`, `product`, `validity`, `after_market` and `tag`. Anything beyond that, such as a disclosed quantity or a stop loss, is a reason to call `place_order` directly.
 - **They live in `instruments.py`** rather than in a mixin module of their own, which the user chose on 2026-09-20 over following the pattern that `src/tradingmachine/assets/analysis/` uses. The file grows to about 2,200 lines, and everything about orders stays in one place.
 
-Two private helpers, `_bid_price_at` and `_offer_price_at`, read one level of one side through the existing `bids` and `asks` and raise `OrderError` when the book is not that deep. They keep each wrapper to a few lines without putting an abstraction in front of the twenty-eight public names, which is the same bargain `_best_level` already makes.
+Two private helpers, `_bid_price_at` and `_offer_price_at`, originally read one level of one side through the existing `bids` and `asks` and raised `OrderError` when the book was not that deep. They were removed on 2026-09-26, as the next section explains.
+
+#### Moved into UBI on 2026-09-26
+
+UBI's order engine can now work a price out itself from a `price_reference`, and the commit that added it (`01aafb4` in the sibling project) names this class's wrappers as the reason: they "are not thirty-three order types. They are a side, a price reference and a quantity reference crossed with each other". The user decided that order types belong in UBI, so the wrappers kept their names and signatures and stopped reading the book. Each of the twenty-four book-based wrappers now sends `order_type` `limit`, no `price`, and a reference: `bid_level` or `offer_level` with `level` 1 to 5, `mid`, or `vwap`. The two market and two limit wrappers are unchanged and still send a plain price, so they work in either of UBI's placement modes, and the holdings members, which only call those four, are untouched.
+
+Three things changed for a caller, and each is deliberate.
+
+1. **The price is read when the order is sent, not when the method is called.** Before, the quote was read in one request and the order sent in another, so the price could already be stale. UBI reads the quote inside the engine, immediately before placing.
+2. **The price is rounded to the tick.** A midpoint used to be sent exactly, so a one-tick spread produced a price between ticks that the exchange refused. UBI rounds towards the passive side, down for a buy and up for a sell, so a midpoint order never crosses the spread. The day's average price is rounded too.
+3. **An empty or shallow book is UBI's 503.** `OrderError` existed only for the wrappers to raise when the book could not supply a price. Nothing in this package reads a price from the book any more, so the class was deleted, and the wrappers' docstrings name `ServiceUnavailableError` and `DirectPlacementError` instead.
+
+Four wrappers were added at the same time, bringing the count to thirty-two: `buy_at_marketable_price` and `sell_at_marketable_price`, which send `{"kind": "marketable"}` with an optional `buffer_percent`, and `buy_at_last_price` and `sell_at_last_price`, which send `{"kind": "last"}`. They cover the two price kinds UBI offers that no wrapper named. The marketable pair matters most, because the Synthetic Order Atlas that UBI's engine was designed from lists "marketable limit" as one of the eight order types that need no class of their own, and it is what a market order has become in India: brokers convert API market orders to protected limit orders, and Flattrade's API refuses them outright. `buffer_percent` goes last in the signature so the five arguments every wrapper shares keep the same positions.
 
 ### Asking for orders by status
 

@@ -1443,7 +1443,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1451,7 +1452,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._bid_price_at(1),
+            price_reference={
+                "kind": "bid_level",
+                "level": 1,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1482,7 +1486,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1490,7 +1495,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._offer_price_at(1),
+            price_reference={
+                "kind": "offer_level",
+                "level": 1,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1521,7 +1529,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1529,7 +1538,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._offer_price_at(1),
+            price_reference={
+                "kind": "offer_level",
+                "level": 1,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1560,7 +1572,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1568,7 +1581,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._bid_price_at(1),
+            price_reference={
+                "kind": "bid_level",
+                "level": 1,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1586,7 +1602,7 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Buys halfway between the best bid and the best offer.
 
-        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far.
+        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far. UBI works the midpoint out when it sends the order and rounds it to the tick, down for a buy and up for a sell, so the order never crosses the spread.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -1599,20 +1615,18 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.mid_price
-        if price is None:
-            raise exceptions.OrderError(
-                f"One side of the order book is empty, so there is no mid price to buy at: {self!r}"
-            )
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=price,
+            price_reference={
+                "kind": "mid",
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1630,7 +1644,7 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Sells halfway between the best bid and the best offer.
 
-        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far.
+        The mid price sits inside the spread, where nobody is waiting, so the order is better than joining its own side of the book and cheaper than crossing to the other. It fills only if the market moves that far. UBI works the midpoint out when it sends the order and rounds it to the tick, down for a buy and up for a sell, so the order never crosses the spread.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -1643,20 +1657,18 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.mid_price
-        if price is None:
-            raise exceptions.OrderError(
-                f"One side of the order book is empty, so there is no mid price to sell at: {self!r}"
-            )
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=price,
+            price_reference={
+                "kind": "mid",
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1674,7 +1686,7 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Buys at the average price the day has traded at so far.
 
-        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it.
+        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it. UBI reads it when it sends the order and rounds it to the tick.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -1687,20 +1699,18 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.volume_weighted_average_price
-        if price is None:
-            raise exceptions.OrderError(
-                f"The broker serving the quote reports no volume weighted average price, so there is none to buy at: {self!r}"
-            )
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=price,
+            price_reference={
+                "kind": "vwap",
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1718,7 +1728,7 @@ class TradeableInstrument(Instrument):
     ) -> dict:
         """Sells at the average price the day has traded at so far.
 
-        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it.
+        The volume weighted average price is where the day's business has actually been done, which makes it a common benchmark to measure a fill against. It has no relation to where the book is now, so the order may cross the spread or sit far away from it. Not every broker reports it. UBI reads it when it sends the order and rounds it to the tick.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -1731,20 +1741,196 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        price = self.volume_weighted_average_price
-        if price is None:
-            raise exceptions.OrderError(
-                f"The broker serving the quote reports no volume weighted average price, so there is none to sell at: {self!r}"
-            )
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=price,
+            price_reference={
+                "kind": "vwap",
+            },
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_marketable_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+        buffer_percent: float | None = None,
+    ) -> dict:
+        """Buys now with a limit order priced at the best offer, the price it takes to fill immediately.
+
+        This is what a market order has become in India: brokers convert an API market order into a limit order with price protection, and some refuse market orders outright. A marketable limit states the cap itself, so the order fills at once up to that price and never beyond it. UBI reads the best offer when it sends the order, and `buffer_percent` moves the cap that far above it to reach deeper into the book. Pair it with `validity="ioc"` to cancel whatever cannot fill at once.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+            buffer_percent: The float percentage to move the cap past the best offer, such as 0.5, or None for no buffer. A cap too far from the market is refused by the exchange's price protection.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price_reference = {
+            "kind": "marketable",
+        }
+        if buffer_percent is not None:
+            price_reference["buffer_percent"] = buffer_percent
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price_reference=price_reference,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_marketable_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+        buffer_percent: float | None = None,
+    ) -> dict:
+        """Sells now with a limit order priced at the best bid, the price it takes to fill immediately.
+
+        This is what a market order has become in India: brokers convert an API market order into a limit order with price protection, and some refuse market orders outright. A marketable limit states the cap itself, so the order fills at once up to that price and never beyond it. UBI reads the best bid when it sends the order, and `buffer_percent` moves the cap that far below it to reach deeper into the book. Pair it with `validity="ioc"` to cancel whatever cannot fill at once.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+            buffer_percent: The float percentage to move the cap past the best bid, such as 0.5, or None for no buffer. A cap too far from the market is refused by the exchange's price protection.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        price_reference = {
+            "kind": "marketable",
+        }
+        if buffer_percent is not None:
+            price_reference["buffer_percent"] = buffer_percent
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price_reference=price_reference,
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def buy_at_last_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Buys with a limit order at the price the instrument last traded at.
+
+        The last traded price is where the most recent deal was done, which may be on either side of the book by the time the order arrives, so the order may fill at once or rest. UBI reads it when it sends the order and rounds it to the tick.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="buy",
+            order_type="limit",
+            price_reference={
+                "kind": "last",
+            },
+            quantity=quantity,
+            product=product,
+            validity=validity,
+            after_market=after_market,
+            tag=tag,
+        )
+
+    def sell_at_last_price(
+        self,
+        quantity: int,
+        product: str,
+        validity: str | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+    ) -> dict:
+        """Sells with a limit order at the price the instrument last traded at.
+
+        The last traded price is where the most recent deal was done, which may be on either side of the book by the time the order arrives, so the order may fill at once or rest. UBI reads it when it sends the order and rounds it to the tick.
+
+        Args:
+            quantity: The int quantity in underlying units, not lots.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+
+        Returns:
+            The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
+
+        Raises:
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
+            BadRequestError: A field is invalid.
+            OrderRejectedError: The broker refused the order.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.place_order(
+            transaction_type="sell",
+            order_type="limit",
+            price_reference={
+                "kind": "last",
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1775,7 +1961,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1783,7 +1970,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._bid_price_at(2),
+            price_reference={
+                "kind": "bid_level",
+                "level": 2,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1814,7 +2004,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1822,7 +2013,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._bid_price_at(3),
+            price_reference={
+                "kind": "bid_level",
+                "level": 3,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1853,7 +2047,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1861,7 +2056,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._bid_price_at(4),
+            price_reference={
+                "kind": "bid_level",
+                "level": 4,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1892,7 +2090,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1900,7 +2099,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._bid_price_at(5),
+            price_reference={
+                "kind": "bid_level",
+                "level": 5,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1931,7 +2133,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1939,7 +2142,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._bid_price_at(2),
+            price_reference={
+                "kind": "bid_level",
+                "level": 2,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -1970,7 +2176,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1978,7 +2185,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._bid_price_at(3),
+            price_reference={
+                "kind": "bid_level",
+                "level": 3,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2009,7 +2219,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2017,7 +2228,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._bid_price_at(4),
+            price_reference={
+                "kind": "bid_level",
+                "level": 4,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2048,7 +2262,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2056,7 +2271,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._bid_price_at(5),
+            price_reference={
+                "kind": "bid_level",
+                "level": 5,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2087,7 +2305,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2095,7 +2314,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._offer_price_at(2),
+            price_reference={
+                "kind": "offer_level",
+                "level": 2,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2126,7 +2348,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2134,7 +2357,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._offer_price_at(3),
+            price_reference={
+                "kind": "offer_level",
+                "level": 3,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2165,7 +2391,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2173,7 +2400,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._offer_price_at(4),
+            price_reference={
+                "kind": "offer_level",
+                "level": 4,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2204,7 +2434,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2212,7 +2443,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
-            price=self._offer_price_at(5),
+            price_reference={
+                "kind": "offer_level",
+                "level": 5,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2243,7 +2477,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2251,7 +2486,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._offer_price_at(2),
+            price_reference={
+                "kind": "offer_level",
+                "level": 2,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2282,7 +2520,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2290,7 +2529,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._offer_price_at(3),
+            price_reference={
+                "kind": "offer_level",
+                "level": 3,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2321,7 +2563,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2329,7 +2572,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._offer_price_at(4),
+            price_reference={
+                "kind": "offer_level",
+                "level": 4,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2360,7 +2606,8 @@ class TradeableInstrument(Instrument):
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
-            OrderError: The order book has no price to use, which is what it looks like outside market hours.
+            ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
+            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2368,7 +2615,10 @@ class TradeableInstrument(Instrument):
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
-            price=self._offer_price_at(5),
+            price_reference={
+                "kind": "offer_level",
+                "level": 5,
+            },
             quantity=quantity,
             product=product,
             validity=validity,
@@ -2814,46 +3064,6 @@ class TradeableInstrument(Instrument):
             after_market=after_market,
             tag=tag,
         )
-
-    def _bid_price_at(self, position: int) -> float:
-        """Reads the price at one level of the buy side of the order book.
-
-        Args:
-            position: The int level to read, where 1 is the best bid and 5 is the deepest level UBI serves.
-
-        Returns:
-            The float price in rupees at that level.
-
-        Raises:
-            OrderError: The buy side holds fewer levels than that, which is what an empty book looks like.
-            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
-        """
-        levels = self.bids
-        if len(levels) < position:
-            raise exceptions.OrderError(
-                f"The buy side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"
-            )
-        return levels[position - 1]["price"]
-
-    def _offer_price_at(self, position: int) -> float:
-        """Reads the price at one level of the sell side of the order book.
-
-        Args:
-            position: The int level to read, where 1 is the best offer and 5 is the deepest level UBI serves.
-
-        Returns:
-            The float price in rupees at that level.
-
-        Raises:
-            OrderError: The sell side holds fewer levels than that, which is what an empty book looks like.
-            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
-        """
-        levels = self.asks
-        if len(levels) < position:
-            raise exceptions.OrderError(
-                f"The sell side of the order book holds {len(levels)} levels, so it has no level {position} to price against: {self!r}"
-            )
-        return levels[position - 1]["price"]
 
     def _frame_for_this_instrument(
         self,

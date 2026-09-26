@@ -19,7 +19,7 @@ infosys.cancel_open_orders()
 ```
 
 > [!CAUTION]
-> This project places real orders with real money. `place_order` and its twenty-eight wrappers, the position methods and the holdings methods all reach a live broker account, and there is no paper trading mode and no simulator. `place_order(dry_run=True)` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
+> This project places real orders with real money. `place_order` and its thirty-two wrappers, the position methods and the holdings methods all reach a live broker account, and there is no paper trading mode and no simulator. `place_order(dry_run=True)` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
 
 ## How it fits together
 
@@ -143,7 +143,7 @@ src/tradingmachine/assets/
 ├── currencies.py          the six currency classes
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
-├── exceptions.py          InstrumentError and its thirty-two subclasses
+├── exceptions.py          InstrumentError and its thirty-one subclasses
 └── analysis/              thirteen classes of candle analysis that Instrument inherits
 
 src/tradingmachine/ubi_client/
