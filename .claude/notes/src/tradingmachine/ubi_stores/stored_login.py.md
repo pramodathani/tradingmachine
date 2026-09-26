@@ -1,0 +1,3 @@
+# src/tradingmachine/ubi_stores/stored_login.py
+
+`StoredLogin` is instruments_explorer's `LoginDocument`, ported on 2026-09-26 with its tests. UBI writes `expires_at` in its own local time with no offset, such as `2026-09-27 08:40:30.859909`, both in the stored document and in the connect answer, so the expiry is parsed with `strptime` as local time (hence the `DTZ007` suppression) and compared with `time.time()`. The stored document names the token `access_token` and the connect answer names it `access-token`; `from_document` accepts either. `repr` never shows the token, so a login can be logged safely.

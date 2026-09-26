@@ -46,7 +46,7 @@ flowchart LR
 
 **Why.** UBI runs on the same machine and already caches in its own Redis, and its `/prices` route serves any date range in one request. A second cache here would add a second place for a value to go stale, and a stale expiry list or quote is a worse failure than a slow one.
 
-**The cost.** Repeated reads repeat requests. Asking a derivative class for its expiries and then for a chain downloads the segment master twice, about four seconds for single-stock options. The members that need two values from one moment, `bid_offer_spread` and `mid_price`, read both from a single quote so that they never mix two moments. If the cost ever matters, the answer is a measurement first, not a cache added in advance.
+**The cost.** Repeated reads repeat requests. Asking a derivative class for its expiries and then for a chain downloads the segment master twice, about four seconds for single-stock options. The members that need two values from one moment, `bid_offer_spread` and `mid_price`, read both from a single quote so that they never mix two moments. If the cost ever matters, the answer is a measurement first, not a cache added in advance. A program that needs many indicators over the same candles can read them once and hand them to [`CandleFrameAnalysis`](../analysis/index.md#analysing-candles-you-already-have), which runs every analysis method over a frame the caller holds; that is the caller keeping its own data for one computation, not a cache inside the library.
 
 **In the code.** `src/tradingmachine/assets/instruments.py`, whose module docstring says every call goes straight to UBI's REST API. The reasoning is under "No caching and no batching" in `.claude/notes/src/tradingmachine/assets/instruments.py.md`.
 
@@ -177,7 +177,7 @@ The chart below shows how much of each segment the master had to stream on 2026-
 
 **Why.** With search, every live contract in a busy segment sits permanently behind thousands of expired ones. The master is complete, and because UBI runs on the same machine even 125,967 rows arrive in about 1.3 seconds.
 
-**The cost.** Each discovery call downloads its whole segment again, with no cache. The calls return a DataFrame of identities rather than instrument objects, because a 214-contract chain as objects would mean 214 lookups; the caller builds the few contracts it wants.
+**The cost.** Each discovery call downloads its whole segment again, with no cache. The calls return a DataFrame of identities rather than instrument objects, because a 214-contract chain as objects would mean 214 lookups; the caller builds the few contracts it wants. A program that needs the whole master, every exchange and segment at once, uses [`InstrumentCatalogue.open_master`](../python-api/read-only-market-data.md#open_master) instead, which reads it in batches rather than holding it all in memory.
 
 **In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_contracts_for`, `_expiry_dates` and `_identity_frame` on `Instrument` in `src/tradingmachine/assets/instruments.py`, and the public class methods on each family class. [Finding instruments](../python-api/discovery.md) documents the public calls.
 

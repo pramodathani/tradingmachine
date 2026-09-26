@@ -1,8 +1,8 @@
 # Analysis
 
-Every instrument object can analyse its own price history. A share, an index or a commodity future has 192 analysis methods: moving averages, oscillators, candlestick pattern detectors, summary statistics, crossover signals and a backtest runner. You call one on the instrument, such as `reliance.relative_strength_index(window=14, days=90)`, and it fetches the candles from UBI, runs the calculation and hands back the candles with the result added as a new column.
+Every instrument object can analyse its own price history. A share, an index or a commodity future has 193 analysis methods: moving averages, oscillators, candlestick pattern detectors, summary statistics, crossover signals and a backtest runner. You call one on the instrument, such as `reliance.relative_strength_index(window=14, days=90)`, and it fetches the candles from UBI, runs the calculation and hands back the candles with the result added as a new column.
 
-The methods are not written on `Instrument` itself. They live in thirteen small classes under `src/tradingmachine/assets/analysis/`, one per group of related calculations, and `Instrument` inherits all thirteen. Most of the calculations come from [TA-Lib](https://ta-lib.org/), a widely used C library of technical indicators, and follow its function groups; the statistics, the signals and the backtest are this library's own.
+The methods are not written on `Instrument` itself. They live in thirteen small classes under `src/tradingmachine/assets/analysis/`, one per group of related calculations, and `Instrument` inherits all thirteen. So does [`CandleFrameAnalysis`](#analysing-candles-you-already-have), which runs the same methods over candles you already hold instead of fetching them from UBI. Most of the calculations come from [TA-Lib](https://ta-lib.org/), a widely used C library of technical indicators, and follow its function groups; the statistics, the signals and the backtest are this library's own.
 
 ## How a method works
 
@@ -32,7 +32,7 @@ sequenceDiagram
 
 Three things follow from this design, and each is worth knowing before you call the methods in a loop.
 
-1. **Each call fetches its own candles.** Two indicators on the same instrument send two requests. That is deliberate: UBI runs on the same machine and keeps its own copy of the candles in Redis, so a repeated request is cheap, and the library keeps no cache of its own.
+1. **Each call fetches its own candles.** Two indicators on the same instrument send two requests. That is deliberate: UBI runs on the same machine and keeps its own copy of the candles in Redis, so a repeated request is cheap, and the library keeps no cache of its own. When you need many indicators over the same candles, read them once and use [`CandleFrameAnalysis`](#analysing-candles-you-already-have).
 2. **No candles means `None`, not an error.** When UBI has no candles for the range, `prices` returns `None`, and so does every method built on it. That is what happens for every instrument in a family UBI stores no candles for, as the [table below](#which-instruments-have-candles) shows.
 3. **The early rows are empty.** An indicator needs a run of candles before it has a value, so the first rows of its column are `NaN`. A 14-candle RSI has nothing for its first 14 rows, and the Hilbert transform indicators need 32 to 63 candles before their first value. Ask for a longer range than the window you want to look at.
 
@@ -61,12 +61,12 @@ Each method's own arguments use the library's spelled-out names rather than TA-L
 
 ## The thirteen classes
 
-The table below lists the thirteen analysis classes in the order `Instrument` inherits them, with the number of public methods in each. The counts were taken from the code with a short script on 2026-09-26 and add up to 192.
+The table below lists the thirteen analysis classes in the order `Instrument` inherits them, with the number of public methods in each. The counts were taken from the code with a short script on 2026-09-26, after `mulloy_triple_exponential_moving_average` was added, and add up to 193.
 
 | Class | Module | Methods | What it holds | Each method returns | Page |
 |---|---|--:|---|---|---|
 | `PriceStatistics` | `price_statistics` | 39 | Highs, lows, means, spreads and quantiles of prices, volumes and returns | A number, a summary, a histogram or a narrowed frame | [Statistics](statistics.md#price-statistics) |
-| `OverlapStudies` | `overlap_studies` | 12 | Moving averages, Bollinger bands, parabolic SAR | The candles with columns added | [Indicators](indicators.md#overlap-studies) |
+| `OverlapStudies` | `overlap_studies` | 13 | Moving averages, Bollinger bands, parabolic SAR | The candles with columns added | [Indicators](indicators.md#overlap-studies) |
 | `MomentumIndicators` | `momentum_indicators` | 28 | MACD, RSI, ADX, stochastics and other oscillators | The candles with columns added | [Indicators](indicators.md#momentum-indicators) |
 | `VolumeIndicators` | `volume_indicators` | 3 | Chaikin accumulation distribution, on balance volume | The candles with a column added | [Indicators](indicators.md#volume-indicators) |
 | `CycleIndicators` | `cycle_indicators` | 6 | The Hilbert transform family | The candles with columns added | [Indicators](indicators.md#cycle-indicators) |
@@ -79,7 +79,7 @@ The table below lists the thirteen analysis classes in the order `Instrument` in
 | `Signals` | `signals` | 2 | Crossovers and crossunders between two columns | A copy of your frame with a bool column | [Signals and backtests](signals-and-backtests.md#signals) |
 | `StrategyBacktests` | `strategy_backtests` | 1 | A backtest of a `backtesting` strategy | A pandas Series of statistics | [Signals and backtests](signals-and-backtests.md#backtests) |
 
-All thirteen inherit a small base class, `PriceAnalysis`, which declares `prices` and raises `NotImplementedError` from it. That lets each module be written and read on its own, without importing the instrument classes. `Instrument` supplies the real `prices`, which reads UBI.
+All thirteen inherit a small base class, `PriceAnalysis`, which declares `prices` and raises `NotImplementedError` from it. That lets each module be written and read on its own, without importing the instrument classes. `Instrument` supplies the real `prices`, which reads UBI, and `CandleFrameAnalysis` supplies one that hands back a copy of candles you gave it.
 
 The chart below shows the same counts. Candlestick patterns and price statistics make up more than half of the total.
 
@@ -95,7 +95,7 @@ The chart below shows the same counts. Candlestick patterns and price statistics
       {"class": "PriceStatistics", "methods": 39, "source": "pandas"},
       {"class": "MomentumIndicators", "methods": 28, "source": "TA-Lib"},
       {"class": "MathTransforms", "methods": 15, "source": "TA-Lib"},
-      {"class": "OverlapStudies", "methods": 12, "source": "TA-Lib"},
+      {"class": "OverlapStudies", "methods": 13, "source": "TA-Lib"},
       {"class": "MathOperators", "methods": 10, "source": "TA-Lib"},
       {"class": "StatisticFunctions", "methods": 8, "source": "TA-Lib"},
       {"class": "CycleIndicators", "methods": 6, "source": "TA-Lib"},
@@ -146,6 +146,58 @@ print(crossings[crossings["cross_over"]][["datetime", "close", "sma_20"]])
 
 The first call returns the candles with an `sma_20` column. The second marks, in a new `cross_over` column, each row where the close was at or below the average on the previous row and above it on this one.
 
+## Analysing candles you already have
+
+`CandleFrameAnalysis` runs every analysis method over one DataFrame of candles that you give it, instead of fetching candles from UBI for each call. It inherits the same thirteen classes in the same order as `Instrument`, so it has all 193 methods, with the same names, arguments and columns. It lives in `tradingmachine.assets.analysis.candle_frame_analysis`.
+
+It exists for programs that compute many indicators over the same candles. A chart that shows twelve indicators would otherwise send twelve requests for the same candles, and a screener that computes eight figures for each of 750 shares would send 6,000. It also keeps a chart's warm-up history: a program can read extra candles before the range it shows, so that a 200-day average has values from the first candle on screen, compute everything over the longer frame, and then trim the extra rows away, which a method that fetches its own range cannot do.
+
+The sequence diagram below shows the difference from [How a method works](#how-a-method-works): UBI is asked once, and every method after that works on a copy of the same candles.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Y as Your code
+    participant U as UBI
+    participant C as CandleFrameAnalysis
+    participant T as TA-Lib
+    Y->>U: prices(days=400), one request
+    U-->>Y: the candles as a DataFrame
+    Y->>C: CandleFrameAnalysis(frame)
+    Y->>C: relative_strength_index(window=14)
+    C->>T: RSI over a copy of the frame
+    C-->>Y: the copy with an rsi_14 column added
+    Y->>C: moving_average_convergence_divergence()
+    C->>T: MACD over a fresh copy
+    C-->>Y: the fresh copy with the three MACD columns added
+```
+
+The rules below govern what it accepts and returns.
+
+- **The frame should look like the output of [`prices`](../python-api/market-data.md#prices).** The indicators read only `open`, `high`, `low`, `close` and `volume`, but the summaries, `beta` and `correlation_coefficient` also line rows up by `exchange`, `segment`, `interval` and `datetime`, so pass all of them. [`PricesDocument.frame`](../python-api/read-only-market-data.md#frame) builds exactly that shape from candles read by instrument id.
+- **Your frame is never changed.** The constructor copies the frame, and each method call works on its own fresh copy, so one call's added columns never appear in another's result.
+- **The range is fixed by the frame.** A method given `from_date`, `to_date` or `days` raises `ValueError`, rather than quietly answering for the whole frame. `interval` and `adjusted` are accepted and ignored, because the frame already has them.
+- **An empty frame means every method returns `None`**, just as it does for an instrument with no candles.
+- **Missing volume is yours to fill.** UBI stores some volumes as null, and TA-Lib carries a missing volume forward into every later value of on-balance volume, the accumulation/distribution line and its oscillator, and the money flow index. Fill missing volume with zero before building the frame if you want it counted as none traded.
+
+The example below reads 400 days of RELIANCE's candles once and computes three indicators from them. It was not run for this page, but all 188 methods that need no argument were run on RELIANCE's 743 real daily candles on 2026-09-26, without error and without changing the frame.
+
+```python
+from tradingmachine.assets import equities
+from tradingmachine.assets.analysis import candle_frame_analysis
+
+reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+frame = reliance.prices(days=400)
+frame["volume"] = frame["volume"].fillna(0)
+
+analysis = candle_frame_analysis.CandleFrameAnalysis(frame)
+rsi = analysis.relative_strength_index(window=14)["rsi_14"]
+macd = analysis.moving_average_convergence_divergence()
+tema = analysis.mulloy_triple_exponential_moving_average(window=20)["tema_20"]
+```
+
+The five methods that need an argument still work. `beta` and `correlation_coefficient` take a benchmark, which can be another `CandleFrameAnalysis` over the benchmark's candles, `is_cross_over` and `is_cross_under` take a frame and two column names, and `run_backtest` takes a `backtesting` strategy.
+
 ## The pages in this section
 
 Each page lists every method in its groups, with the method's own arguments and the column it adds.
@@ -156,7 +208,7 @@ Each page lists every method in its groups, with the method's own arguments and 
 
     ---
 
-    Overlap studies, momentum, volume, volatility and cycle indicators: 52 methods.
+    Overlap studies, momentum, volume, volatility and cycle indicators: 53 methods.
 
     [:octicons-arrow-right-24: Indicators](indicators.md)
 

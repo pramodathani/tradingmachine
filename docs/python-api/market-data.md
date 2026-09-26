@@ -2,12 +2,14 @@
 
 These members read prices: the candles an instrument has traded in, its latest quote, and the order book behind that quote. Every instrument has the candles and the quote, and every tradeable instrument also has the order book, so an index has `last_price` but no `best_bid`.
 
-The table below lists every member on this page. Only `prices` is a method, because it takes an interval and a range; everything else is a property, read like an attribute.
+The table below lists every member on this page. Only `prices` and `prices_document` are methods, because they take an interval and a range; everything else is a property, read like an attribute.
 
 | Kind | Member | Description |
 |---|---|---|
 | <span class="member method">method</span> | [`prices`](#prices) | Candles for an interval and a date range, as a DataFrame |
+| <span class="member method">method</span> | [`prices_document`](#prices_document) | The same candles with UBI's facts about them, such as the price basis and the range read |
 | <span class="member property">property</span> | [`quote`](#quote) | The full unified quote, as a dict |
+| <span class="member property">property</span> | [`additional_details`](#additional_details) | The extra attributes each broker publishes, such as the ISIN, as a dict |
 | <span class="member property">property</span> | [`last_price`](#last_price) | The last traded price, as a float |
 | <span class="member property">property</span> | [`ohlc`](#ohlc) | The day's open, high and low with the last and previous close |
 | <span class="member property">property</span> | [`bids`](#bids) | The buy side of the order book |
@@ -168,7 +170,42 @@ A pandas DataFrame, or `None` when UBI has no candles for the range. The table b
 Some families have no candles at all, so `prices` returns `None` for every bond, currency pair, investment trust and mutual fund. [Asset classes](../asset-classes/index.md) lists which classes have candles.
 
 ??? note "Under the hood"
-    The request carries `instrument_id`, `interval`, `adjusted` as the text `true` or `false`, and whichever of `from`, `to` and `days` were given. UBI answers with a `columns` list and a `candles` list of rows. See [Prices](https://pramodathani.github.io/unified_broker_interface/rest-api/historical-data/#prices) on the UBI site for the route, including where the candles come from and how adjustment works.
+    `prices` calls [`prices_document`](#prices_document) and then its `frame` method. The request carries `instrument_id`, `interval`, `adjusted` as the text `true` or `false`, and whichever of `from`, `to` and `days` were given. UBI answers with a `columns` list and a `candles` list of rows. See [Prices](https://pramodathani.github.io/unified_broker_interface/rest-api/historical-data/#prices) on the UBI site for the route, including where the candles come from and how adjustment works.
+
+## prices_document
+
+<div class="endpoint" markdown><span class="member method">method</span> `prices_document(interval="day", from_date=None, to_date=None, days=None, adjusted=True)`<span class="route"><span class="method get">GET</span> `/api/instruments/prices`</span></div>
+
+This method fetches the same candles as [`prices`](#prices), with the same arguments, but returns UBI's whole answer rather than only the DataFrame. Use it when UBI's facts about the candles matter too: which price basis they are on, whether the instrument can be adjusted at all, whether UBI read them from its cache or its database, and the range UBI actually read.
+
+#### Parameters
+
+The parameters are the same five as those of [`prices`](#prices).
+
+#### Example
+
+The example below reads a year of candles, prints UBI's facts about them, and then builds the DataFrame that `prices` would have returned. Its output was not captured.
+
+=== "Python"
+
+    ```python
+    document = reliance.prices_document(days=365)
+    print(document.price_basis, document.adjustable, document.source)
+    print(document.from_date, document.to_date)
+
+    frame = document.frame(reliance.exchange, reliance.segment, "day")
+    ```
+
+#### Returns
+
+A [`PricesDocument`](read-only-market-data.md#pricesdocument), whose attributes hold UBI's facts and whose `frame` method builds the DataFrame. When UBI has no candles for the range, it is still a document, with `is_empty` set to `True`.
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| [`BadRequestError`](errors.md#badrequesterror) | The range or interval is invalid, such as both `days` and `from_date` given |
+| [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
 ## quote
 
@@ -206,6 +243,38 @@ A `dict` holding UBI's unified quote. The fields that matter most are `last_pric
 |---|---|
 | [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | UBI has no recent quote and no broker could supply one, which is always the case for a cash bond, a fixed income index and a mutual fund |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
+
+## additional_details
+
+<div class="endpoint" markdown><span class="member property">property</span> `additional_details`<span class="route"><span class="method get">GET</span> `/api/instruments/additional_details`</span></div>
+
+This property returns the extra attributes each broker publishes about the instrument beyond what an order needs, such as its ISIN, its series, its freeze quantity and its price band. Every broker spells these differently, so UBI maps them onto one shared set of names. Like `quote`, it is read from UBI on every access.
+
+#### Parameters
+
+This property takes no parameters.
+
+#### Example
+
+The example below prints the ISIN each broker reports for the instrument. Its output was not captured.
+
+=== "Python"
+
+    ```python
+    details = reliance.additional_details
+    for entry in details["carried_by"]:
+        print(entry["broker"], entry["isin"])
+    ```
+
+#### Returns
+
+A `dict` holding UBI's answer, with `attribute_names` and one `carried_by` entry per broker holding that broker's values, and `None` wherever a broker publishes nothing. [Additional details](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#additional-details) on the UBI site lists every attribute.
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any failure reported by, or on the way to, UBI |
 
 ## last_price
 

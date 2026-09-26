@@ -8,7 +8,7 @@ The table below summarises the steps and what each one leaves behind.
 |---|---|---|
 | [1. The TA-Lib C library](#1-install-the-ta-lib-c-library) | Your system's package manager or a source build | The native library the `TA-Lib` package wraps |
 | [2. The virtual environment](#2-create-the-virtual-environment) | `python3.14 -m venv .venv` | A private Python 3.14 in `.venv/` |
-| [3. The library](#3-install-the-library) | `pip install -e ".[docs,development]"` | `tradingmachine` importable from anywhere, with its seven dependencies |
+| [3. The library](#3-install-the-library) | `pip install -e ".[docs,development]"` | `tradingmachine` importable from anywhere, with its eight dependencies |
 | [4. The containers](#4-start-the-containers) | `docker compose up -d` | Redis, MongoDB and TimescaleDB on ports 2002 to 2004 |
 | [5. UBI](#5-make-sure-ubi-is-running-in-engine-mode) | UBI's own services | UBI answering on `127.0.0.1:8080`, placing orders through its engine |
 
@@ -63,7 +63,7 @@ The table below lists what the install brings in. `pyproject.toml` declares only
 
 | Group | Packages |
 |---|---|
-| The library itself | `backtesting`, `numpy`, `pandas`, `pymongo`, `python-dotenv`, `requests`, `TA-Lib` |
+| The library itself | `backtesting`, `numpy`, `pandas`, `pymongo`, `python-dotenv`, `redis`, `requests`, `TA-Lib` |
 | `docs` extra | `mkdocs`, `mkdocs-material`, `mkdocstrings[python]`, `mkdocs-charts-plugin`, `mkdocs-gen-files`, `mkdocs-literate-nav`, `mkdocs-section-index`, `pymdown-extensions` |
 | `development` extra | `ruff`, `build` |
 
@@ -85,7 +85,7 @@ A quick check that the Python version, the TA-Lib wrapper and the library are al
     ```
 
 !!! note "The repository root is not importable"
-    All library code lives under `src/tradingmachine`, so `from tradingmachine.assets import equities` works only once the library is installed. There is no test suite, and `pytest` is not installed, because exercising the order routes means placing real orders.
+    All library code lives under `src/tradingmachine`, so `from tradingmachine.assets import equities` works only once the library is installed. The offline test suite in `tests/` runs with `.venv/bin/python -m pytest` once the `development` extra is installed. It never places an order, because it talks to a fake UBI server on a local port.
 
 ## 4. Start the containers
 

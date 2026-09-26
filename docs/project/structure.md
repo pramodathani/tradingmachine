@@ -8,7 +8,7 @@ The annotated tree below shows every directory and the files that matter. The 42
 
 ```text
 tradingmachine/
-├── pyproject.toml                 the library's metadata, its 7 dependencies, the docs and development extras
+├── pyproject.toml                 the library's metadata, its 8 dependencies, the docs and development extras
 ├── requirements.txt               the pinned development environment, not read by the library
 ├── README.md
 ├── docker-compose.yml             Redis, MongoDB and TimescaleDB on host ports 2002 to 2004
@@ -28,6 +28,7 @@ tradingmachine/
 │   ├── project/                   this tab
 │   ├── assets/diagrams/           the animated SVG diagrams, included with snippets
 │   └── stylesheets/extra.css      every custom class the pages use
+├── tests/                         the offline pytest suite, run against a fake UBI server on a local port
 ├── .claude/notes/                 one sidecar note per file, mirroring the tree, holding the reasoning
 └── src/tradingmachine/
     ├── __init__.py                the package docstring and __version__, imports nothing else
@@ -44,6 +45,7 @@ tradingmachine/
     │   ├── exceptions.py          InstrumentError and its 31 subclasses
     │   └── analysis/
     │       ├── price_analysis.py  PriceAnalysis, the shared base
+    │       ├── candle_frame_analysis.py   CandleFrameAnalysis, every method over candles you already have
     │       └── 13 modules         one analysis class each, inherited by Instrument
     ├── orders/
     │   ├── __init__.py            the table of UBI type, module and class
@@ -53,27 +55,40 @@ tradingmachine/
     │   └── 42 modules             one synthetic order type each, such as bracket.py
     ├── ubi_client/
     │   ├── client.py              UnifiedBrokerInterface, the only code that speaks HTTP
-    │   └── exceptions.py          one error class per HTTP status UBI returns
+    │   ├── token_sources.py       TokenSource, CredentialTokenSource, MongoCredentialTokenSource
+    │   ├── instrument_catalogue.py    InstrumentCatalogue, read-only data by instrument id
+    │   ├── prices_document.py     PricesDocument, UBI's whole answer from the prices route
+    │   ├── instrument_master_stream.py    InstrumentMasterStream, the master read in batches
+    │   ├── json_array_stream_parser.py    the parser behind InstrumentMasterStream
+    │   └── exceptions.py          one error class per HTTP status UBI returns, and two of the library's own
+    ├── ubi_stores/                reads UBI's own Redis and MongoDB, never writes
+    │   ├── store_settings.py      RedisSettings, MongoSettings
+    │   ├── stored_login.py        StoredLogin, UBI's token and its expiry
+    │   ├── stored_login_reader.py StoredLoginReader
+    │   ├── stored_login_token_source.py   StoredLoginTokenSource
+    │   └── live_quote_reader.py   LiveQuoteReader, many live quotes in one round trip
     └── utilities/
-        └── configuration.py       Configuration, which reads the environment and .env lazily
+        ├── configuration.py       Configuration, which reads the environment and .env lazily
+        └── clock.py               SystemClock, the current time, replaceable in tests
 ```
 
 `site/`, `.venv/`, `.env` and the build outputs are also present on a working machine, and `.gitignore` keeps all of them out of git.
 
 ## Module counts
 
-The table below counts the Python files and lines in each package, measured on 2026-09-26. The counts include each package's `__init__.py`.
+The table below counts the Python files and lines in each package, measured on 2026-09-26 after the read-only market data classes were added. The counts include each package's `__init__.py`.
 
 | Package | Python files | Lines | What it holds | Third-party imports |
 |---|---:|---:|---|---|
 | `tradingmachine` | 1 | 17 | The package docstring and `__version__` | none |
 | `tradingmachine.accounts` | 2 | 89 | `Account` | none |
-| `tradingmachine.assets` | 9 | 7,818 | The instrument classes, the 27 family classes and their errors | `pandas` |
-| `tradingmachine.assets.analysis` | 15 | 7,827 | `PriceAnalysis` and the 13 analysis classes | `talib`, `backtesting`, `numpy`, `pandas` |
+| `tradingmachine.assets` | 9 | 7,852 | The instrument classes, the 27 family classes and their errors | `pandas` |
+| `tradingmachine.assets.analysis` | 16 | 7,962 | `PriceAnalysis`, the 13 analysis classes and `CandleFrameAnalysis` | `talib`, `backtesting`, `numpy`, `pandas` |
 | `tradingmachine.orders` | 46 | 5,381 | `SyntheticOrder`, two helper classes and 42 order types | none |
-| `tradingmachine.ubi_client` | 3 | 513 | `UnifiedBrokerInterface` and its 14 exception classes | `requests`, `pymongo` |
-| `tradingmachine.utilities` | 2 | 133 | `Configuration` | `dotenv` |
-| **Total** | **78** | **21,778** | | |
+| `tradingmachine.ubi_client` | 8 | 1,482 | `UnifiedBrokerInterface`, its token sources, the read-only catalogue classes and 15 exception classes | `requests`, `pymongo`, `pandas` |
+| `tradingmachine.ubi_stores` | 6 | 728 | The read-only readers of UBI's Redis and MongoDB, and `StoredLoginTokenSource` | `redis`, `pymongo` |
+| `tradingmachine.utilities` | 3 | 156 | `Configuration` and `SystemClock` | `dotenv` |
+| **Total** | **91** | **23,667** | | |
 
 The chart below shows the same line counts, which makes it plain that the library's weight is in its instruments and their analysis, not in its plumbing.
 
@@ -85,11 +100,12 @@ The chart below shows the same line counts, which makes it plain that the librar
   "height": 200,
   "data": {
     "values": [
-      {"package": "assets.analysis", "lines": 7827},
-      {"package": "assets", "lines": 7818},
+      {"package": "assets.analysis", "lines": 7962},
+      {"package": "assets", "lines": 7852},
       {"package": "orders", "lines": 5381},
-      {"package": "ubi_client", "lines": 513},
-      {"package": "utilities", "lines": 133},
+      {"package": "ubi_client", "lines": 1482},
+      {"package": "ubi_stores", "lines": 728},
+      {"package": "utilities", "lines": 156},
       {"package": "accounts", "lines": 89},
       {"package": "tradingmachine", "lines": 17}
     ]
@@ -106,7 +122,7 @@ The chart below shows the same line counts, which makes it plain that the librar
 }
 ```
 
-`.claude/notes/` holds 79 notes. Every source module has one except the five `__init__.py` files that hold no reasoning worth recording: the top-level one and those of `assets`, `assets.analysis`, `ubi_client` and `utilities`. The other six notes cover `mkdocs.yml`, `pyproject.toml`, `docker-compose.yml`, the two scripts and the documentation workflow.
+`.claude/notes/` holds 95 notes. Every source module has one except the six `__init__.py` files that hold no reasoning worth recording: the top-level one and those of `assets`, `assets.analysis`, `ubi_client`, `ubi_stores` and `utilities`. The `ubi_stores` package has a `README.md` note of its own that explains why it exists. The other nine notes cover `mkdocs.yml`, `pyproject.toml`, `docker-compose.yml`, the two scripts, the documentation workflow and the three test helpers `conftest.py`, `fake_ubi_server.py` and `fakes.py`.
 
 ## Which package imports which
 
@@ -118,20 +134,24 @@ flowchart TB
     OR["orders<br/>42 synthetic order types"]
     AS["assets<br/>instruments, 27 family classes, exceptions"]
     AN["assets.analysis<br/>13 analysis classes"]
-    UC["ubi_client<br/>client, exceptions"]
-    UT["utilities<br/>configuration"]
+    UC["ubi_client<br/>client, token sources, catalogue, exceptions"]
+    US["ubi_stores<br/>readers of UBI's Redis and MongoDB"]
+    UT["utilities<br/>configuration, clock"]
     AC -->|"assets.instruments"| AS
     AC -->|"ubi_client.client"| UC
     OR -->|"assets.instruments"| AS
     AS -->|"13 analysis modules"| AN
-    AS -->|"client, exceptions"| UC
+    AS -->|"client, exceptions, catalogue"| UC
+    US -->|"exceptions, token_sources"| UC
+    US -->|"clock"| UT
     UC -->|"configuration"| UT
 ```
 
-Three details of the graph are worth knowing.
+Four details of the graph are worth knowing.
 
 - `orders` does not import `ubi_client`. A synthetic order sends itself through `TradeableInstrument.place_order`, so the placement-mode probe and the shared client apply to it without any code of its own.
 - `accounts` imports `assets.instruments` only to call `Instrument.shared_unified_broker_interface()`, so that an `Account` shares the instruments' client instead of logging them out with a second one.
+- Nothing imports `ubi_stores` except your own program. `ubi_client` refers to `StoredLoginTokenSource` only in documentation, so importing the REST client never imports `redis`.
 - Inside `assets`, every family module imports `instruments` and `exceptions`, and `instruments` alone imports the thirteen analysis modules. Inside `orders`, every type imports `synthetic_order`, and the multi-instrument types also import `order_candidate` or `exposure_watch`.
 
 The package `__init__.py` files import nothing from the library, and the top-level one imports only `importlib.metadata` to read the version, so `import tradingmachine` never reaches for the network, the databases or the `.env` file. Import the module you need, such as `from tradingmachine.assets import equities`.

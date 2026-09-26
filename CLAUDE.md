@@ -4,14 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state of the repository
 
-The repository is a git repository on the `main` branch, tracking `origin/main`. It is an installable Python library named `tradingmachine`, converted from a flat script layout on 2026-09-20. It holds a `pyproject.toml` with the library's metadata, dependencies and hatchling build backend, a `requirements.txt` pinning the wider development environment, a `README.md` describing the project, a `docker-compose.yml` for the local databases, an `mkdocs.yml`, a `docs/` tree and a `.github/workflows/docs.yml` for the documentation site, a `scripts/` directory for the documentation build tooling, and a Python 3.14 virtual environment in `.venv/` with the library installed editable. There is no `ruff.toml`, no `[tool.ruff]` section and no test suite. There is no `LICENSE` file either, and `pyproject.toml` deliberately declares no licence until one is chosen.
+The repository is a git repository on the `main` branch, tracking `origin/main`. It is an installable Python library named `tradingmachine`, converted from a flat script layout on 2026-09-20. It holds a `pyproject.toml` with the library's metadata, dependencies and hatchling build backend, a `requirements.txt` pinning the wider development environment, a `README.md` describing the project, a `docker-compose.yml` for the local databases, an `mkdocs.yml`, a `docs/` tree and a `.github/workflows/docs.yml` for the documentation site, a `scripts/` directory for the documentation build tooling, and a Python 3.14 virtual environment in `.venv/` with the library installed editable. There is no `ruff.toml` and no `[tool.ruff]` section. A `tests/` directory holds a pytest suite that runs offline, against a fake UBI server on a local port, so it never places an order. There is no `LICENSE` file either, and `pyproject.toml` deliberately declares no licence until one is chosen.
 
-All library code lives under `src/tradingmachine`, so the repository root is not importable and the library must be installed before it can be used. The source code so far is the client for the sibling project's REST API, the configuration it reads, the instrument classes built on it, the synthetic order classes and the account:
+All library code lives under `src/tradingmachine`, so the repository root is not importable and the library must be installed before it can be used. The source code so far is the client for the sibling project's REST API with its token sources, the configuration it reads, the instrument classes built on it, the read-only market data classes, the read-only readers of UBI's own stores, the synthetic order classes and the account:
 
 ```
 src/tradingmachine/utilities/configuration.py   Configuration, which reads the environment and .env lazily
-src/tradingmachine/ubi_client/client.py         UnifiedBrokerInterface: connect, disconnect, status, get, post, put, patch, delete
-src/tradingmachine/ubi_client/exceptions.py     one error class per HTTP status code UBI returns
+src/tradingmachine/utilities/clock.py           SystemClock, the current time, replaceable in tests
+src/tradingmachine/ubi_client/client.py         UnifiedBrokerInterface: connect, disconnect, status, greeting, get, post, put, patch, delete, stream_get, close
+src/tradingmachine/ubi_client/token_sources.py  TokenSource, CredentialTokenSource, MongoCredentialTokenSource
+src/tradingmachine/ubi_client/instrument_catalogue.py      InstrumentCatalogue, read-only UBI data by instrument id
+src/tradingmachine/ubi_client/prices_document.py           PricesDocument, UBI's whole answer from the prices route
+src/tradingmachine/ubi_client/instrument_master_stream.py  InstrumentMasterStream, the instrument master read in batches
+src/tradingmachine/ubi_client/json_array_stream_parser.py  JsonArrayStreamParser, the incremental JSON array parser behind it
+src/tradingmachine/ubi_client/exceptions.py     one error class per HTTP status code UBI returns, plus DirectPlacementError and IncompleteResponseError
+src/tradingmachine/ubi_stores/store_settings.py            RedisSettings, MongoSettings for UBI's own stores
+src/tradingmachine/ubi_stores/stored_login.py              StoredLogin, UBI's stored token and its expiry
+src/tradingmachine/ubi_stores/stored_login_reader.py       StoredLoginReader, the read-only reader of UBI's login and api credentials
+src/tradingmachine/ubi_stores/stored_login_token_source.py StoredLoginTokenSource, which uses UBI's stored token and connects only as a last resort
+src/tradingmachine/ubi_stores/live_quote_reader.py         LiveQuoteReader, many live quotes from UBI's Redis in one round trip
 src/tradingmachine/assets/instruments.py        Instrument, TradeableInstrument, NonTradeableInstrument
 src/tradingmachine/assets/equities.py           the six equity-family classes, one per UBI equity segment
 src/tradingmachine/assets/fixed_income.py       the six fixed income classes, one per UBI fixed income segment
@@ -21,6 +32,7 @@ src/tradingmachine/assets/funds.py              ExchangeTradedFund and Investmen
 src/tradingmachine/assets/mutual_funds.py       MutualFund, which is held rather than traded
 src/tradingmachine/assets/exceptions.py         InstrumentError and its thirty-one subclasses
 src/tradingmachine/assets/analysis/             thirteen classes of candle analysis that Instrument inherits
+src/tradingmachine/assets/analysis/candle_frame_analysis.py   CandleFrameAnalysis, the same methods over a frame of candles the caller holds
 src/tradingmachine/orders/synthetic_order.py    SyntheticOrder, the shared base of the synthetic order types
 src/tradingmachine/orders/order_candidate.py    OrderCandidate, one leg of a multi-instrument synthetic order
 src/tradingmachine/orders/exposure_watch.py     ExposureWatch, one watched instrument of an exposure hedge
@@ -33,7 +45,7 @@ scripts/documentation_hooks.py                  silences one griffe warning duri
 
 `scripts/` is deliberately outside the package, because those two files only run inside a MkDocs build and should not ship to anyone installing the library.
 
-`Instrument` looks an instrument up once through `/api/instruments/details`, then fetches candles through the `prices` method and live values through the `quote`, `last_price` and `ohlc` properties, going to UBI on every read. Every member that only reports a value is a property, and only members that take an argument or write to the market are methods, which the user decided on 2026-09-22. It inherits about 190 analysis methods from `src/tradingmachine/assets/analysis/`: TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest. `TradeableInstrument` adds order-book values and refuses indices, and `NonTradeableInstrument` accepts only indices. There is deliberately no caching and no date-range batching around UBI calls, because UBI is local and caches in its own Redis.
+`Instrument` looks an instrument up once through `/api/instruments/details`, then fetches candles through the `prices` method and live values through the `quote`, `last_price` and `ohlc` properties, going to UBI on every read. Every member that only reports a value is a property, and only members that take an argument or write to the market are methods, which the user decided on 2026-09-22. It inherits about 190 analysis methods from `src/tradingmachine/assets/analysis/`: TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest. `TradeableInstrument` adds order-book values and refuses indices, and `NonTradeableInstrument` accepts only indices. There is deliberately no caching and no date-range batching around UBI calls, because UBI is local and caches in its own Redis. `prices` is built on `prices_document`, which returns UBI's whole answer as a `PricesDocument` (price basis, adjustability, cache or database, the range read), and `PricesDocument.frame` builds the same DataFrame `prices` always returned. `additional_details` is a property reading the brokers' extra attributes, such as the ISIN.
 
 `TradeableInstrument` also trades. `place_order`, `modify_order`, `cancel_order` and `cancel_open_orders` write to UBI's order routes, and the `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`, `net_positions` and `day_positions` properties read this instrument's own rows out of the account-wide documents UBI serves. `orders` gives every order today whatever its status, and a status without a property of its own, such as `EXPIRED`, is found by filtering its `status` column. The order vocabulary is passed as plain strings, such as `"buy"` and `"limit"`, because UBI validates it; prices and quantities are sent exactly as given, with no tick rounding or lot checking; and the reading members return a pandas DataFrame, or None when no row matches. Holdings and funds are not part of this, and holdings stay on `Equity`.
 
@@ -65,6 +77,13 @@ With these seven modules, every asset class the old project had is ported. What 
 
 Instruments can also be found rather than only named. `Equity.search` and `EquityIndex.search` look a symbol up by part of its name, and the four derivative classes offer `expiries`, `contracts`, `strikes` and `chain`, each supplying its own segment. These read `/api/instruments/master` rather than `/api/instruments/search`, because the search route sorts by expiry ascending, caps at 200 rows and takes no offset, so every live contract sits behind thousands of expired ones. They return a pandas DataFrame of identities rather than instrument objects, since a 214-contract option chain would otherwise mean 214 lookups, and expired contracts are left out unless `include_expired=True`.
 
+Two further groups of classes serve programs that deal with thousands of instruments at once, and were added on 2026-09-26 for the sibling project instruments_explorer (`../instruments_explorer`), a web application that moved all of its UBI access onto this library that day. Neither ever places an order or writes anything.
+
+- **Read-only market data by instrument id**, in `tradingmachine.ubi_client`. `InstrumentCatalogue` takes an instrument id per call and returns UBI's answers unchanged (`greeting`, `segments`, `mapping_date`, `details`, `additional_details`, `quote`, `prices_document`, `open_master`), without building an `Instrument`, whose constructor sends a details request. `open_master` returns an `InstrumentMasterStream`, which reads the whole master (about 540,000 instruments and 127 MB) in batches through `UnifiedBrokerInterface.stream_get` and raises `IncompleteResponseError` when the array stops early or has no `X-Mapping-Date` header, because UBI has already sent HTTP 200 by then.
+- **Direct, read-only reads of UBI's own Redis and MongoDB** (ports 1002 and 1003), in `tradingmachine.ubi_stores`, for the two things UBI's REST API has no route for. `StoredLoginReader` reads the token UBI has stored (Redis hash `last_login`, then MongoDB) and UBI's own api key and secret; `StoredLoginTokenSource` uses that token and connects only when none is usable, if allowed and not within a 60-second cooldown. `LiveQuoteReader` reads many quotes at once from the hash `unified:quotes:live` with one `HMGET` per 500 ids. The caller fills in `RedisSettings` and `MongoSettings`, usually from UBI's `.env`; nothing here reads tradingmachine's `Configuration`. The package is separate so that importing the REST client never imports `redis`, and `tests/test_ubi_stores.py::TestReadOnly` checks that it contains no write command.
+
+`CandleFrameAnalysis`, in `src/tradingmachine/assets/analysis/candle_frame_analysis.py`, inherits the same thirteen analysis classes as `Instrument`, but its `prices` returns a copy of one DataFrame given to it, so a chart or screener can compute many indicators from one read of the candles, including warm-up history it trims away afterwards. A method given `from_date`, `to_date` or `days` raises `ValueError`. `OverlapStudies.triple_exponential_moving_average` is Tillson's T3 (`talib.T3`, column `t3_<window>`), not the TEMA most charting tools show; `mulloy_triple_exponential_moving_average` (`talib.TEMA`, column `tema_<window>`) was added for that, and the T3 method kept its name so no caller breaks.
+
 Imports use full package paths from the top-level package (`from tradingmachine.ubi_client import client`), and they work from any directory once the library is installed. Reasoning behind each file is in `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`.
 
 ## The Unified Broker Interface (UBI)
@@ -73,7 +92,7 @@ The sibling project `../unified_broker_interface` exposes REST APIs for trading 
 
 `UnifiedBrokerInterface` reads UBI's api key and secret from this project's MongoDB, from the `settings` document `{"broker_name": "unified_broker_interface", "api_key": ..., "api_secret": ...}`, which must match the same document in UBI's own MongoDB. It was seeded by hand and is not created by any code.
 
-UBI holds one access token for the whole application, and it expires after a day by default. Every `connect` replaces it, which logs out any other client using UBI, including UBI's REST API test page. The client reconnects and retries once when a request gets HTTP 401. See `.claude/notes/src/tradingmachine/ubi_client/client.py.md`.
+UBI holds one access token for the whole application, and it expires after a day by default. A `connect` made after the most recent 07:00 hands back the token already in force, but otherwise it replaces it, which logs out any other client using UBI, including UBI's REST API test page. The client asks a token source (`tradingmachine.ubi_client.token_sources`) for its token before each request and once more after an HTTP 401, retrying once. The default, `MongoCredentialTokenSource`, is the old behaviour: the key and secret from this project's MongoDB, connect on first use and reconnect after a refusal. `CredentialTokenSource` takes a key and secret directly, and `tradingmachine.ubi_stores.stored_login_token_source.StoredLoginTokenSource` uses UBI's stored token. The client keeps one `requests.Session` with a pool of `connection_pool_size` connections, holds a re-entrant lock around every call into the token source so concurrent 401s share one connect, and can be closed or used as a context manager. See `.claude/notes/src/tradingmachine/ubi_client/client.py.md` and `token_sources.py.md` beside it.
 
 The library assumes UBI runs with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`, which the user's UBI `.env` sets. The price-reference wrappers, `reduce_position`, `liquidate_position` and every class in `tradingmachine.orders` depend on it, and `place_order` refuses to send their orders otherwise.
 
@@ -87,9 +106,9 @@ Use the interpreter and tools inside `.venv/` directly rather than any system-wi
 .venv/bin/ruff format .
 ```
 
-`pyproject.toml` declares only the seven packages the library imports: `backtesting`, `numpy`, `pandas`, `pymongo`, `python-dotenv`, `requests` and `TA-Lib`. The `docs` extra holds the MkDocs toolchain and the `development` extra holds `ruff` and `build`. Everything else the project may eventually want, such as `streamlit`, `selenium` and `yfinance`, stays pinned in `requirements.txt` as the development environment and is not a dependency of the library.
+`pyproject.toml` declares only the eight packages the library imports: `backtesting`, `numpy`, `pandas`, `pymongo`, `python-dotenv`, `redis`, `requests` and `TA-Lib`. `redis` joined on 2026-09-26 for `tradingmachine.ubi_stores`. The `docs` extra holds the MkDocs toolchain and the `development` extra holds `ruff` and `build`. Everything else the project may eventually want, such as `streamlit`, `selenium` and `yfinance`, stays pinned in `requirements.txt` as the development environment and is not a dependency of the library.
 
-`pytest` is in neither file and is not installed, so it must be added before tests can be run.
+`pytest` is in the `development` extra and its settings are under `[tool.pytest.ini_options]` in `pyproject.toml`. Run the suite with `.venv/bin/python -m pytest`. The tests send real HTTP requests to `tests/fake_ubi_server.py`, which issues its own tokens, and replace `pymongo.MongoClient` and `redis.Redis` with the fakes in `tests/fakes.py`, so nothing reaches UBI, a broker or a database.
 
 `TA-Lib` is a Python wrapper around a native C library. It imports correctly in the current `.venv`, but recreating the environment on another machine requires the TA-Lib C library to be installed first.
 
@@ -97,7 +116,7 @@ Use the interpreter and tools inside `.venv/` directly rather than any system-wi
 
 The project has a Material for MkDocs site, published at https://pramodathani.github.io/tradingmachine/. It was first added on 2026-09-20 and rebuilt from scratch on 2026-09-26, following the sibling project's rebuild of the day before, with the same deep orange palette, Mermaid diagrams, Vega-Lite charts and animated SVGs in `docs/assets/diagrams/`. Narrative pages are hand-written under `docs/` and listed in the `nav` in `mkdocs.yml`; reference pages are generated at build time by `scripts/gen_ref_pages.py`, one per module under `src/tradingmachine`, straight from the docstrings, and held in memory rather than written into the repository. `site/` is gitignored.
 
-The site has seven tabs: Get started, Python API, Asset classes, Analysis, Architecture, Project and the generated API reference. The Python API tab is laid out like Zerodha's Kite Connect documentation, with one page per group of members, a summary table on each, and member badges from `docs/stylesheets/extra.css` that mark which members place real orders. `docs/project/writing-docs.md` holds the visual conventions a new page should follow. The old Pitfalls and Known issues pages were not carried over, at the user's choice; they remain in git history at `b5761c0`.
+The site has seven tabs: Get started, Python API, Asset classes, Analysis, Architecture, Project and the generated API reference. The Python API tab's Read-only market data page covers `InstrumentCatalogue`, `PricesDocument`, `InstrumentMasterStream` and `tradingmachine.ubi_stores`, and the Analysis tab's landing page covers `CandleFrameAnalysis`. The Python API tab is laid out like Zerodha's Kite Connect documentation, with one page per group of members, a summary table on each, and member badges from `docs/stylesheets/extra.css` that mark which members place real orders. `docs/project/writing-docs.md` holds the visual conventions a new page should follow. The old Pitfalls and Known issues pages were not carried over, at the user's choice; they remain in git history at `b5761c0`.
 
 `.github/workflows/docs.yml` builds the site with `mkdocs build --strict` on every push and pull request, and publishes it to GitHub Pages only from `main`, so merging a pull request republishes the site and a broken link fails the pull request's check. It installs only the `docs` extra from `pyproject.toml`, because installing the library would need TA-Lib's C library; the reasoning is in `.claude/notes/.github/workflows/docs.yml.md`.
 
@@ -124,16 +143,16 @@ docker compose down
 | MongoDB | 2003 | Root user, so clients connect with `authSource=admin` |
 | TimescaleDB | 2004 | PostgreSQL 18 with the `timescaledb` extension |
 
-`docker compose down -v` also deletes the `tradingmachine_*_volume` volumes and all data in them. The sibling project `unified_broker_interface` runs its own containers on ports 1002 to 1005 on the same machine. The reasoning behind the compose file is in `.claude/notes/docker-compose.yml.md`.
+`docker compose down -v` also deletes the `tradingmachine_*_volume` volumes and all data in them. The sibling project `unified_broker_interface` runs its own containers on ports 1002 to 1005 on the same machine; `tradingmachine.ubi_stores` reads UBI's Redis on 1002 and MongoDB on 1003, never these. The reasoning behind the compose file is in `.claude/notes/docker-compose.yml.md`.
 
 ## Intended scope, inferred from dependencies
 
-The pinned dependencies suggest what the project is for. Apart from the UBI client, the instrument classes, the synthetic order classes and the account, none of this is implemented yet:
+The pinned dependencies suggest what the project is for. Apart from the UBI client, the instrument classes, the read-only market data classes, the readers of UBI's stores, the synthetic order classes and the account, none of this is implemented yet:
 
 | Area | Packages |
 |---|---|
-| Market data | UBI's REST API through `tradingmachine.assets.instruments`, which is implemented; `yfinance`, `beautifulsoup4`, `selenium`, `websocket-client`, `websockets` |
+| Market data | UBI's REST API through `tradingmachine.assets.instruments` and `tradingmachine.ubi_client.instrument_catalogue`, and UBI's live quote hash through `tradingmachine.ubi_stores.live_quote_reader`, all implemented; `yfinance`, `beautifulsoup4`, `selenium`, `websocket-client`, `websockets` |
 | Broker access | `requests` through `ubi_client`, which is implemented; `pyotp` (time-based one-time passwords) |
 | Analysis and backtesting | `pandas`, `numpy`, `TA-Lib` and `backtesting` through `tradingmachine.assets.analysis`, which is implemented; `opstrat` |
-| Storage | `redis`, `pymongo`, `psycopg2-binary`, `SQLAlchemy`, `peewee` |
+| Storage | `redis` and `pymongo`, used read-only on UBI's own stores through `tradingmachine.ubi_stores`, which is implemented; `psycopg2-binary`, `SQLAlchemy`, `peewee` |
 | Interfaces | `streamlit`, `Flask`, `textual`, `uvicorn`, `gunicorn` |
