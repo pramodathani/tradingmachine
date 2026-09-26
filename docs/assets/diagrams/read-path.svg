@@ -1,0 +1,69 @@
+<svg class="tm-svg" viewBox="0 0 900 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="read-path-title read-path-description">
+  <title id="read-path-title">One property read travelling to UBI and back</title>
+  <desc id="read-path-description">Reading share.last_price calls the instrument object, which asks the shared UBI client for GET /api/instruments/ltp with the instrument_id. The client adds the access token and sends the request to UBI on 127.0.0.1:8080, which reads the quote from its own Redis cache, or from a broker while the caller waits. The answer travels back the same way, and the property returns the float 1226.0. Nothing is kept on the way back, so the next read makes the whole trip again.</desc>
+  <text class="title" x="20" y="32">share.last_price, one read, one request</text>
+  <path id="read-path-request-code" class="wire" d="M140,100 L190,100"/>
+  <path id="read-path-request-instrument" class="wire" d="M350,100 L400,100"/>
+  <path id="read-path-request-client" class="wire" d="M570,100 L640,100"/>
+  <path id="read-path-read-store" class="wire" d="M695,142 L695,210"/>
+  <path id="read-path-answer-store" class="wire" d="M725,210 L725,142"/>
+  <path id="read-path-answer-client" class="wire" d="M640,124 L570,124"/>
+  <path id="read-path-answer-instrument" class="wire" d="M400,124 L350,124"/>
+  <path id="read-path-answer-code" class="wire" d="M190,124 L140,124"/>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.08;1" calcMode="linear"><mpath href="#read-path-request-code"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="1;1;0;0" keyTimes="0;0.08;0.09;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.1;0.18;1" calcMode="linear"><mpath href="#read-path-request-instrument"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.1;0.11;0.18;0.19;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.2;0.28;1" calcMode="linear"><mpath href="#read-path-request-client"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.2;0.21;0.28;0.29;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.3;0.38;1" calcMode="linear"><mpath href="#read-path-read-store"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.3;0.31;0.38;0.39;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.42;0.5;1" calcMode="linear"><mpath href="#read-path-answer-store"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.42;0.43;0.5;0.51;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.52;0.6;1" calcMode="linear"><mpath href="#read-path-answer-client"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.52;0.53;0.6;0.61;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.62;0.7;1" calcMode="linear"><mpath href="#read-path-answer-instrument"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.62;0.63;0.7;0.71;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="8s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.72;0.8;1" calcMode="linear"><mpath href="#read-path-answer-code"/></animateMotion>
+    <animate attributeName="opacity" dur="8s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.72;0.73;0.8;0.81;1"/>
+  </circle>
+  <rect class="box" x="20" y="90" width="120" height="44" rx="22"/>
+  <text x="80" y="117" text-anchor="middle">Your code</text>
+  <text class="mono" x="80" y="160" text-anchor="middle">share.last_price</text>
+  <text class="mono" x="80" y="178" text-anchor="middle">→ 1226.0</text>
+  <rect class="accent-box" x="190" y="80" width="160" height="64" rx="8"/>
+  <text class="title" x="270" y="106" text-anchor="middle">Equity object</text>
+  <text class="small" x="270" y="126" text-anchor="middle">holds the instrument_id</text>
+  <text class="small" x="270" y="166" text-anchor="middle">a property, but still</text>
+  <text class="small" x="270" y="182" text-anchor="middle">one request per read</text>
+  <rect class="box" x="400" y="80" width="170" height="64" rx="8"/>
+  <text class="title" x="485" y="106" text-anchor="middle">UBI client</text>
+  <text class="small" x="485" y="126" text-anchor="middle">shared by every instrument</text>
+  <text class="mono" x="485" y="166" text-anchor="middle">GET /api/instruments/ltp</text>
+  <text class="small" x="485" y="182" text-anchor="middle">adds the access-token header</text>
+  <text class="small" x="485" y="198" text-anchor="middle">retries once on a 401</text>
+  <rect class="box" x="640" y="80" width="140" height="64" rx="8"/>
+  <text class="title" x="710" y="106" text-anchor="middle">UBI</text>
+  <text class="mono" x="710" y="126" text-anchor="middle">127.0.0.1:8080</text>
+  <rect class="store" x="630" y="210" width="160" height="50" rx="8"/>
+  <text x="710" y="231" text-anchor="middle">UBI's quote cache</text>
+  <text class="small" x="710" y="249" text-anchor="middle">or a broker while you wait</text>
+  <text class="small" x="686" y="182" text-anchor="end">read</text>
+  <text class="small" x="734" y="182">answer</text>
+  <text class="small" x="710" y="285" text-anchor="middle">nothing is kept on the way back</text>
+</svg>
