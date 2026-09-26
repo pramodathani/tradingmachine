@@ -73,7 +73,7 @@ Twenty-seven classes across six modules cover every asset class UBI carries. A m
 | Funds and trusts | 2 | ✓ funds only | ✓ | quantity in units | ✓ both |
 | Mutual funds | 1 | — none | — none | `cnc` only, give a limit price | ✓ |
 
-The gaps are UBI's rather than work left undone. No broker that serves quotes carries a cash bond or a rate index; UBI stores no candles for any fixed income or currency segment; and four segments — the three currency index ones and `fixed_income_index_options` — hold no rows at all on any exchange, so their classes resolve nothing today and exist so that every family has the same shape. `docs/asset-classes/index.md` carries the full table and the reason behind every gap.
+The gaps are UBI's rather than work left undone. No broker that serves quotes carries a cash bond or a rate index; UBI stores no candles for any fixed income or currency segment; and four segments — the three currency index ones and `fixed_income_index_options` — hold no rows at all on any exchange, so their classes resolve nothing today and exist so that every family has the same shape. The [Asset classes](https://pramodathani.github.io/tradingmachine/asset-classes/) page of the documentation site carries the full table and the reason behind every gap.
 
 > [!WARNING]
 > A commodity or currency order's quantity is counted in quotation units and must be a whole number of lots: `quantity=1` on an MCX gold future is refused, `quantity=100` is one lot. The instrument's `lot_size` attribute is **not** the figure to compute that from, because it is the plurality of the brokers' own numbers, which gives NSE `USDINR` a lot of 1 while orders are measured against 1000.
@@ -105,7 +105,7 @@ Docker Compose runs the three stores, so none of them needs to be installed on t
 
    To reproduce the exact pinned environment this was developed in, install `requirements.txt` as well, then add the library on top of it with `--no-deps`.
 
-3. **Write a `.env` file at the project root.** It needs `TRADINGMACHINE_UBI_BASE_URL` and a host, port, database, username and password for each of Redis, MongoDB and TimescaleDB. `docs/getting-started/configuration.md` lists every variable. The file is excluded by `.gitignore` and should never be committed.
+3. **Write a `.env` file at the project root.** It needs `TRADINGMACHINE_UBI_BASE_URL` and a host, port, database, username and password for each of Redis, MongoDB and TimescaleDB. The [Configuration](https://pramodathani.github.io/tradingmachine/get-started/configuration/) page lists every variable. The file is excluded by `.gitignore` and should never be committed.
 
 4. **Bring the data stores up.** Docker Compose reads the same `.env`, so the ports and passwords come from the variables you just set. The containers use ports 2002 to 2004, chosen to stay clear of the sibling project's, which use 1002 to 1005 on the same machine.
 
@@ -171,7 +171,8 @@ scripts/
 └── documentation_hooks.py silences one griffe warning during a strict docs build
 
 pyproject.toml             the library's metadata, dependencies and build backend
-docs/                      the MkDocs site
+docs/                      the MkDocs site, published on GitHub Pages
+.github/workflows/docs.yml builds and publishes the site
 .claude/notes/             one Markdown note per source file, holding the reasoning
 ```
 
@@ -192,11 +193,11 @@ Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` r
 
 ## Documentation
 
-The `docs/` directory is a full Material for MkDocs site and is the authoritative reference. Narrative pages are hand-written; the API reference is generated from the docstrings at build time by `scripts/gen_ref_pages.py`, one page per module, so a new module appears without any edit anywhere.
+The `docs/` directory is a full Material for MkDocs site, published at <https://pramodathani.github.io/tradingmachine/> and rebuilt automatically whenever `main` changes. Narrative pages are hand-written; the API reference is generated from the docstrings at build time by `scripts/gen_ref_pages.py`, one page per module, so a new module appears without any edit anywhere.
 
 ```bash
 .venv/bin/mkdocs serve           # http://127.0.0.1:8000, with live reload
 .venv/bin/mkdocs build --strict  # broken links and references fail the build
 ```
 
-Three pages are worth knowing about before you change anything. `docs/contributing/pitfalls.md` collects the things that have caught someone out, from the lot-size trap to what HTTP 504 means for an order. `docs/contributing/known-issues.md` separates what is actually broken, most of it in UBI, from what is merely surprising. `docs/contributing/adding-an-asset-class.md` walks through building the next family module in the pattern the existing six follow.
+The [Python API](https://pramodathani.github.io/tradingmachine/python-api/) tab lists every public class and member, laid out like Zerodha's Kite Connect documentation. Before changing anything, read [Design choices](https://pramodathani.github.io/tradingmachine/architecture/design-choices/), which records why the library is built the way it is, and [Adding an asset class](https://pramodathani.github.io/tradingmachine/project/adding-an-asset-class/), which walks through building the next family module in the pattern the existing seven follow. A pull request builds the site with `--strict` as a check, so a broken link fails before it can be merged.
