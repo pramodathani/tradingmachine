@@ -40,6 +40,8 @@ from tradingmachine.assets.analysis import volatility_indicators
 from tradingmachine.assets.analysis import volume_indicators
 from tradingmachine.ubi_client import client
 from tradingmachine.ubi_client import exceptions as ubi_exceptions
+from tradingmachine.ubi_client import instrument_catalogue
+from tradingmachine.ubi_client import prices_document
 
 INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
@@ -561,35 +563,67 @@ class Instrument(
             BadRequestError: The range or interval is invalid, such as both days and from_date given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        parameters = {
-            "instrument_id": self.instrument_id,
-            "interval": interval,
-        }
-        if adjusted:
-            parameters["adjusted"] = "true"
-        else:
-            parameters["adjusted"] = "false"
-        if from_date is not None:
-            parameters["from"] = from_date
-        if to_date is not None:
-            parameters["to"] = to_date
-        if days is not None:
-            parameters["days"] = days
-        response = self._unified_broker_interface.get(
-            "/api/instruments/prices",
-            params=parameters,
+        document = self.prices_document(
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+            days=days,
+            adjusted=adjusted,
         )
-        if not response["candles"]:
-            return None
-        frame = pd.DataFrame(response["candles"], columns=response["columns"])
-        frame = frame.rename(columns={"time": "datetime"})
-        frame["datetime"] = pd.to_datetime(frame["datetime"]).dt.tz_convert(
-            INDIA_TIME_ZONE
+        return document.frame(self.exchange, self.segment, interval)
+
+    def prices_document(
+        self,
+        interval: str = "day",
+        from_date: datetime.date | str | None = None,
+        to_date: datetime.date | str | None = None,
+        days: int | None = None,
+        adjusted: bool = True,
+    ) -> prices_document.PricesDocument:
+        """Fetches the instrument's candles for a range from UBI, together with UBI's facts about them.
+
+        Use this rather than prices when the price basis, whether the instrument is adjustable, where UBI read the candles from, or the range UBI actually read also matter.
+
+        Args:
+            interval: The str candle interval, such as `day` or `5minute`.
+            from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            days: The int number of days to count back from today, or None when from_date and to_date are given.
+            adjusted: A bool that is True for prices adjusted for splits and bonuses.
+
+        Returns:
+            The prices_document.PricesDocument holding UBI's whole answer.
+
+        Raises:
+            BadRequestError: The range or interval is invalid, such as both days and from_date given.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        catalogue = instrument_catalogue.InstrumentCatalogue(
+            self._unified_broker_interface
         )
-        frame.insert(0, "interval", interval)
-        frame.insert(0, "segment", self.segment)
-        frame.insert(0, "exchange", self.exchange)
-        return frame.sort_values("datetime").reset_index(drop=True)
+        return catalogue.prices_document(
+            self.instrument_id,
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+            days=days,
+            adjusted=adjusted,
+        )
+
+    @property
+    def additional_details(self) -> dict:
+        """The extra attributes each broker publishes about the instrument, such as its ISIN, read from UBI on every access.
+
+        Returns:
+            A dict with `attribute_names` and one `carried_by` entry per broker holding that broker's values.
+
+        Raises:
+            UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+        """
+        catalogue = instrument_catalogue.InstrumentCatalogue(
+            self._unified_broker_interface
+        )
+        return catalogue.additional_details(self.instrument_id)
 
     @property
     def quote(self) -> dict:
