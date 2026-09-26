@@ -1,12 +1,12 @@
 # Indicators
 
-Technical indicators are calculations over a run of candles that traders read as signs of trend, momentum or volatility. This page lists the 53 indicator methods every instrument inherits, in five groups that follow TA-Lib's own grouping. Each method fetches the instrument's candles through [`prices`](../python-api/market-data.md#prices), runs one TA-Lib function over them, and returns the candles with one or more columns added, or `None` when UBI has no candles for the range.
+Technical indicators are calculations over a run of candles that traders read as signs of trend, momentum or volatility. This page lists the 52 indicator methods every instrument inherits, in five groups that follow TA-Lib's own grouping. Each method fetches the instrument's candles through [`prices`](../python-api/market-data.md#prices), runs one TA-Lib function over them, and returns the candles with one or more columns added, or `None` when UBI has no candles for the range.
 
 The table below shows the five groups and what each is for.
 
 | Group | Class | Methods | What it measures |
 |---|---|--:|---|
-| [Overlap studies](#overlap-studies) | `OverlapStudies` | 13 | Averages and bands drawn on the same scale as the price |
+| [Overlap studies](#overlap-studies) | `OverlapStudies` | 12 | Averages and bands drawn on the same scale as the price |
 | [Momentum indicators](#momentum-indicators) | `MomentumIndicators` | 28 | How fast and how strongly the price is moving |
 | [Volume indicators](#volume-indicators) | `VolumeIndicators` | 3 | Whether volume confirms the price's moves |
 | [Volatility indicators](#volatility-indicators) | `VolatilityIndicators` | 3 | How far the price ranges from candle to candle |
@@ -70,7 +70,6 @@ The tabs below hold one table per group. The "Columns added" column gives each n
     | `weighted_moving_average` | Adds the weighted moving average of one candle column | `window=10`, `column='close'` | `WMA` | `wma_<window>` |
     | `double_exponential_moving_average` | Adds the double exponential moving average of one candle column | `window=10`, `column='close'` | `DEMA` | `dema_<window>` |
     | `triple_exponential_moving_average` | Adds Tillson's T3 triple exponential moving average of one candle column | `window=10`, `volume_factor=0.7`, `column='close'` | `T3` | `t3_<window>` |
-    | `mulloy_triple_exponential_moving_average` | Adds Patrick Mulloy's triple exponential moving average (TEMA) of one candle column | `window=10`, `column='close'` | `TEMA` | `tema_<window>` |
     | `kaufman_adaptive_moving_average` | Adds the Kaufman adaptive moving average of one candle column | `window=10`, `column='close'` | `KAMA` | `kama_<window>` |
     | `mesa_adaptive_moving_average` | Adds the MESA adaptive moving average and its following average of one candle column | `fast_limit=0.5`, `slow_limit=0.05`, `column='close'` | `MAMA` | `mama`, `fama` |
     | `triangular_moving_average` | Adds the triangular moving average of one candle column | `window=10`, `column='close'` | `TRIMA` | `trima_<window>` |
@@ -78,15 +77,7 @@ The tabs below hold one table per group. The "Columns added" column gives each n
     | `mid_point` | Adds the midpoint of the highest and lowest value of one candle column over each window | `window=10`, `column='close'` | `MIDPOINT` | `mid_point_<window>` |
     | `middle_price` | Adds the midpoint of the highest high and lowest low over each window | `window=10` | `MIDPRICE` | `middle_price_<window>` |
 
-    !!! warning "`triple_exponential_moving_average` is Tillson's T3, not TEMA"
-        Two different indicators go by the name "triple exponential moving average", and the method with that name computes the less common one. The table below tells them apart.
-
-        | Method | Indicator | How it is calculated | TA-Lib function | Column |
-        |---|---|---|---|---|
-        | `triple_exponential_moving_average` | Tim Tillson's T3 | Six exponential moving averages in a row, blended by `volume_factor` | `T3` | `t3_<window>` |
-        | `mulloy_triple_exponential_moving_average` | Patrick Mulloy's TEMA, the one most charting tools show | Three times an exponential moving average, less three times its double smoothing, plus its triple smoothing | `TEMA` | `tema_<window>` |
-
-        The T3 method kept its name from the old project, because renaming it would break every caller, and `mulloy_triple_exponential_moving_average` was added on 2026-09-26 for the TEMA. When your numbers must match a charting tool's "TEMA" line, call the Mulloy method.
+    `triple_exponential_moving_average` calls TA-Lib's `T3`, Tillson's T3, rather than `TEMA`, which is the indicator most charting tools call the triple exponential moving average. The name was kept from the old project, and its column is `t3_<window>`.
 
 === "Momentum indicators"
 

@@ -25,7 +25,7 @@ classDiagram
         quote
         last_price
         ohlc
-        193 analysis methods
+        192 analysis methods
     }
     class TradeableInstrument {
         order book values

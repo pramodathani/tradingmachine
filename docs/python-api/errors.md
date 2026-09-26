@@ -11,7 +11,6 @@ The table below lists every class on this page.
 | <span class="member class">class</span> | [`UnifiedBrokerInterfaceError`](#unifiedbrokerinterfaceerror) | The base of every failure reported by, or on the way to, UBI |
 | <span class="member class">class</span> | [Twelve status classes](#the-ubi-client-errors) | One per HTTP status UBI returns, plus a catch-all and one for no answer at all |
 | <span class="member class">class</span> | [`DirectPlacementError`](#directplacementerror) | UBI would ignore an order's reference or synthetic object |
-| <span class="member class">class</span> | [`IncompleteResponseError`](#incompleteresponseerror) | A successful streamed answer from UBI stopped before its end |
 | <span class="member class">class</span> | [`InstrumentError`](#instrumenterror) | The base of every problem with an instrument |
 | <span class="member class">class</span> | [Four behaviour errors](#the-instrument-errors) | Tradeable, non-tradeable, position and holding |
 | <span class="member class">class</span> | [Twenty-seven family errors](#the-family-errors) | One per named instrument class, raised when UBI has no such instrument |
@@ -37,7 +36,6 @@ classDiagram
     UnifiedBrokerInterfaceError <|-- ServerError
     UnifiedBrokerInterfaceError <|-- UnreachableError
     UnifiedBrokerInterfaceError <|-- DirectPlacementError
-    UnifiedBrokerInterfaceError <|-- IncompleteResponseError
     class UnifiedBrokerInterfaceError {
         +str message
         +int status_code
@@ -120,7 +118,6 @@ UBI reports a failure as an HTTP status and a JSON body, with no error-type fiel
 | <span class="status s5">500</span>, 405 and any other | [`ServerError`](#servererror) | A failure with no more specific class |
 | none | [`UnreachableError`](#unreachableerror) | No answer arrived at all |
 | none | [`DirectPlacementError`](#directplacementerror) | Raised by the library itself, not by a status code |
-| none | [`IncompleteResponseError`](#incompleteresponseerror) | Raised by the library itself, when a streamed answer that began with HTTP 200 stopped early |
 
 A 2xx is never raised. That includes UBI's 202 for a synthetic order that is armed or scheduled, and its 207 for a flatten that partly failed, which `Account.flatten` returns for you to read.
 
@@ -148,7 +145,6 @@ flowchart LR
     D -- "UnreachableError" --> D7["Start UBI, check<br/>TRADINGMACHINE_UBI_BASE_URL"]
     D -- "DirectPlacementError" --> D8["Run UBI in engine mode"]
     D -- "AuthenticationError" --> D9["Make the MongoDB settings<br/>match UBI's key and secret"]
-    D -- "IncompleteResponseError" --> D10["Read the instrument<br/>master again"]
 ```
 
 !!! danger "Never resend an order after `OrderOutcomeUnknownError`"
@@ -246,10 +242,6 @@ The example below catches one subclass and reads all three. It is built from the
 3. A dry run carrying one of them is not probed first, because it is its own probe, and it raises this error when its answer has no `intent_id`.
 
 Start UBI with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine` and the order engine service running. [The placement-mode probe](../architecture/placement-modes.md#the-placement-mode-probe) explains the check.
-
-### IncompleteResponseError
-
-`IncompleteResponseError` is raised by the library, not by a status code, so its `status_code` is `None`. It means UBI answered with a success status but the answer stopped before its end, which can only be noticed in a streamed answer, because UBI has already sent HTTP 200 by the time a failure part-way through can happen. [`InstrumentMasterStream`](read-only-market-data.md#instrumentmasterstream) raises it when the instrument master stops before its closing bracket, is not a JSON array, or has no `X-Mapping-Date` header. Read the master again from the start, and never keep the partial list; [Read-only market data](read-only-market-data.md#incompleteresponseerror) has the detail.
 
 ## The instrument errors
 

@@ -164,7 +164,6 @@ nav:
       - Synthetic orders: python-api/synthetic-orders.md
       - The account: python-api/account.md
       - The UBI client: python-api/client.md
-      - Read-only market data: python-api/read-only-market-data.md
       - Vocabulary: python-api/vocabulary.md
       - Errors: python-api/errors.md
   - Asset classes:

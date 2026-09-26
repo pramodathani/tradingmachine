@@ -7,22 +7,18 @@ This module holds `UnifiedBrokerInterface`, a thin wrapper around the REST API o
 ```
 caller ── get / post / put / patch / delete ──► _request
                                                    │
-                  under the token lock ──► token_source.current_token
-                                                   │     (the default source connects on first use:
-                                                   │      exchange_credentials ── POST /api/session/connect)
+                        no cached token? ──► connect ── POST /api/session/connect
+                                                   │     (api-key, api-secret headers)
                                                    ▼
-                                               _send ── the shared requests.Session, access-token header
+                                               _send ── requests.request, access-token header
                                                    │
-                                            401? ── under the lock: token_source.token_after_refusal,
-                                                   │                then _send once more
+                           401 and not yet retried? ── clear token, _request again once
                                                    │
-                                       failure? ── _raise_for_failure ── exceptions class
+                                 other failure? ── _raise_for_failure ── exceptions class
                                                    │
                                                    ▼
                                            parsed JSON body
 ```
-
-This flow was reshaped on 2026-09-26; the section "Token sources, the session and the lock" below says why.
 
 ## Authentication
 
@@ -68,7 +64,7 @@ The request body parameter is named `body` rather than `json`, as the old client
 
 `_send` is the only place that calls `requests`. It turns `requests.RequestException`, such as a refused connection or a timeout, into `UnreachableError`, chained with `from` so the original error is kept. The old client let those exceptions escape unchanged, even though its `UBIServerError` docstring claimed to cover them.
 
-Until 2026-09-26 each request used `requests.request` directly rather than a `requests.Session`, on the grounds that a session must be closed. The client now keeps one session, because instruments_explorer sends thousands of requests through it; see below.
+Each request uses `requests.request` directly rather than a `requests.Session`. A session would reuse connections but must be closed, which would make the client a context manager. That can be added if request volume makes it worthwhile.
 
 The old client repeated the parse-and-raise code in `connect`, `disconnect` and `status`. Now `disconnect` and `status` go through `_request` like every other route, and only `connect` builds its request by hand, because it sends the key and secret instead of a token.
 
@@ -85,21 +81,3 @@ A live check against UBI on `http://127.0.0.1:8080` passed every case: connectin
 ## The message falls back to `status_message`, since 2026-09-26
 
 `_raise_for_failure` takes the exception's message from the body's `error` field. UBI's order engine does not use that field for its 504, "the engine did not answer in time": it answers with an order-shaped body whose explanation is in `status_message`, so the first dry runs against the engine on 2026-09-26 raised `OrderOutcomeUnknownError` with only "UBI returned HTTP 504". The method now falls back to `status_message` when there is no `error`, and to the generic text only when there is neither.
-
-## Token sources, the session and the lock, since 2026-09-26
-
-instruments_explorer, a long-running web application beside UBI, moved all of its UBI access onto this library on 2026-09-26. Three things it needed changed the client.
-
-**Where the token comes from is now a separate object.** `token_source` is a `tradingmachine.ubi_client.token_sources.TokenSource`, asked for a token before each request (`current_token`), asked again once after a 401 (`token_after_refusal`), asked to connect by `connect()`, and told to forget its token by `disconnect()`. Leaving `token_source` out builds a `MongoCredentialTokenSource`, which is the code that used to be `_load_credentials` plus the old connect-on-first-use and reconnect-on-401 behaviour, so a client built the old way behaves exactly as before; `tests/test_client.py` pins that down. instruments_explorer instead passes `tradingmachine.ubi_stores.stored_login_token_source.StoredLoginTokenSource`, which uses the token UBI has already stored and connects only when none is usable, because that project's rule is never to connect while a stored token is usable. The actual exchange of key and secret for a token is the public `exchange_credentials`, so every source connects the same way and `token_expires_at` is always set by it.
-
-A configuration is now built only when it is needed: when `base_url` is missing, or when no token source is given. A caller that passes both never causes the `.env` search, which matters because `Configuration` loads the `.env` it finds into `os.environ` for the whole process, and a host application must not pick up tradingmachine's variables by accident.
-
-**One `requests.Session` with a pool of `connection_pool_size` connections** (10 by default) replaces `requests.request`. Reusing connections saves a TCP handshake per call; instruments_explorer's screener alone reads 750 stocks in one run. `close()` closes the pool, and the client works as a context manager, but a client that is never closed is harmless: the pool is released with the object. The session is only used for the thread-safe parts of `requests`: no cookies are set and nothing is mounted after construction.
-
-**A lock around every call into the token source.** instruments_explorer calls the client from several threads at once. Without a lock, eight requests refused together would each connect, and each connect would replace the token the others had just received. `_token_lock` is a `threading.RLock` held while asking the source, never while a request is in flight, so requests still run in parallel. `CredentialTokenSource.token_after_refusal` returns the current token when it is no longer the refused one, which is how the seven threads that wait behind the first reuse its new token; `tests/test_token_sources.py` checks that eight concurrent refusals issue exactly one new token. The lock is re-entrant so that a source may call back into the client, as `connect` does through `exchange_credentials`.
-
-The retry no longer recurses with an `is_retry` flag: `_request` sends, and on a 401 asks for a replacement token and sends exactly once more, raising whatever the second answer is. The observable behaviour is the same.
-
-**Two new ways to send a request.** The `greeting` property sends `GET /api/`, the one route UBI serves without a token, and never asks the token source; instruments_explorer's status page uses it to tell "UBI is down" apart from "UBI has no token". `stream_get` sends an authenticated GET with `stream=True` and returns the open `requests.Response` once its status is known to be successful, retrying a 401 first, so a caller can read UBI's 127 MB instrument master as it arrives; `tradingmachine.ubi_client.instrument_master_stream.InstrumentMasterStream` is its only user.
-
-A connect answer that carries no `access-token` now raises `ServerError` rather than a `KeyError`.

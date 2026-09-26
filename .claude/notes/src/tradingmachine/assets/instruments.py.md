@@ -544,11 +544,3 @@ Every dry run that went through the engine, which in engine mode is every placem
 Two things were fixed from that run. The error's message had read only "UBI returned HTTP 504", which the client now takes from `status_message`. And a refusal carrying an `intent_id` on the main send, not only on the probe, now records `engine` as the placement mode, through `_record_engine_refusal`, which both paths share.
 
 Whether UBI accepts each class's settings, rather than only their shape matching its glossary, therefore still has to be checked with dry runs once the engine is running.
-
-## `prices_document` and `additional_details`, added on 2026-09-26
-
-`prices` now fetches through `prices_document`, which returns UBI's whole answer as a `tradingmachine.ubi_client.prices_document.PricesDocument`, and builds its DataFrame with `PricesDocument.frame`. The frame is identical to the one `prices` built before; `.claude/notes/src/tradingmachine/ubi_client/prices_document.py.md` records the check. `prices_document` is public for callers that also need UBI's facts about the candles: the price basis, whether the instrument is adjustable, whether they came from UBI's cache or database, and the range read.
-
-`additional_details` is a property that reads `/api/instruments/additional_details`, the extra attributes each broker publishes, such as the ISIN. It is read on every access, like `quote`.
-
-Both go through `tradingmachine.ubi_client.instrument_catalogue.InstrumentCatalogue`, which does the same by instrument id for callers that do not want to build an `Instrument`; see its note for why that class exists.

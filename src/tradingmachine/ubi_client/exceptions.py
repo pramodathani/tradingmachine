@@ -95,10 +95,6 @@ class UnreachableError(UnifiedBrokerInterfaceError):
     """The Unified Broker Interface could not be reached, so no response arrived."""
 
 
-class IncompleteResponseError(UnifiedBrokerInterfaceError):
-    """A successful answer from UBI arrived incomplete, such as a streamed instrument master that stopped before its end or has no mapping date."""
-
-
 class DirectPlacementError(UnifiedBrokerInterfaceError):
     """UBI places orders directly rather than through its order engine, so it would ignore a price reference, a quantity reference or a synthetic order."""
 

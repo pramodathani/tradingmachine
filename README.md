@@ -50,8 +50,6 @@ ten Indian retail brokers
 
 `tradingmachine.orders` holds one class per synthetic order type and `tradingmachine.accounts` holds `Account`, whose `flatten` is UBI's kill switch; both send through the same client.
 
-Beside the instrument objects sit read-only classes for programs that handle thousands of instruments at once, such as the sibling web application instruments_explorer. `InstrumentCatalogue` reads UBI's data by instrument id without building an instrument, including the whole 127 MB instrument master read in batches, and `CandleFrameAnalysis` runs every analysis method over candles you have already read. `tradingmachine.ubi_stores` reads UBI's own Redis and MongoDB directly, and never writes to them, for the two things UBI's REST API has no route for: the access token UBI has already stored, so a program never has to connect while one is usable, and many live quotes in one round trip. The client itself can take its access token from a pluggable token source and can be shared between threads.
-
 Four ideas shape everything above.
 
 **The class is the contract type.** There is no `segment="equity_options"` string passed by hand. `EquityOption` is a class, and its constructor asks for an exchange, an underlying symbol, an expiry date, a strike price and an option type, because that is what identifies one equity option. A class that cannot be traded, such as `EquityIndex`, simply does not offer the order methods.
@@ -88,7 +86,7 @@ The gaps are UBI's rather than work left undone. No broker that serves quotes ca
 | TA-Lib C library | 0.6 or later | The `TA-Lib` package the library depends on wraps it, and `pip` cannot install the C part |
 | Unified Broker Interface | running on `127.0.0.1:8080` | Every price and every order comes from it |
 | MongoDB | 8.0.4 | Holds the api key and secret the UBI client authenticates with |
-| Redis | `redis:trixie` | Brought up by Compose, not yet read by any module; `tradingmachine.ubi_stores` reads UBI's own Redis instead |
+| Redis | `redis:trixie` | Brought up by Compose, not yet read by any module |
 | PostgreSQL with TimescaleDB | 18 | The same |
 
 Docker Compose runs the three stores, so none of them needs to be installed on the host.
@@ -97,7 +95,7 @@ Docker Compose runs the three stores, so none of them needs to be installed on t
 
 1. **Install the TA-Lib C library first.** The Python wrapper fails to build without it, with an error about a missing symbol or header rather than a missing package, which is confusing the first time. On macOS, `brew install ta-lib`; on Debian, build the newest source release from [the TA-Lib releases page](https://github.com/ta-lib/ta-lib/releases).
 
-2. **Create the virtual environment and install the library.** An editable install points the environment at `src/tradingmachine` where it sits, so an edit to a source file takes effect immediately, and it pulls in the eight packages the library imports. The two extras add the MkDocs toolchain and `ruff`.
+2. **Create the virtual environment and install the library.** An editable install points the environment at `src/tradingmachine` where it sits, so an edit to a source file takes effect immediately, and it pulls in the seven packages the library imports. The two extras add the MkDocs toolchain and `ruff`.
 
    ```bash
    python3.14 -m venv .venv
@@ -150,8 +148,7 @@ src/tradingmachine/assets/
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
 ├── exceptions.py          InstrumentError and its thirty-one subclasses
-└── analysis/              thirteen classes of candle analysis that Instrument inherits,
-                           and CandleFrameAnalysis, which runs them over candles you hold
+└── analysis/              thirteen classes of candle analysis that Instrument inherits
 
 src/tradingmachine/orders/
 ├── synthetic_order.py     SyntheticOrder, the shared base
@@ -164,23 +161,10 @@ src/tradingmachine/accounts/
 
 src/tradingmachine/ubi_client/
 ├── client.py              UnifiedBrokerInterface: connect, disconnect, status, get, post, …
-├── token_sources.py       where the client's access token comes from
-├── instrument_catalogue.py    InstrumentCatalogue, read-only data by instrument id
-├── prices_document.py     PricesDocument, UBI's whole answer from the prices route
-├── instrument_master_stream.py    InstrumentMasterStream, the master read in batches
-├── json_array_stream_parser.py    the incremental JSON parser behind it
 └── exceptions.py          one error class per HTTP status code UBI returns
 
-src/tradingmachine/ubi_stores/     read-only access to UBI's own Redis and MongoDB
-├── store_settings.py      RedisSettings, MongoSettings
-├── stored_login.py        StoredLogin, UBI's stored token and its expiry
-├── stored_login_reader.py StoredLoginReader
-├── stored_login_token_source.py   StoredLoginTokenSource
-└── live_quote_reader.py   LiveQuoteReader, many live quotes in one round trip
-
 src/tradingmachine/utilities/
-├── configuration.py       Configuration, which reads the environment and .env lazily
-└── clock.py               SystemClock, replaceable in tests
+└── configuration.py       Configuration, which reads the environment and .env lazily
 
 scripts/
 ├── gen_ref_pages.py       builds the API reference at documentation build time
@@ -192,20 +176,20 @@ docs/                      the MkDocs site, published on GitHub Pages
 .claude/notes/             one Markdown note per source file, holding the reasoning
 ```
 
-The library is installable and the six packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
+The library is installable and the five packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
 
 This project keeps no explanatory comments in source files. Reasoning, trade-offs, dated live checks and the record of which alternative was turned down go into a sidecar note under `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`. Those notes are more detailed than the documentation site and are the place to look before changing anything.
 
 ## Tests and lint
 
-The test suite in `tests/` runs offline with `.venv/bin/python -m pytest`, after installing the `development` extra. It covers the REST client, the read-only market data classes and the analysis over a given candle frame, against a fake UBI server on a local port, so it never places an order. The order routes are not covered, because exercising them against UBI means placing real orders at a real broker; what verification exists for them is recorded in the sidecar notes, as live checks against a running UBI on a stated date, and each note says plainly whether any order was sent.
+There is no test suite. `pytest` is not in `requirements.txt` and is not installed, and that is not only inertia: exercising the order routes against UBI means placing real orders at a real broker. What verification exists is recorded in the sidecar notes, as live checks against a running UBI on a stated date, and each note says plainly whether any order was sent.
 
 ```bash
 .venv/bin/ruff check .          # ruff 0.11.2, no config file, so default rules
 .venv/bin/ruff format .
 ```
 
-Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reported all 103 files already formatted on 2026-09-26. Keep it that way.
+Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reports all 32 files already formatted. Keep it that way.
 
 ## Documentation
 

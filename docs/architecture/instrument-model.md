@@ -141,7 +141,7 @@ Each level adds only what is true of every class below it. The table below lists
 | Level | Holds | Why here |
 |---|---|---|
 | `PriceAnalysis` and the thirteen analysis classes | TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, about 190 methods | Every instrument with candles can be analysed, including an index |
-| `Instrument` | Identity attributes, `lot_size`, `tick_size`, `carried_by`; `prices`, `prices_document`, `quote`, `additional_details`, `last_price`, `ohlc`; the protected discovery helpers; the shared client | UBI quotes indices too, and an index's last price is one of the most used values |
+| `Instrument` | Identity attributes, `lot_size`, `tick_size`, `carried_by`; `prices`, `quote`, `last_price`, `ohlc`; the protected discovery helpers; the shared client | UBI quotes indices too, and an index's last price is one of the most used values |
 | `TradeableInstrument` | The eleven order-book values, the order and trade readers, `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the 32 price wrappers, the position readers, totals and the four position methods | An index has no order book, no orders and no position |
 | `NonTradeableInstrument` | Nothing new; it only refuses a segment that does not end in `_indices` | The refusal is its whole job |
 | Family class | A fixed segment, a constructor taking exactly that segment's identity fields, its own error class, its discovery class methods, and on five classes the holdings members | The kind of contract is the class, not a segment string passed by hand |

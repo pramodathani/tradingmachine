@@ -74,7 +74,7 @@ The theme is `mkdocs-material==9.6.9`, with deep orange as its primary and accen
 `scripts/gen_ref_pages.py` holds one class, `ReferencePageBuilder`, which the `gen-files` plugin runs by path. It walks every `.py` file under `src/tradingmachine`, and the steps below are what it does for each file.
 
 1. It skips any path containing `__pycache__`.
-2. It turns the file path, relative to `src`, into a dotted module path and a page path under `reference/`. A package's `__init__.py` becomes that package's `index.md`, and an empty `__init__.py` is skipped because it has nothing to show. Today that skips the `assets`, `assets.analysis`, `ubi_client`, `ubi_stores` and `utilities` packages, so only `tradingmachine`, `tradingmachine.accounts` and `tradingmachine.orders` get an index page. Any other dunder module, such as a `__main__.py`, is skipped too.
+2. It turns the file path, relative to `src`, into a dotted module path and a page path under `reference/`. A package's `__init__.py` becomes that package's `index.md`, and an empty `__init__.py` is skipped because it has nothing to show. Today that skips the `assets`, `assets.analysis`, `ubi_client` and `utilities` packages, so only `tradingmachine`, `tradingmachine.accounts` and `tradingmachine.orders` get an index page. Any other dunder module, such as a `__main__.py`, is skipped too.
 3. It writes the page in memory, not on disk, with a single line such as `::: tradingmachine.assets.equities`, which mkdocstrings expands.
 4. It records an edit link back to the source file, such as `src/tradingmachine/assets/equities.py`, and adds the page to the navigation.
 5. At the end it writes `reference/SUMMARY.md`, which literate-nav reads. That is why the nav in `mkdocs.yml` says only `- API reference: reference/`.
