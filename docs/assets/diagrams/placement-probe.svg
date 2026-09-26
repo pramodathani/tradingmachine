@@ -1,0 +1,82 @@
+<svg class="tm-svg" viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tm-probe-title tm-probe-description">
+  <title id="tm-probe-title">The placement-mode probe before the first engine order</title>
+  <desc id="tm-probe-description">Your program calls place_order with a price reference. Because the shared client does not yet know UBI's placement mode, place_order first sends the same body as a dry run. UBI hands it to the order engine, which answers with an intent_id. The client records placement_mode as engine, and only then is the real order sent through the engine to a broker, and its answer returned to your program.</desc>
+  <path id="tm-probe-call" class="wire" d="M140,165 L190,165"/>
+  <path id="tm-probe-out" class="wire" d="M360,165 L620,165"/>
+  <path id="tm-probe-engine-in" class="wire" d="M750,165 L790,165"/>
+  <path id="tm-probe-engine-back" class="wire" d="M790,195 L750,195"/>
+  <path id="tm-probe-back" class="wire" d="M620,195 L360,195"/>
+  <path id="tm-probe-answer" class="wire" d="M190,195 L140,195"/>
+  <path id="tm-probe-broker" class="wire" d="M835,215 L835,280"/>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.06;1" calcMode="linear"><mpath href="#tm-probe-call"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="1;1;0;0" keyTimes="0;0.06;0.07;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.08;0.2;1" calcMode="linear"><mpath href="#tm-probe-out"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.08;0.09;0.2;0.21;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.21;0.25;1" calcMode="linear"><mpath href="#tm-probe-engine-in"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.21;0.22;0.25;0.26;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.28;0.32;1" calcMode="linear"><mpath href="#tm-probe-engine-back"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.28;0.29;0.32;0.33;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.33;0.45;1" calcMode="linear"><mpath href="#tm-probe-back"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.33;0.34;0.45;0.46;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.5;0.62;1" calcMode="linear"><mpath href="#tm-probe-out"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.5;0.51;0.62;0.63;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.63;0.67;1" calcMode="linear"><mpath href="#tm-probe-engine-in"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.63;0.64;0.67;0.68;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.68;0.74;1" calcMode="linear"><mpath href="#tm-probe-broker"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.68;0.69;0.74;0.75;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.78;0.82;1" calcMode="linear"><mpath href="#tm-probe-engine-back"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.78;0.79;0.82;0.83;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.83;0.93;1" calcMode="linear"><mpath href="#tm-probe-back"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.83;0.84;0.93;0.94;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.94;0.99;1" calcMode="linear"><mpath href="#tm-probe-answer"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.94;0.95;0.99;1;1"/>
+  </circle>
+  <text class="title" x="20" y="34">Before the first order that carries a reference or a synthetic object</text>
+  <text class="small" x="20" y="54">Orange: the call and the dry-run probe. Green: answers carrying intent_id. Blue: the real order, sent only after the probe.</text>
+  <rect class="box" x="20" y="155" width="120" height="50" rx="25"/>
+  <text x="80" y="185" text-anchor="middle">Your program</text>
+  <rect class="accent-box" x="190" y="140" width="170" height="80" rx="8"/>
+  <text class="mono" x="275" y="170" text-anchor="middle">place_order(...)</text>
+  <text class="small" x="275" y="190" text-anchor="middle">TradeableInstrument</text>
+  <text class="small" x="275" y="206" text-anchor="middle">price_reference given</text>
+  <rect class="box" x="410" y="140" width="170" height="80" rx="8"/>
+  <text class="title" x="495" y="166" text-anchor="middle">Shared client</text>
+  <text class="mono" x="495" y="192" text-anchor="middle" opacity="1">placement_mode: None<animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="1;1;0;0" keyTimes="0;0.4;0.41;1"/></text>
+  <text class="mono" x="495" y="192" text-anchor="middle" opacity="0">placement_mode: 'engine'<animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1" keyTimes="0;0.4;0.41;1"/></text>
+  <text class="small" x="495" y="210" text-anchor="middle">UnifiedBrokerInterface</text>
+  <rect class="box" x="620" y="140" width="130" height="80" rx="8"/>
+  <text class="title" x="685" y="166" text-anchor="middle">UBI</text>
+  <text class="mono" x="685" y="188" text-anchor="middle">POST</text>
+  <text class="mono" x="685" y="204" text-anchor="middle">/api/orders/place</text>
+  <rect class="box" x="790" y="140" width="90" height="75" rx="8"/>
+  <text class="title" x="835" y="166" text-anchor="middle">Order</text>
+  <text class="title" x="835" y="184" text-anchor="middle">engine</text>
+  <text class="small" x="835" y="203" text-anchor="middle">adds intent_id</text>
+  <rect class="box" x="790" y="280" width="90" height="44" rx="6"/>
+  <text x="835" y="307" text-anchor="middle">Broker</text>
+  <text class="small" x="495" y="126" text-anchor="middle">1. same body, dry_run true</text>
+  <text class="small" x="495" y="244" text-anchor="middle">2. intent_id in the answer, so engine</text>
+  <text class="small" x="495" y="262" text-anchor="middle">3. then the real order, dry_run false</text>
+  <text class="small" x="20" y="350">Without intent_id in the probe's answer, placement_mode becomes 'direct', DirectPlacementError is raised and nothing is sent.</text>
+</svg>
