@@ -1,7 +1,11 @@
 site_name: Trading Machine
-site_description: Indian market instruments as Python objects - candles, quotes, order book, analysis, orders, positions and holdings, all through the Unified Broker Interface.
+site_description: Indian market instruments as Python objects - candles, quotes, analysis, orders, synthetic orders, positions and holdings, all through the Unified Broker Interface.
 site_author: Pramod Athani
 copyright: Copyright &copy; Pramod Athani
+site_url: https://pramodathani.github.io/tradingmachine/
+repo_url: https://github.com/pramodathani/tradingmachine
+repo_name: pramodathani/tradingmachine
+edit_uri: edit/main/docs/
 
 theme:
   name: material
@@ -16,15 +20,15 @@ theme:
         name: Follow the system theme
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: deep orange
+      accent: deep orange
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: teal
+      primary: deep orange
+      accent: deep orange
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -32,20 +36,29 @@ theme:
     - navigation.instant
     - navigation.tracking
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.indexes
     - navigation.top
+    - navigation.footer
     - toc.follow
     - search.suggest
     - search.highlight
     - search.share
     - content.code.copy
+    - content.action.edit
+    - content.action.view
     - content.code.annotate
     - content.tabs.link
     - content.tooltips
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/vega@5
+  - https://cdn.jsdelivr.net/npm/vega-lite@5
+  - https://cdn.jsdelivr.net/npm/vega-embed@6
 
 markdown_extensions:
   - abbr
@@ -74,6 +87,9 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+        - name: vegalite
+          class: vegalite
+          format: !!python/name:mkdocs_charts_plugin.fences.fence_vegalite
   - pymdownx.tabbed:
       alternate_style: true
       slugify: !!python/object/apply:pymdownx.slugs.slugify
@@ -91,6 +107,9 @@ hooks:
 
 plugins:
   - search
+  - charts:
+      vega_theme_light: default
+      vega_theme_dark: dark
   - gen-files:
       scripts:
         - scripts/gen_ref_pages.py
@@ -128,16 +147,25 @@ watch:
 
 nav:
   - Home: index.md
-  - Getting started:
-      - getting-started/index.md
-      - Installation: getting-started/installation.md
-      - Configuration: getting-started/configuration.md
-      - Data stores: getting-started/data-stores.md
-  - Architecture:
-      - architecture/index.md
-      - The instrument model: architecture/instrument-model.md
-      - The UBI client: architecture/ubi-client.md
-      - Errors: architecture/errors.md
+  - Get started:
+      - get-started/index.md
+      - Installation: get-started/installation.md
+      - Configuration: get-started/configuration.md
+      - First steps: get-started/first-steps.md
+  - Python API:
+      - python-api/index.md
+      - Instruments: python-api/instruments.md
+      - Market data: python-api/market-data.md
+      - Finding instruments: python-api/discovery.md
+      - Orders: python-api/orders.md
+      - Price wrappers: python-api/price-wrappers.md
+      - Positions: python-api/positions.md
+      - Holdings: python-api/holdings.md
+      - Synthetic orders: python-api/synthetic-orders.md
+      - The account: python-api/account.md
+      - The UBI client: python-api/client.md
+      - Vocabulary: python-api/vocabulary.md
+      - Errors: python-api/errors.md
   - Asset classes:
       - asset-classes/index.md
       - Equities: asset-classes/equities.md
@@ -146,18 +174,20 @@ nav:
       - Currencies: asset-classes/currencies.md
       - Funds and trusts: asset-classes/funds.md
       - Mutual funds: asset-classes/mutual-funds.md
-  - Guides:
-      - Candles and quotes: guides/prices-and-quotes.md
-      - Analysis: guides/analysis.md
-      - Finding instruments: guides/discovery.md
-      - Orders: guides/orders.md
-      - Synthetic orders: guides/synthetic-orders.md
-      - Positions: guides/positions.md
-      - Holdings: guides/holdings.md
-      - The account: guides/account.md
-  - Contributing:
-      - Adding an asset class: contributing/adding-an-asset-class.md
-      - Pitfalls: contributing/pitfalls.md
-      - Known issues: contributing/known-issues.md
-      - Writing docs: contributing/documentation.md
+  - Analysis:
+      - analysis/index.md
+      - Indicators: analysis/indicators.md
+      - Candlestick patterns: analysis/patterns.md
+      - Statistics and transforms: analysis/statistics.md
+      - Signals and backtests: analysis/signals-and-backtests.md
+  - Architecture:
+      - architecture/index.md
+      - The instrument model: architecture/instrument-model.md
+      - Placement modes: architecture/placement-modes.md
+      - Design choices: architecture/design-choices.md
+  - Project:
+      - project/index.md
+      - Repository structure: project/structure.md
+      - Adding an asset class: project/adding-an-asset-class.md
+      - Writing these docs: project/writing-docs.md
   - API reference: reference/
