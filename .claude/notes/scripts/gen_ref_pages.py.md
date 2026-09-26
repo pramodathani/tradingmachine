@@ -10,7 +10,7 @@ For each `.py` file under `src/tradingmachine`, it writes a one-line page holdin
 
 Nothing is written into the repository. `mkdocs_gen_files.open` holds the pages in memory for the length of the build, so the working tree stays clean and the generated pages can never drift from the source.
 
-`set_edit_path` points each generated page's edit link at the source file it documents rather than at a file that does not exist. It has no visible effect until `repo_url` and `edit_uri` are set in `mkdocs.yml`, which they are not yet.
+`set_edit_path` points each generated page's edit link at the source file it documents rather than at a file that does not exist. Since the rebuild of 2026-09-26 `mkdocs.yml` sets `repo_url` and `edit_uri`, so every generated reference page carries an edit button that opens its source file on GitHub.
 
 ## Why it is a class
 
@@ -26,7 +26,7 @@ The sibling's version is a module-level script, with the loop and the conditiona
 
 `EXCLUDED_PARTS` used to list `gen_ref_pages` and `documentation_hooks` as well. Both entries went away when the two files moved to `scripts/`, because a file outside the tree being walked cannot be found in the first place.
 
-`src/tradingmachine/assets/__init__.py`, `src/tradingmachine/assets/analysis/__init__.py`, `src/tradingmachine/ubi_client/__init__.py` and `src/tradingmachine/utilities/__init__.py` are all empty today, so all four are skipped and no subpackage index page appears. `src/tradingmachine/__init__.py` does have a docstring, so `tradingmachine` gets an index page. A subpackage that gains a docstring later will get one without any edit here.
+`src/tradingmachine/assets/__init__.py`, `src/tradingmachine/assets/analysis/__init__.py`, `src/tradingmachine/ubi_client/__init__.py` and `src/tradingmachine/utilities/__init__.py` are all empty today, so all four are skipped and get no index page. `src/tradingmachine/__init__.py`, `src/tradingmachine/accounts/__init__.py` and `src/tradingmachine/orders/__init__.py` have docstrings, so `tradingmachine`, `accounts` and `orders` each get an index page. A subpackage that gains a docstring later will get one without any edit here.
 
 ## Two roots, not one
 

@@ -1,119 +1,163 @@
+---
+hide:
+  - navigation
+---
+
 # Trading Machine
 
-An Indian market instrument is a Python object here. You name a share, a futures contract or an
-option once, and from that one object you get its candles, its live quote, its order book, about
-190 analysis methods, the orders you have placed in it, the positions you hold in it and the
-shares of it sitting in your demat account.
+<div class="hero" markdown>
 
-Nothing in this project talks to a broker. Every call goes to the sibling project
-[Unified Broker Interface](architecture/ubi-client.md), which runs on the same machine, speaks to
-ten Indian retail brokers and normalises what they say. This project is the layer above that,
-where the vocabulary stops being HTTP routes and starts being instruments.
-
-<div class="grid cards" markdown>
-
--   :material-rocket-launch: **Getting started**
-
-    ---
-
-    Install the dependencies, fill in the environment, seed the credentials and bring up the
-    databases.
-
-    [:octicons-arrow-right-24: Getting started](getting-started/index.md)
-
--   :material-sitemap: **Architecture**
-
-    ---
-
-    How one instrument object is built, what it caches and what it does not, and how failures from
-    UBI arrive as exceptions.
-
-    [:octicons-arrow-right-24: Architecture](architecture/index.md)
-
--   :material-shape: **Asset classes**
-
-    ---
-
-    Equities, fixed income, commodities, currencies, funds and mutual funds, and what UBI actually
-    carries for each.
-
-    [:octicons-arrow-right-24: Coverage](asset-classes/index.md)
-
--   :material-code-braces: **API reference**
-
-    ---
-
-    Generated from the source tree, one page per module, on every build.
-
-    [:octicons-arrow-right-24: Reference](reference/)
+<p class="lead"><code>tradingmachine</code> is a Python library that turns Indian market instruments into <strong>objects you can ask questions of and trade through</strong>. You write <code>Equity("nse", "RELIANCE")</code>, and that object gives you its candles, its live quote, its order book, about 190 kinds of technical analysis, its orders, its positions and its holdings. Underneath, every question goes to the <a href="https://pramodathani.github.io/unified_broker_interface/">Unified Broker Interface</a> (UBI), which combines ten stock brokers into one account.</p>
 
 </div>
 
-## What the project does
+<figure class="diagram">
+--8<-- "docs/assets/diagrams/overview.svg"
+<figcaption>Orange dots are quotes, candles, orders and positions coming up from the brokers to your program. The blue dot is an order going the other way, through UBI to one broker.</figcaption>
+</figure>
 
-You build an instrument by naming it. The object looks itself up in UBI once, keeps its identity,
-and from then on every price, order and position it reports is fetched fresh.
+## Start here
 
-```python
-from tradingmachine.assets import equities
+The site is split into tabs along the top. Most readers want the first card, which lists every class and member of the library on one page.
 
-infosys = equities.Equity(exchange="nse", symbol="INFY")
+<div class="grid cards" markdown>
 
-candles = infosys.prices(days=365)
-strength = infosys.relative_strength_index(window=14, days=365)
-spread = infosys.bid_offer_spread
+-   :material-language-python:{ .lg .middle } **Python API**
 
-placed = infosys.buy_at_limit_price(quantity=1, price=1450.0, product="cnc")
-waiting = infosys.open_orders
-infosys.cancel_open_orders()
-```
+    ---
 
-The picture below shows where each of those calls ends up.
+    Every public member, one group per page, with parameters, examples captured from a real UBI, return values and exceptions.
 
-```mermaid
-flowchart LR
-    ENV[".env"] -. base url .-> CLIENT
-    MONGO[("MongoDB<br/>settings")] -. api key and secret .-> CLIENT
+    [:octicons-arrow-right-24: Go to the Python API](python-api/index.md)
 
-    YOU["Your script"] --> ASSETS["tradingmachine.assets.equities.Equity<br/>and the other asset classes"]
-    ASSETS --> INSTR["tradingmachine.assets.instruments<br/>Instrument, TradeableInstrument,<br/>NonTradeableInstrument"]
-    INSTR --> ANALYSIS["tradingmachine.assets.analysis<br/>~190 methods over the candles"]
-    INSTR --> CLIENT["tradingmachine.ubi_client.client<br/>UnifiedBrokerInterface"]
-    CLIENT --> UBI["UBI REST API<br/>127.0.0.1:8080"]
-    UBI --> BROKERS["Ten Indian retail brokers"]
-```
+-   :material-rocket-launch:{ .lg .middle } **Get started**
 
-| Layer | Where | What it gives you |
-| --- | --- | --- |
-| Asset classes | `tradingmachine.assets.equities`, `tradingmachine.assets.fixed_income`, `tradingmachine.assets.commodities`, `tradingmachine.assets.currencies`, `tradingmachine.assets.funds`, `tradingmachine.assets.mutual_funds` | One named class per UBI segment, with a constructor that asks for exactly the fields that identify one of its own contracts. See [Asset classes](asset-classes/index.md) |
-| Instrument model | `tradingmachine.assets.instruments` | Identity, candles, quotes, the order book, orders, trades and positions. See [The instrument model](architecture/instrument-model.md) |
-| Analysis | `tradingmachine.assets.analysis` | TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, all inherited as methods. See [Analysis](guides/analysis.md) |
-| REST client | `ubi_client` | The authenticated connection to UBI, and one exception class per failure it reports. See [The UBI client](architecture/ubi-client.md) |
-| Configuration | `tradingmachine.utilities.configuration` | The UBI base url and the MongoDB connection string, read lazily from the environment and `.env`. See [Configuration](getting-started/configuration.md) |
+    ---
 
-## The three ideas worth knowing first
+    Install the library, start its three databases, point it at UBI, and run a first session.
 
-**The class is the contract type.** There is no `segment="equity_options"` string passed by hand.
-`EquityOption` is a class, and its constructor asks for an exchange, an underlying symbol, an
-expiry date, a strike price and an option type, because that is what identifies one equity option.
-A class that cannot be traded, such as `EquityIndex`, simply does not offer the order methods. See
-[Asset classes](asset-classes/index.md).
+    [:octicons-arrow-right-24: Installation](get-started/index.md)
 
-**Nothing is cached and nothing is validated locally.** An instrument looks itself up once, at
-construction, and after that every candle, quote, order and position is fetched from UBI at the
-moment you ask. Prices and quantities are sent to UBI exactly as you give them, with no rounding
-to the tick size and no checking against the lot size, because UBI and the broker behind it hold
-those rules and this layer would only be guessing. See [The instrument model](architecture/instrument-model.md).
+-   :material-shape:{ .lg .middle } **Asset classes**
 
-**What UBI carries varies a lot by asset class.** Equities have everything. Fixed income has no
-candles at all and no quotes for cash bonds. Three of the six currency segments contain no rows.
-Commodity derivatives have candles but commodities themselves have no quote. The
-[coverage table](asset-classes/index.md#what-ubi-actually-carries) says which is which, and it is
-worth reading before writing code against a family you have not used yet.
+    ---
 
-!!! danger "These classes place real orders"
+    The 27 instrument classes across equities, fixed income, commodities, currencies, funds and mutual funds, and what each can and cannot do.
 
-    `place_order` and every wrapper around it send a live order to a real broker account with real
-    money. There is no paper trading mode and no simulator. `place_order(dry_run=True)` asks UBI to
-    build the broker's request and hand it back without sending it, which is the closest thing to a
-    rehearsal that exists here.
+    [:octicons-arrow-right-24: Compare the families](asset-classes/index.md)
+
+-   :material-chart-bell-curve-cumulative:{ .lg .middle } **Analysis**
+
+    ---
+
+    TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, inherited by every instrument.
+
+    [:octicons-arrow-right-24: Analyse candles](analysis/index.md)
+
+-   :material-layers-triple:{ .lg .middle } **Architecture**
+
+    ---
+
+    The layers from your program down to the brokers, how UBI places orders, and why the library is built the way it is.
+
+    [:octicons-arrow-right-24: How it fits together](architecture/index.md)
+
+-   :material-folder-cog:{ .lg .middle } **Project**
+
+    ---
+
+    The repository's layout, how to add an asset class, and how this site is built and published.
+
+    [:octicons-arrow-right-24: Work on the project](project/index.md)
+
+</div>
+
+## A first taste
+
+The example below looks up one share and reads three things from it. The output was captured from a local UBI on Saturday 2026-09-26, so the prices are Friday's close, and the DataFrame is trimmed to its first two rows.
+
+=== "Python"
+
+    ```python
+    from tradingmachine.assets import equities
+
+    reliance = equities.Equity("nse", "RELIANCE")
+    print(reliance.last_price)
+    print(reliance.prices(days=10))
+    print(equities.Equity.search("nse", "RELI", limit=5)["symbol"].tolist())
+    ```
+
+=== "Output"
+
+    ```text
+    1226.0
+      exchange       segment interval                  datetime    open    high     low   close    volume    oi  price_factor
+    0      nse  nse_equities      day 2026-09-16 00:00:00+05:30  1243.0  1255.0  1240.0  1240.0  10023997  None           1.0
+    1      nse  nse_equities      day 2026-09-17 00:00:00+05:30  1244.8  1253.4  1238.5  1243.9   7752895  None           1.0
+    ['RELIABLE', 'RELIANCE', 'RELIGARE', 'RELINFRA']
+    ```
+
+`last_price` has no brackets because it only reports a value, so it is a property. `prices` has brackets because it takes arguments, so it is a method. The whole library follows that rule.
+
+## The library in numbers
+
+The table below counts what the library holds today, so you can judge the size of each part before you read about it.
+
+| What | Count | Where |
+|---|---:|---|
+| Instrument classes | 27 | `src/tradingmachine/assets/`, in seven family modules |
+| Synthetic order classes | 42 | `src/tradingmachine/orders/`, one module each |
+| Analysis methods inherited by every instrument | 192 | `src/tradingmachine/assets/analysis/`, in thirteen classes |
+| Price wrappers such as `buy_at_best_bid_price` | 32 | `TradeableInstrument` in `src/tradingmachine/assets/instruments.py` |
+| Exception classes | 46 | 32 in `assets/exceptions.py`, 14 in `ubi_client/exceptions.py` |
+| Python modules | 77 | `src/tradingmachine/` |
+
+## What the library adds to UBI
+
+UBI already answers every question the library asks, over HTTP. The comparison below shows what the library adds on top, using the same order written both ways.
+
+=== "With tradingmachine"
+
+    ```python
+    from tradingmachine.assets import equities
+
+    reliance = equities.Equity("nse", "RELIANCE")
+    reliance.buy_at_best_bid_price(quantity=1, product="cnc")
+    ```
+
+=== "Calling UBI directly"
+
+    ```python
+    import requests
+
+    base_url = "http://127.0.0.1:8080"
+    session = requests.post(
+        f"{base_url}/api/session/connect",
+        headers={"api-key": API_KEY, "api-secret": API_SECRET},
+    ).json()
+    headers = {"access-token": session["access-token"]}
+    details = requests.get(
+        f"{base_url}/api/instruments/details",
+        headers=headers,
+        params={"exchange": "nse", "segment": "nse_equities", "symbol": "RELIANCE"},
+    ).json()
+    requests.post(
+        f"{base_url}/api/orders/place",
+        headers=headers,
+        json={
+            "instrument_id": details["instrument_id"],
+            "transaction_type": "buy",
+            "order_type": "limit",
+            "product": "cnc",
+            "after_market": False,
+            "dry_run": False,
+            "quantity": 1,
+            "price_reference": {"kind": "bid_level", "level": 1},
+        },
+    )
+    ```
+
+The library looks the instrument up once, keeps the one shared login alive and renews it when UBI answers HTTP 401, checks that UBI is in the mode that understands a `price_reference` before sending one, and turns each error status into a named exception. It deliberately does not cache anything, round prices or check lot sizes, because UBI does all three.
+
+!!! danger "Orders are real"
+    Every member that places an order sends it through UBI to a real broker, with real money. The [Orders](python-api/orders.md) page explains `dry_run`, which asks UBI to check an order and show what it would send, without sending it.

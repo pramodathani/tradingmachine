@@ -1,0 +1,74 @@
+<svg class="tm-svg" viewBox="0 0 900 350" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="overview-title overview-description">
+  <title id="overview-title">Your program, the library, UBI and ten brokers</title>
+  <desc id="overview-description">Quotes, candles, orders and positions flow from ten brokers into the Unified Broker Interface, through the library's shared client and instrument objects, to your program. An order goes the other way, from your program through an instrument object and the client to UBI, which sends it to one broker.</desc>
+  <text class="small" x="340" y="44" text-anchor="middle">tradingmachine</text>
+  <rect class="wire-solid" x="200" y="52" width="280" height="268" rx="10" stroke-dasharray="2 4"/>
+  <text class="small" x="615" y="104" text-anchor="middle">sibling project</text>
+  <text class="small" x="810" y="14" text-anchor="middle">brokers</text>
+  <rect class="box" x="740" y="22" width="140" height="26" rx="4"/><text x="810" y="40" text-anchor="middle">Dhan</text>
+  <rect class="box" x="740" y="54" width="140" height="26" rx="4"/><text x="810" y="72" text-anchor="middle">Flattrade</text>
+  <rect class="box" x="740" y="86" width="140" height="26" rx="4"/><text x="810" y="104" text-anchor="middle">Fyers</text>
+  <rect class="box" x="740" y="118" width="140" height="26" rx="4"/><text x="810" y="136" text-anchor="middle">Groww</text>
+  <rect class="box" x="740" y="150" width="140" height="26" rx="4"/><text x="810" y="168" text-anchor="middle">INDmoney</text>
+  <rect class="box" x="740" y="182" width="140" height="26" rx="4"/><text x="810" y="200" text-anchor="middle">Kotak</text>
+  <rect class="box" x="740" y="214" width="140" height="26" rx="4"/><text x="810" y="232" text-anchor="middle">Shoonya</text>
+  <rect class="box" x="740" y="246" width="140" height="26" rx="4"/><text x="810" y="264" text-anchor="middle">Stoxkart</text>
+  <rect class="box" x="740" y="278" width="140" height="26" rx="4"/><text x="810" y="296" text-anchor="middle">Wisdom Capital</text>
+  <rect class="box" x="740" y="310" width="140" height="26" rx="4"/><text x="810" y="328" text-anchor="middle">Zerodha</text>
+  <path class="wire" d="M740,35 C715,35 715,180 690,180"/>
+  <path class="wire" d="M740,67 C715,67 715,180 690,180"/>
+  <path class="wire" d="M740,99 C715,99 715,180 690,180"/>
+  <path class="wire" d="M740,131 C715,131 715,180 690,180"/>
+  <path class="wire" d="M740,163 C715,163 715,180 690,180"/>
+  <path class="wire" d="M740,195 C715,195 715,180 690,180"/>
+  <path class="wire" d="M740,227 C715,227 715,180 690,180"/>
+  <path class="wire" d="M740,259 C715,259 715,180 690,180"/>
+  <path class="wire" d="M740,291 C715,291 715,180 690,180"/>
+  <path class="wire" d="M740,323 C715,323 715,180 690,180"/>
+  <path class="wire" d="M540,180 C505,180 500,270 465,270"/>
+  <path class="wire" d="M540,196 C510,196 505,290 465,290"/>
+  <path class="wire" d="M330,250 L330,204"/>
+  <path class="wire" d="M350,204 L350,250"/>
+  <path class="wire" d="M215,170 L150,170"/>
+  <path class="wire" d="M150,190 L215,190"/>
+  <path class="wire" d="M340,122 L340,150"/>
+  <path class="wire" d="M690,196 C715,196 715,227 740,227"/>
+  <path id="overview-data-0" fill="none" stroke="none" d="M740,35 C715,35 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="0.0s" repeatCount="indefinite"><mpath href="#overview-data-0"/></animateMotion></circle>
+  <path id="overview-data-1" fill="none" stroke="none" d="M740,67 C715,67 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-0.6s" repeatCount="indefinite"><mpath href="#overview-data-1"/></animateMotion></circle>
+  <path id="overview-data-2" fill="none" stroke="none" d="M740,99 C715,99 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-1.2s" repeatCount="indefinite"><mpath href="#overview-data-2"/></animateMotion></circle>
+  <path id="overview-data-3" fill="none" stroke="none" d="M740,131 C715,131 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-1.7999999999999998s" repeatCount="indefinite"><mpath href="#overview-data-3"/></animateMotion></circle>
+  <path id="overview-data-4" fill="none" stroke="none" d="M740,163 C715,163 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-2.4s" repeatCount="indefinite"><mpath href="#overview-data-4"/></animateMotion></circle>
+  <path id="overview-data-5" fill="none" stroke="none" d="M740,195 C715,195 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-3.0s" repeatCount="indefinite"><mpath href="#overview-data-5"/></animateMotion></circle>
+  <path id="overview-data-6" fill="none" stroke="none" d="M740,227 C715,227 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-3.5999999999999996s" repeatCount="indefinite"><mpath href="#overview-data-6"/></animateMotion></circle>
+  <path id="overview-data-7" fill="none" stroke="none" d="M740,259 C715,259 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-4.2s" repeatCount="indefinite"><mpath href="#overview-data-7"/></animateMotion></circle>
+  <path id="overview-data-8" fill="none" stroke="none" d="M740,291 C715,291 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-4.8s" repeatCount="indefinite"><mpath href="#overview-data-8"/></animateMotion></circle>
+  <path id="overview-data-9" fill="none" stroke="none" d="M740,323 C715,323 715,180 690,180 L540,180 C505,180 500,270 465,270 L330,270 L330,177 L215,170 L150,170"/>
+  <circle class="dot" r="6"><animateMotion dur="6s" begin="-5.3999999999999995s" repeatCount="indefinite"><mpath href="#overview-data-9"/></animateMotion></circle>
+  <path id="overview-order" fill="none" stroke="none" d="M150,190 L215,190 L350,190 L350,290 L465,290 C505,290 510,196 540,196 L690,196 C715,196 715,227 740,227"/>
+  <circle class="dot alt" r="6"><animateMotion dur="6s" begin="-3s" repeatCount="indefinite"><mpath href="#overview-order"/></animateMotion></circle>
+  <rect class="box" x="20" y="150" width="130" height="60" rx="30"/>
+  <text class="title" x="85" y="185" text-anchor="middle">Your program</text>
+  <rect class="box" x="215" y="68" width="250" height="54" rx="8"/>
+  <text class="title" x="340" y="91" text-anchor="middle">Orders and the account</text>
+  <text class="small" x="340" y="109" text-anchor="middle">42 synthetic order classes, Account.flatten</text>
+  <rect class="box" x="215" y="150" width="250" height="54" rx="8"/>
+  <text class="title" x="340" y="173" text-anchor="middle">Instrument objects</text>
+  <text class="small" x="340" y="191" text-anchor="middle">27 classes, from Equity to MutualFund</text>
+  <rect class="box" x="215" y="250" width="250" height="54" rx="8"/>
+  <text class="title" x="340" y="273" text-anchor="middle">Shared UBI client</text>
+  <text class="small" x="340" y="291" text-anchor="middle">one token, retried once on HTTP 401</text>
+  <rect class="accent-box" x="540" y="120" width="150" height="120" rx="10"/>
+  <text class="title" x="615" y="160" text-anchor="middle">UBI</text>
+  <text class="mono" x="615" y="182" text-anchor="middle">127.0.0.1:8080</text>
+  <text class="small" x="615" y="202" text-anchor="middle">REST API and</text>
+  <text class="small" x="615" y="218" text-anchor="middle">order engine</text>
+</svg>

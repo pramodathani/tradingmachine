@@ -1,0 +1,43 @@
+<svg class="tm-svg" viewBox="0 0 900 390" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tm-docs-build-title tm-docs-build-description">
+  <title id="tm-docs-build-title">How this site is built</title>
+  <desc id="tm-docs-build-description">Hand-written Markdown pages from docs/, the docstrings in src/tradingmachine and the configuration in mkdocs.yml flow into MkDocs. The gen-files plugin runs scripts/gen_ref_pages.py to create one reference page per module, mkdocstrings fills each page from the docstrings, scripts/documentation_hooks.py filters one griffe warning, and MkDocs writes the finished HTML site.</desc>
+  <path id="tm-docs-build-pages" class="wire" d="M210,60 C400,60 450,120 560,120"/>
+  <path id="tm-docs-build-code" class="wire" d="M210,150 L290,150"/>
+  <path id="tm-docs-build-reference" class="wire" d="M480,150 L560,150"/>
+  <path id="tm-docs-build-config" class="wire" d="M210,240 C400,240 450,190 560,190"/>
+  <path id="tm-docs-build-hooks" class="wire" d="M210,330 C470,330 500,230 590,220"/>
+  <path id="tm-docs-build-output" class="wire" d="M710,160 L760,160"/>
+  <circle class="dot" r="5"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#tm-docs-build-pages"/></animateMotion></circle>
+  <circle class="dot alt" r="5"><animateMotion dur="1.2s" repeatCount="indefinite"><mpath href="#tm-docs-build-code"/></animateMotion></circle>
+  <circle class="dot alt" r="5"><animateMotion dur="1.2s" begin="-0.6s" repeatCount="indefinite"><mpath href="#tm-docs-build-reference"/></animateMotion></circle>
+  <circle class="dot" r="5"><animateMotion dur="2.2s" begin="-1s" repeatCount="indefinite"><mpath href="#tm-docs-build-config"/></animateMotion></circle>
+  <circle class="dot" r="5"><animateMotion dur="2.2s" begin="-1.6s" repeatCount="indefinite"><mpath href="#tm-docs-build-hooks"/></animateMotion></circle>
+  <circle class="dot ok" r="6"><animateMotion dur="1s" repeatCount="indefinite"><mpath href="#tm-docs-build-output"/></animateMotion></circle>
+  <rect class="box" x="20" y="30" width="190" height="60" rx="8"/>
+  <text class="title" x="115" y="56" text-anchor="middle">docs/*.md</text>
+  <text class="small" x="115" y="75" text-anchor="middle">hand-written pages, SVG files</text>
+  <rect class="box" x="20" y="120" width="190" height="60" rx="8"/>
+  <text class="title" x="115" y="146" text-anchor="middle">src/tradingmachine</text>
+  <text class="small" x="115" y="165" text-anchor="middle">docstrings, read without importing</text>
+  <rect class="box" x="20" y="210" width="190" height="60" rx="8"/>
+  <text class="title" x="115" y="236" text-anchor="middle">mkdocs.yml</text>
+  <text class="small" x="115" y="255" text-anchor="middle">nav, theme, plugins</text>
+  <rect class="box" x="20" y="300" width="190" height="60" rx="8"/>
+  <text class="title" x="115" y="326" text-anchor="middle">hooks</text>
+  <text class="mono" x="115" y="345" text-anchor="middle">documentation_hooks.py</text>
+  <rect class="box" x="290" y="120" width="190" height="60" rx="8"/>
+  <text class="title" x="385" y="146" text-anchor="middle">gen-files</text>
+  <text class="mono" x="385" y="165" text-anchor="middle">scripts/gen_ref_pages.py</text>
+  <text class="small" x="520" y="142" text-anchor="middle">reference/</text>
+  <text class="small" x="430" y="352" text-anchor="middle">filters one griffe warning</text>
+  <rect class="accent-box" x="560" y="80" width="150" height="160" rx="8"/>
+  <text class="title" x="635" y="112" text-anchor="middle">MkDocs</text>
+  <text class="small" x="635" y="134" text-anchor="middle">Material theme</text>
+  <text class="small" x="635" y="152" text-anchor="middle">mkdocstrings</text>
+  <text class="small" x="635" y="170" text-anchor="middle">literate-nav</text>
+  <text class="small" x="635" y="188" text-anchor="middle">charts, Mermaid</text>
+  <text class="small" x="635" y="206" text-anchor="middle">--strict</text>
+  <rect class="store" x="760" y="125" width="120" height="70" rx="8"/>
+  <text class="title" x="820" y="155" text-anchor="middle">site/</text>
+  <text class="small" x="820" y="175" text-anchor="middle">static HTML</text>
+</svg>

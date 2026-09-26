@@ -1,91 +1,181 @@
 # Asset classes
 
-Six modules cover every asset class UBI carries, in twenty-seven classes. The shape repeats: an
-asset class with derivatives gets six classes, one per UBI segment, and the two fund modules get
-fewer because UBI has no derivatives on a fund.
+An instrument in this library is an object whose class says what kind of contract it is. There is a class for a share, one for a share future, one for an option on an index, and so on, 27 classes in all, spread over six family modules under `src/tradingmachine/assets/`. You pick the class, give it the few fields that identify one contract, and the constructor asks UBI which instrument that is. You never type a segment name such as `nse_equity_index_options` yourself, because the class already knows it.
 
-| Module | Classes | Segments |
-| --- | --- | --- |
-| [`tradingmachine.assets.equities`](equities.md) | 6 | `equities`, `equity_futures`, `equity_options`, `equity_indices`, `equity_index_futures`, `equity_index_options` |
-| [`tradingmachine.assets.fixed_income`](fixed-income.md) | 6 | `fixed_income`, `fixed_income_futures`, `fixed_income_options`, `fixed_income_indices`, `fixed_income_index_futures`, `fixed_income_index_options` |
-| [`tradingmachine.assets.commodities`](commodities.md) | 6 | `commodities`, `commodity_futures`, `commodity_options`, `commodity_indices`, `commodity_index_futures`, `commodity_index_options` |
-| [`tradingmachine.assets.currencies`](currencies.md) | 6 | `currencies`, `currency_futures`, `currency_options`, `currency_indices`, `currency_index_futures`, `currency_index_options` |
-| [`tradingmachine.assets.funds`](funds.md) | 2 | `exchange_traded_funds`, `investment_trusts` |
-| [`tradingmachine.assets.mutual_funds`](mutual-funds.md) | 1 | `mutual_funds` |
+The classes look alike, but what works on each one does not. UBI has live quotes for some segments and not others, stores candles for only a few, and cannot send an order for several kinds of instrument even though the class inherits the order methods. This page puts all of that in one place, and each family page explains the reasons.
 
-The one segment left unported is UBI's `uncategorised` catch-all, which UBI does not accept orders
-for.
+## How the classes fit together
 
-## The pattern every family follows
+Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. An index inherits `NonTradeableInstrument`, which adds nothing and refuses anything that is not an index. Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the thirteen analysis classes described in [Analysis](../analysis/index.md).
 
-Within a family with derivatives, the six classes always divide the same way.
+The animated diagram below shows the six family modules feeding their classes up into the two base classes and then into `Instrument`.
 
-```mermaid
-flowchart TD
-    T["TradeableInstrument"] --> S["the security<br/>Equity, FixedIncome, Commodity, Currency"]
-    T --> F["the futures<br/>…Futures"]
-    T --> O["the options<br/>…Option"]
-    T --> IF["the index futures<br/>…IndexFutures"]
-    T --> IO["the index options<br/>…IndexOption"]
-    N["NonTradeableInstrument"] --> I["the index<br/>…Index"]
+<figure class="diagram">
+--8<-- "docs/assets/diagrams/families.svg"
+<figcaption>Orange dots follow the tradeable classes up through TradeableInstrument, and blue dots follow the four index classes up through NonTradeableInstrument. The orange dots entering Instrument from the right are the thirteen analysis classes it inherits.</figcaption>
+</figure>
+
+The funds module has only two classes and the mutual funds module only one, because UBI carries no futures or options on a fund, a trust or a mutual fund. The four families with derivatives each have six classes, following the same pattern: a cash instrument, its futures and its options, and an index, its futures and its options. [The instrument model](../architecture/instrument-model.md) explains the base classes in more depth.
+
+## The whole matrix
+
+The table below lists all 27 classes. "Named by" gives the constructor's arguments, every one of which is required. The last five columns say whether UBI serves a live quote, whether it stores candles, whether an order for the class can actually be placed, whether the class carries the holdings members, and which discovery class methods it offers.
+
+:material-check: means yes, :material-close: means no, and :material-minus: means the segment holds no instruments at all in UBI, so the class resolves nothing today.
+
+| Class | Module | UBI segment | Base | Named by | Quotes | Candles | Orders | Holdings | Discovery |
+|---|---|---|---|---|:-:|:-:|:-:|:-:|---|
+| [`Equity`][tradingmachine.assets.equities.Equity] | `equities` | `equities` | Tradeable | exchange, symbol | :material-check: | :material-check: | :material-check: | :material-check: | `search` |
+| [`EquityFutures`][tradingmachine.assets.equities.EquityFutures] | `equities` | `equity_futures` | Tradeable | exchange, underlying, expiry | :material-check: | not checked | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`EquityOption`][tradingmachine.assets.equities.EquityOption] | `equities` | `equity_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-check: | not checked | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`EquityIndex`][tradingmachine.assets.equities.EquityIndex] | `equities` | `equity_indices` | NonTradeable | exchange, symbol | :material-check: | :material-check: | :material-close: | :material-close: | `search` |
+| [`EquityIndexFutures`][tradingmachine.assets.equities.EquityIndexFutures] | `equities` | `equity_index_futures` | Tradeable | exchange, underlying, expiry | :material-check: | not checked | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`EquityIndexOption`][tradingmachine.assets.equities.EquityIndexOption] | `equities` | `equity_index_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-check: | not checked | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`FixedIncome`][tradingmachine.assets.fixed_income.FixedIncome] | `fixed_income` | `fixed_income` | Tradeable | exchange, symbol (an ISIN) | :material-close: | :material-close: | :material-close: | :material-check: | `search` |
+| [`FixedIncomeFutures`][tradingmachine.assets.fixed_income.FixedIncomeFutures] | `fixed_income` | `fixed_income_futures` | Tradeable | exchange, underlying, expiry | :material-check: | :material-close: | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`FixedIncomeOption`][tradingmachine.assets.fixed_income.FixedIncomeOption] | `fixed_income` | `fixed_income_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-check: | :material-close: | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`FixedIncomeIndex`][tradingmachine.assets.fixed_income.FixedIncomeIndex] | `fixed_income` | `fixed_income_indices` | NonTradeable | exchange, symbol | :material-close: | :material-close: | :material-close: | :material-close: | `search` |
+| [`FixedIncomeIndexFutures`][tradingmachine.assets.fixed_income.FixedIncomeIndexFutures] | `fixed_income` | `fixed_income_index_futures` | Tradeable | exchange, underlying, expiry | :material-check: | :material-close: | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`FixedIncomeIndexOption`][tradingmachine.assets.fixed_income.FixedIncomeIndexOption] | `fixed_income` | `fixed_income_index_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-minus: | :material-minus: | :material-minus: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`Commodity`][tradingmachine.assets.commodities.Commodity] | `commodities` | `commodities` | Tradeable | exchange, symbol | :material-close: | :material-close: | :material-close: | :material-close: | `search` |
+| [`CommodityFutures`][tradingmachine.assets.commodities.CommodityFutures] | `commodities` | `commodity_futures` | Tradeable | exchange, underlying, expiry | :material-check: | :material-check: | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`CommodityOption`][tradingmachine.assets.commodities.CommodityOption] | `commodities` | `commodity_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-check: | :material-check: | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`CommodityIndex`][tradingmachine.assets.commodities.CommodityIndex] | `commodities` | `commodity_indices` | NonTradeable | exchange, symbol | :material-close: | :material-close: | :material-close: | :material-close: | `search` |
+| [`CommodityIndexFutures`][tradingmachine.assets.commodities.CommodityIndexFutures] | `commodities` | `commodity_index_futures` | Tradeable | exchange, underlying, expiry | :material-check: | :material-check: | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`CommodityIndexOption`][tradingmachine.assets.commodities.CommodityIndexOption] | `commodities` | `commodity_index_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-check: | :material-check: | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`Currency`][tradingmachine.assets.currencies.Currency] | `currencies` | `currencies` | Tradeable | exchange, symbol | :material-close: | :material-close: | :material-close: | :material-close: | `search` |
+| [`CurrencyFutures`][tradingmachine.assets.currencies.CurrencyFutures] | `currencies` | `currency_futures` | Tradeable | exchange, underlying, expiry | nse only | :material-close: | :material-check: | :material-close: | `expiries`, `contracts` |
+| [`CurrencyOption`][tradingmachine.assets.currencies.CurrencyOption] | `currencies` | `currency_options` | Tradeable | exchange, underlying, expiry, strike, option type | nse only | :material-close: | :material-check: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`CurrencyIndex`][tradingmachine.assets.currencies.CurrencyIndex] | `currencies` | `currency_indices` | NonTradeable | exchange, symbol | :material-minus: | :material-minus: | :material-minus: | :material-close: | `search` |
+| [`CurrencyIndexFutures`][tradingmachine.assets.currencies.CurrencyIndexFutures] | `currencies` | `currency_index_futures` | Tradeable | exchange, underlying, expiry | :material-minus: | :material-minus: | :material-minus: | :material-close: | `expiries`, `contracts` |
+| [`CurrencyIndexOption`][tradingmachine.assets.currencies.CurrencyIndexOption] | `currencies` | `currency_index_options` | Tradeable | exchange, underlying, expiry, strike, option type | :material-minus: | :material-minus: | :material-minus: | :material-close: | `expiries`, `strikes`, `chain` |
+| [`ExchangeTradedFund`][tradingmachine.assets.funds.ExchangeTradedFund] | `funds` | `exchange_traded_funds` | Tradeable | exchange, symbol | :material-check: | :material-check: | :material-check: | :material-check: | `search` |
+| [`InvestmentTrust`][tradingmachine.assets.funds.InvestmentTrust] | `funds` | `investment_trusts` | Tradeable | exchange, symbol | :material-check: | :material-close: | :material-check: | :material-check: | `search` |
+| [`MutualFund`][tradingmachine.assets.mutual_funds.MutualFund] | `mutual_funds` | `mutual_funds` | Tradeable | exchange, symbol (a scheme code) | :material-close: | :material-close: | limit price only | :material-check: | `search` |
+
+A few cells need a word of explanation, because the short form hides a condition.
+
+- **Candles on equity derivatives are marked "not checked".** UBI's own documentation says no derivative bars are stored, but the commodity derivatives were measured on 2026-09-20 and do have candles, so that statement is out of date. Nobody has run `prices` on an equity future or option from this library, so the four cells are left unverified rather than guessed. `Equity` and `EquityIndex` do have candles: RELIANCE's are captured on the [Equities](equities.md) page, and NIFTY's were used for the beta check on 2026-09-14.
+- **"Orders" means an order can actually be placed.** Every class built on `TradeableInstrument` has `place_order` and the thirty-two price wrappers, including `Commodity`, `Currency` and `FixedIncome`. For `Commodity` and `Currency`, UBI refuses the order. For `FixedIncome`, the only broker carrying cash bonds has no order symbol for them, so there is no broker to send the order to; this was read from the instrument data rather than tested. The cells therefore say no, and the family pages give the reasons.
+- **The fixed income derivatives are marked as orderable, with a caution.** UBI appears to route them to the wrong venue. This was read from UBI's source and has never been tested with a real order, as the [Fixed income](fixed-income.md#a-routing-problem-in-ubi) page explains.
+- **A mutual fund order is an ordinary `cnc` order.** It has no quote, so it needs a limit price, and whether a broker treats it as a subscription has not been tested.
+
+## Coverage by family
+
+The chart below counts, for each family, how many of its classes have each capability. The first bar in each group is the number of classes that resolve any instrument at all, so it shows how many of the family's classes are more than placeholders today. Candles on the four equity derivative classes are not counted, because they have not been checked.
+
+```vegalite
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "For each asset family, the number of classes that resolve instruments, have quotes, have candles, can be ordered and carry holdings.",
+  "width": "container",
+  "height": 360,
+  "data": {
+    "values": [
+      {"family": "Equities", "capability": "1. Resolves instruments", "classes": 6},
+      {"family": "Equities", "capability": "2. Live quotes", "classes": 6},
+      {"family": "Equities", "capability": "3. Candles", "classes": 2},
+      {"family": "Equities", "capability": "4. Can be ordered", "classes": 5},
+      {"family": "Equities", "capability": "5. Holdings", "classes": 1},
+      {"family": "Fixed income", "capability": "1. Resolves instruments", "classes": 5},
+      {"family": "Fixed income", "capability": "2. Live quotes", "classes": 3},
+      {"family": "Fixed income", "capability": "3. Candles", "classes": 0},
+      {"family": "Fixed income", "capability": "4. Can be ordered", "classes": 3},
+      {"family": "Fixed income", "capability": "5. Holdings", "classes": 1},
+      {"family": "Commodities", "capability": "1. Resolves instruments", "classes": 6},
+      {"family": "Commodities", "capability": "2. Live quotes", "classes": 4},
+      {"family": "Commodities", "capability": "3. Candles", "classes": 4},
+      {"family": "Commodities", "capability": "4. Can be ordered", "classes": 4},
+      {"family": "Commodities", "capability": "5. Holdings", "classes": 0},
+      {"family": "Currencies", "capability": "1. Resolves instruments", "classes": 3},
+      {"family": "Currencies", "capability": "2. Live quotes", "classes": 2},
+      {"family": "Currencies", "capability": "3. Candles", "classes": 0},
+      {"family": "Currencies", "capability": "4. Can be ordered", "classes": 2},
+      {"family": "Currencies", "capability": "5. Holdings", "classes": 0},
+      {"family": "Funds and trusts", "capability": "1. Resolves instruments", "classes": 2},
+      {"family": "Funds and trusts", "capability": "2. Live quotes", "classes": 2},
+      {"family": "Funds and trusts", "capability": "3. Candles", "classes": 1},
+      {"family": "Funds and trusts", "capability": "4. Can be ordered", "classes": 2},
+      {"family": "Funds and trusts", "capability": "5. Holdings", "classes": 2},
+      {"family": "Mutual funds", "capability": "1. Resolves instruments", "classes": 1},
+      {"family": "Mutual funds", "capability": "2. Live quotes", "classes": 0},
+      {"family": "Mutual funds", "capability": "3. Candles", "classes": 0},
+      {"family": "Mutual funds", "capability": "4. Can be ordered", "classes": 1},
+      {"family": "Mutual funds", "capability": "5. Holdings", "classes": 1}
+    ]
+  },
+  "mark": {"type": "bar", "tooltip": true},
+  "encoding": {
+    "y": {"field": "family", "type": "nominal", "title": null, "sort": ["Equities", "Fixed income", "Commodities", "Currencies", "Funds and trusts", "Mutual funds"]},
+    "yOffset": {"field": "capability", "type": "nominal"},
+    "x": {"field": "classes", "type": "quantitative", "title": "Number of classes", "axis": {"tickMinStep": 1}},
+    "color": {"field": "capability", "type": "nominal", "title": "Capability", "legend": {"orient": "bottom", "columns": 3}}
+  }
+}
 ```
 
-The constructor of each class asks for exactly what identifies one of its own contracts, so there
-is never a segment string to pass and never a field to leave as `None`.
+Three patterns stand out in the chart. Equities are the only family where nearly everything works. Commodities and currencies share a shape, in which only the derivatives are real contracts, but commodity derivatives have candles and currency derivatives do not. And holding is a separate idea from trading: a mutual fund can be held but has no quote, while a commodity future can be traded but never held.
 
-| Class kind | Constructor takes |
-| --- | --- |
-| The security, the index | `exchange`, `symbol` |
-| The futures, the index futures | `exchange`, `underlying_symbol`, `expiry_date` |
-| The options, the index options | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+## Holdings and positions are different things
 
-A derivative never holds an object for its underlying. UBI links the two only by the underlying
-symbol matching a security's symbol, with no key joining them, and that match is not guaranteed
-for every index, so the caller builds the underlying itself when it wants one.
+A holding is something kept in the demat account overnight and beyond, such as shares bought for delivery. A position is what an order leaves open in a trading day or a derivatives contract, such as a long future. UBI reports holdings only for its cash segments, which are equities, exchange traded funds, investment trusts, mutual funds, fixed income and the catch-all `uncategorised`, so only the five classes on those segments carry the holdings members. Every class built on `TradeableInstrument` has the position members. [Holdings](../python-api/holdings.md) and [Positions](../python-api/positions.md) describe both sets.
 
-## What UBI actually carries
+## The families
 
-This is the table to read before writing code against a family you have not used before. A method
-can be present on a class and still have nothing to work on.
+Each family page lists its classes, explains how they are named, and records what UBI does and does not have for them.
 
-| Family | Candles | Quotes | Orders | Holdings |
-| --- | --- | --- | --- | --- |
-| Equities | :material-check: yes | :material-check: yes | :material-check: quantity in units | :material-check: `Equity` only |
-| Fixed income | :material-close: none, anywhere | :material-check: derivatives only | :material-check: quantity in units | :material-check: `FixedIncome` only |
-| Commodities | :material-check: the four derivative classes | :material-check: derivatives only | :material-alert: whole lots only, derivatives only | :material-close: never |
-| Currencies | :material-close: none, anywhere | :material-alert: nse derivatives only | :material-alert: whole lots only, derivatives only | :material-close: never |
-| Funds and trusts | :material-check: funds only | :material-check: both | :material-check: quantity in units | :material-check: both |
-| Mutual funds | :material-close: none | :material-close: none | :material-check: `cnc` only, and give a limit price | :material-check: yes |
+<div class="grid cards" markdown>
 
-Three of the six currency segments and one fixed income segment hold no rows at all on any
-exchange, so their classes resolve nothing today and exist so that the family has the same shape
-as every other one. They fail cleanly: a lookup raises the class's own error, and the discovery
-calls return an empty list or `None`.
+-   :material-domain:{ .lg .middle } **Equities**
 
-| Segment with no rows | Class |
-| --- | --- |
-| `currency_indices` | `CurrencyIndex` |
-| `currency_index_futures` | `CurrencyIndexFutures` |
-| `currency_index_options` | `CurrencyIndexOption` |
-| `fixed_income_index_options` | `FixedIncomeIndexOption` |
+    ---
 
-## Three traps that cost money
+    Shares, indices, and the futures and options on each. The one family where quotes, candles, orders and holdings all work.
 
-!!! danger "A commodity or currency quantity is a whole number of lots"
+    [:octicons-arrow-right-24: Equities](equities.md)
 
-    `quantity=1` on an MCX gold future is refused with HTTP 400 and the message
-    `quantity must be a whole number of lots of 100`. `quantity=100` is one lot. This is not true
-    of shares, funds or bonds, where the quantity is a plain count of units.
+-   :material-bank-outline:{ .lg .middle } **Fixed income**
 
-!!! danger "`lot_size` is not the figure to compute that quantity from"
+    ---
 
-    The `lot_size` attribute is the plurality of what the brokers report, which gives NSE `USDINR`
-    a lot of 1 while the bse reports 1000. Orders are measured against UBI's own morning decision
-    about the contract's size, which is a different number. Never divide by `lot_size` to work out
-    an order quantity.
+    Bonds named by ISIN, rate indices, and interest rate futures and options. No candles, and no quote for a cash bond.
 
-!!! danger "Three position products cannot be closed through UBI"
+    [:octicons-arrow-right-24: Fixed income](fixed-income.md)
 
-    A position held under `margin_trading`, `cover` or `bracket` is invisible to
-    `reduce_position` and `liquidate_position`. Only `liquidate_all_positions` sees it, and it
-    reports it as ignored rather than closing it. See [Positions](../guides/positions.md).
+-   :material-gold:{ .lg .middle } **Commodities**
+
+    ---
+
+    MCX, NCDEX and NSE commodity derivatives, ordered in whole lots of quotation units. The derivatives have candles.
+
+    [:octicons-arrow-right-24: Commodities](commodities.md)
+
+-   :material-currency-inr:{ .lg .middle } **Currencies**
+
+    ---
+
+    Seven currency pairs and the bse's over-the-counter variants. Half the family is empty, and `lot_size` is a trap.
+
+    [:octicons-arrow-right-24: Currencies](currencies.md)
+
+-   :material-basket-outline:{ .lg .middle } **Funds and trusts**
+
+    ---
+
+    Exchange traded funds and investment trusts, which trade and are held exactly like shares.
+
+    [:octicons-arrow-right-24: Funds and trusts](funds.md)
+
+-   :material-piggy-bank-outline:{ .lg .middle } **Mutual funds**
+
+    ---
+
+    Schemes named by exchange code, held rather than traded, with no quote and no candles.
+
+    [:octicons-arrow-right-24: Mutual funds](mutual-funds.md)
+
+</div>
+
+## What is not covered
+
+UBI has one more segment, `uncategorised`, which collects instruments its mapping could not place anywhere else. It has no class here, because UBI does not accept orders for it. Every asset class the old tradingmachine project had is ported, so this is the only gap.

@@ -1,0 +1,74 @@
+<svg class="tm-svg" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="families-title families-description">
+  <title id="families-title">How the six asset-class modules inherit from the instrument classes</title>
+  <desc id="families-description">Six family modules sit at the bottom. Every class that can be traded inherits TradeableInstrument, and the four index classes inherit NonTradeableInstrument. Both of those inherit Instrument, which also inherits the thirteen analysis classes. Dots travel upward along each inheritance line.</desc>
+  <path id="families-t0" class="wire" d="M54,380 C54,300 60,320 60,252"/>
+  <path id="families-n0" class="wire" d="M102,380 C102,300 620,320 620,252"/>
+  <path id="families-t1" class="wire" d="M201,380 C201,300 140,320 140,252"/>
+  <path id="families-n1" class="wire" d="M249,380 C249,300 690,320 690,252"/>
+  <path id="families-t2" class="wire" d="M348,380 C348,300 220,320 220,252"/>
+  <path id="families-n2" class="wire" d="M396,380 C396,300 760,320 760,252"/>
+  <path id="families-t3" class="wire" d="M495,380 C495,300 300,320 300,252"/>
+  <path id="families-n3" class="wire" d="M543,380 C543,300 830,320 830,252"/>
+  <path id="families-t4" class="wire" d="M666,380 C666,300 380,320 380,252"/>
+  <path id="families-t5" class="wire" d="M813,380 C813,300 460,320 460,252"/>
+  <path id="families-up-t" class="wire" d="M270,192 C270,140 390,150 390,106"/>
+  <path id="families-up-n" class="wire" d="M730,192 C730,140 510,150 510,106"/>
+  <path id="families-analysis" class="wire" d="M690,74 L600,74"/>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t0"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t0"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-n0"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-n0"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t1"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t1"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-n1"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-n1"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t2"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t2"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-n2"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-n2"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t3"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t3"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-n3"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-n3"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t4"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t4"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-t5"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-t5"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-up-t"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-up-t"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-up-n"/></animateMotion></circle>
+  <circle class="dot alt" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-up-n"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="0s" repeatCount="indefinite"><mpath href="#families-analysis"/></animateMotion></circle>
+  <circle class="dot" r="6"><animateMotion dur="4s" begin="-2s" repeatCount="indefinite"><mpath href="#families-analysis"/></animateMotion></circle>
+  <rect class="accent-box" x="300" y="42" width="300" height="64" rx="8"/>
+  <text class="title" x="450" y="68" text-anchor="middle">Instrument</text>
+  <text class="small" x="450" y="88" text-anchor="middle">identity, prices, quote, last_price, ohlc</text>
+  <rect class="store" x="690" y="42" width="195" height="64" rx="8"/>
+  <text x="787" y="66" text-anchor="middle">13 analysis classes</text>
+  <text class="mono" x="787" y="86" text-anchor="middle">192 methods on prices()</text>
+  <rect class="box" x="20" y="192" width="500" height="60" rx="8"/>
+  <text class="title" x="270" y="217" text-anchor="middle">TradeableInstrument</text>
+  <text class="small" x="270" y="237" text-anchor="middle">order book, orders, positions: 23 classes</text>
+  <rect class="box" x="580" y="192" width="300" height="60" rx="8"/>
+  <text class="title" x="730" y="217" text-anchor="middle">NonTradeableInstrument</text>
+  <text class="small" x="730" y="237" text-anchor="middle">indices only: 4 classes</text>
+  <rect class="box" x="12" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="78" y="402" text-anchor="middle">equities.py</text>
+  <text class="small" x="78" y="421" text-anchor="middle">6 classes, 1 index</text>
+  <rect class="box" x="159" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="225" y="402" text-anchor="middle">fixed_income.py</text>
+  <text class="small" x="225" y="421" text-anchor="middle">6 classes, 1 index</text>
+  <rect class="box" x="306" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="372" y="402" text-anchor="middle">commodities.py</text>
+  <text class="small" x="372" y="421" text-anchor="middle">6 classes, 1 index</text>
+  <rect class="box" x="453" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="519" y="402" text-anchor="middle">currencies.py</text>
+  <text class="small" x="519" y="421" text-anchor="middle">6 classes, 1 index</text>
+  <rect class="box" x="600" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="666" y="402" text-anchor="middle">funds.py</text>
+  <text class="small" x="666" y="421" text-anchor="middle">2 classes</text>
+  <rect class="box" x="747" y="380" width="132" height="54" rx="6"/>
+  <text class="mono" x="813" y="402" text-anchor="middle">mutual_funds.py</text>
+  <text class="small" x="813" y="421" text-anchor="middle">1 class</text>
+  <text class="small" x="450" y="464" text-anchor="middle">the six asset-class modules under src/tradingmachine/assets/</text>
+</svg>

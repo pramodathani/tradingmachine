@@ -7,10 +7,10 @@ This file configures the project's documentation site, built with Material for M
 | Setting | Sibling | Here | Why |
 |---|---|---|---|
 | `site_name` | Unified Broker Interface | Trading Machine | |
-| `palette` primary and accent | indigo | teal | So the two sites are distinguishable at a glance when both are open |
+| `palette` primary and accent | deep orange | deep orange | Teal until the rebuild of 2026-09-26, when the user chose to match the sibling so both sites and the user's diagram palette are one family |
 | `theme.icon.logo` | `material/swap-horizontal-bold` | `material/chart-line` | The sibling normalises between brokers; this project analyses prices |
 | `watch` | `stock_brokers`, `utilities` | `src` | This project's one package tree |
-| `repo_url` | commented out | absent | Neither project has the remote wired into the site yet |
+| `site_url`, `repo_url`, `edit_uri` | set | set | Both sites are published on GitHub Pages, and the repository link gives every page an edit button |
 | `inherited_members` | `true` | `false` | See below, this is the one substantive difference |
 
 The sibling's `mkdocs.yml` carries explanatory comments. They are left out here, because this project does not put explanatory comments in configuration files; their content is in this note instead.
@@ -53,11 +53,17 @@ Three entries moved when the project became an installable library on 2026-09-20
 
 `scripts/documentation_hooks.py` silences one griffe warning that this project's docstring convention provokes. The reasoning is in `.claude/notes/scripts/documentation_hooks.py.md`.
 
+## The charts plugin
+
+`mkdocs-charts-plugin` renders ```` ```vegalite ```` fences as Vega-Lite charts, and the three `extra_javascript` entries load vega, vega-lite and vega-embed from jsdelivr, which the plugin needs in the browser. The `vega_theme_light` and `vega_theme_dark` options make the charts follow the palette toggle. Both the plugin and `pymdown-extensions` are pinned in the `docs` extra of `pyproject.toml` at the versions the sibling uses.
+
 ## The navigation
 
-Five sections plus the generated reference. `- API reference: reference/` with a trailing slash rather than a list of pages is what hands that section to `mkdocs-literate-nav`, which reads the `reference/SUMMARY.md` that `scripts/gen_ref_pages.py` writes during the build.
+The site was rebuilt from scratch on 2026-09-26, following the sibling's rebuild of the day before. It has seven tabs plus the generated reference, and the Python API tab sits second from the left, laid out like Zerodha's Kite Connect documentation, because it is what a reader of a library comes for. The old Pitfalls and Known issues pages were not carried over, at the user's choice; they survive in git history at `b5761c0`.
 
-MkDocs logs `Doc file 'index.md' contains an unrecognized relative link 'reference/'` at INFO level on every build, because that link points at a directory the generator creates rather than at a file on disk. It is informational, does not fail `--strict`, and the sibling logs the same line.
+`- API reference: reference/` with a trailing slash rather than a list of pages is what hands that section to `mkdocs-literate-nav`, which reads the `reference/SUMMARY.md` that `scripts/gen_ref_pages.py` writes during the build.
+
+MkDocs logs `Doc file 'index.md' contains an unrecognized relative link 'reference/'` at INFO level on every build, because that link points at a directory the generator creates rather than at a file on disk. It is informational and does not fail `--strict`.
 
 ## Verified on 2026-09-20
 

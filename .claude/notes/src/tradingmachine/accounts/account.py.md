@@ -12,7 +12,7 @@ UBI refuses the request unless the body carries `confirm` set to exactly `FLATTE
 
 ## `dry_run` is sent as a real boolean
 
-UBI reads `dry_run` with a plain Python `bool()` (`blueprints/orders.py`, in `flatten_everything`), so the string `"false"` would count as a dry run and `0` as a real one. The method sends `bool(dry_run)`, so the JSON always carries `true` or `false`. The quirk is recorded in `docs/contributing/known-issues.md`.
+UBI reads `dry_run` with a plain Python `bool()` (`blueprints/orders.py`, in `flatten_everything`), so the string `"false"` would count as a dry run and `0` as a real one. The method sends `bool(dry_run)`, so the JSON always carries `true` or `false`. The quirk is recorded in this project's former Known issues page, which the documentation rebuild of 2026-09-26 removed and which `git show b5761c0:docs/contributing/known-issues.md` still prints.
 
 ## The timeout
 
@@ -24,4 +24,4 @@ UBI answers 200 when everything asked for was done and 207 when any part was not
 
 ## What it does not do
 
-UBI's kill switch reads only the brokers' order books and positions. An armed synthetic order in UBI's engine, such as a hidden stop, a grid or an exposure hedge, is not a broker order, so a flatten does not disarm it, and it can trade again afterwards. UBI also has no REST route to list or cancel such a parent. And in engine mode the closes go wherever the broker selector sends them rather than to the broker holding the position. All three are UBI's to fix and are recorded in `docs/contributing/known-issues.md`; the docstring warns about each.
+UBI's kill switch reads only the brokers' order books and positions. An armed synthetic order in UBI's engine, such as a hidden stop, a grid or an exposure hedge, is not a broker order, so a flatten does not disarm it, and it can trade again afterwards. UBI also has no REST route to list or cancel such a parent. And in engine mode the closes go wherever the broker selector sends them rather than to the broker holding the position. All three are UBI's to fix and are recorded in this project's former Known issues page, which the documentation rebuild of 2026-09-26 removed and which `git show b5761c0:docs/contributing/known-issues.md` still prints; the docstring warns about each.

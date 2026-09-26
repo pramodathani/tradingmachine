@@ -1,63 +1,114 @@
 # Architecture
 
-The project is four layers deep and each one has a single job. Reading them from the bottom up
-explains why the top one looks the way it does.
+This tab explains how the library is put together and why. The short version is that `tradingmachine` is a thin layer of Python objects over one REST client, and everything that knows about brokers, prices and order types lives in the [Unified Broker Interface](https://pramodathani.github.io/unified_broker_interface/) (UBI), a separate service that runs on the same machine.
+
+A useful way to picture it is a restaurant. Your program is the diner, the instrument objects are the menu, the shared client is the one waiter every table uses, UBI is the kitchen, and the ten brokers are the suppliers: the menu never cooks anything, it only tells the waiter what to ask the kitchen for.
+
+## From your program down to the brokers
+
+The animation below shows the five layers between your program and a broker's server. The orange dots are reads, such as a quote, a set of candles or the positions, travelling up to your program. The blue dot is an order travelling down, through UBI's order engine, to one broker.
+
+<figure class="diagram">
+--8<-- "docs/assets/diagrams/layers.svg"
+<figcaption>Orange dots are reads coming up from UBI's stores to your program. The blue dot is an order going down through the shared client, the REST API and the order engine to a broker.</figcaption>
+</figure>
+
+The numbered list below describes each layer from the top, with where it lives.
+
+1. **Instrument, order and account objects** are what your program builds and calls. An `Equity`, an `EquityIndexOption` or a `CommodityFutures` is one instrument; a `BracketOrder` or a `TrailingStopOrder` describes one synthetic order; an `Account` stands for the whole trading account. They live in `tradingmachine.assets`, `tradingmachine.orders` and `tradingmachine.accounts`. None of them holds any market data between calls; each read is a fresh request.
+2. **The shared client**, `UnifiedBrokerInterface` in `tradingmachine.ubi_client.client`, is the only code that speaks HTTP. Every object in a process sends its requests through the same client, because UBI holds a single access token for the whole application and a second client would log the first one out. The client connects on first use, reconnects and retries once on HTTP 401, turns each failure status into its own exception class, and remembers which [placement mode](placement-modes.md) UBI was last seen in.
+3. **UBI's REST API** listens on `http://127.0.0.1:8080`. It answers almost every read from its own Redis and TimescaleDB, which its background scripts keep filled from the brokers, so a read never waits for a broker. It is documented route by route on the [UBI site](https://pramodathani.github.io/unified_broker_interface/rest-api/).
+4. **UBI's order engine** is a separate UBI process that places orders on the REST API's behalf when UBI runs with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. It works out prices and quantities that were described rather than stated, and it runs the 42 synthetic order types, some of which keep placing orders long after your call has returned. See [Order engine](https://pramodathani.github.io/unified_broker_interface/rest-api/order-engine/) on the UBI site.
+5. **The ten brokers** are Dhan, Flattrade, Fyers, Groww, INDmoney, Kotak, Shoonya, Stoxkart, Wisdom Capital and Zerodha. UBI logs in to each of them and chooses which one sends a given order; this library never names a broker and never talks to one.
+
+!!! note "What the library does not do"
+    The library keeps no cache, batches no date ranges, rounds no prices to the tick and checks no quantities against the lot size. UBI already does each of those, or holds the rule, and doing it again here would create a second copy that could drift. [Design choices](design-choices.md) records each decision.
+
+## Which layer may talk to which
+
+The rules below keep the layers independent. The table shows, for each part, what it is allowed to call.
+
+| Part | Calls the shared client | Calls UBI over HTTP | Calls a broker | Keeps state between calls |
+|---|:---:|:---:|:---:|---|
+| Your program | :material-minus: through the objects, or directly for a route no object wraps | :material-close: | :material-close: | Whatever it chooses |
+| Instrument, order and account objects | :material-check: | :material-close: only through the client | :material-close: | Only the instrument's identity, lot size and tick size, read once at construction |
+| Shared client, `UnifiedBrokerInterface` | :material-minus: it is the client | :material-check: the only code that does | :material-close: | The access token, its expiry and `placement_mode` |
+| UBI REST API | :material-close: | :material-minus: it is the API | :material-check: for orders in direct mode, and for a quote when no fresh one is cached | Everything, in Redis, TimescaleDB and MongoDB |
+| UBI order engine | :material-close: | :material-close: | :material-check: every placement in engine mode | Armed and working synthetic orders |
+| Brokers | :material-close: | :material-close: | :material-minus: | The real orders, trades, positions and holdings |
+
+The one rule that matters most for a caller is the second row. An instrument object never opens its own connection, so any number of instruments, synthetic orders and an `Account` can live in one process and share one login. [The instrument model](instrument-model.md#one-shared-client) explains how the client is shared.
+
+## A read and an order, side by side
+
+The sequence below shows the two kinds of request the layers carry: a read of the last price, which UBI answers from memory, and an order that carries a price reference, which the order engine resolves and sends to a broker.
 
 ```mermaid
-flowchart TD
-    CONFIG["tradingmachine.utilities.configuration<br/>Configuration: one property per setting, read lazily"]
-    CLIENT["tradingmachine.ubi_client.client<br/>UnifiedBrokerInterface: connect, token, retry, raise"]
-    INSTR["tradingmachine.assets.instruments<br/>Instrument / TradeableInstrument / NonTradeableInstrument"]
-    ANALYSIS["tradingmachine.assets.analysis<br/>thirteen classes Instrument inherits"]
-    FAMILIES["tradingmachine.assets.equities, tradingmachine.assets.fixed_income, tradingmachine.assets.commodities,<br/>tradingmachine.assets.currencies, tradingmachine.assets.funds, tradingmachine.assets.mutual_funds"]
-
-    CONFIG --> CLIENT
-    CLIENT --> INSTR
-    ANALYSIS --> INSTR
-    INSTR --> FAMILIES
+sequenceDiagram
+    autonumber
+    participant P as Your program
+    participant O as Equity object
+    participant C as Shared client
+    participant A as UBI REST API
+    participant E as Order engine
+    participant B as Broker
+    P->>O: share.last_price
+    O->>C: get("/api/instruments/ltp")
+    C->>A: GET with access-token
+    A-->>C: last price from UBI's Redis
+    C-->>O: parsed JSON
+    O-->>P: 1226.0
+    P->>O: share.buy_at_best_offer_price(quantity=1, product="cnc")
+    O->>C: post("/api/orders/place") with price_reference
+    C->>A: POST with access-token
+    A->>E: hand the order over as an intent
+    E->>E: read the quote, round to the tick
+    E->>B: place the limit order
+    B-->>E: order id
+    E-->>A: answer with intent_id
+    A-->>C: answer
+    C-->>O: parsed JSON
+    O-->>P: dict with broker, order_id, outcome
 ```
 
-| Layer | Job | What it deliberately does not do |
-| --- | --- | --- |
-| `tradingmachine.utilities.configuration` | Name every environment variable in one place, and read them on first use | Nothing else. It holds one class and no logic beyond assembling the MongoDB connection string |
-| `ubi_client` | Hold the session with UBI and turn every failed response into a typed exception | Interpret any payload. It returns parsed JSON and nothing more |
-| `tradingmachine.assets.instruments` | Be one instrument: identity, candles, quotes, order book, orders, positions | Cache, batch, round prices or check quantities |
-| `tradingmachine.assets.analysis` | Turn candles into indicators, patterns and statistics | Fetch anything. It calls `prices` and is given it by the instrument |
-| The six family modules | Put a named class on each UBI segment, and add what only that family has | Share a base class between families, even where the code is identical |
-| `tradingmachine.orders` | Describe one of UBI's forty-two synthetic order types each, and send it through `place_order` | Place, watch or re-price anything itself. UBI's order engine does that |
-| `tradingmachine.accounts` | Act on the whole account, which today means UBI's kill switch | Act on one instrument, which is the instruments' job |
-
-## Four decisions that shape everything above
-
-**There is no caching anywhere.** An instrument looks itself up in UBI once, in its constructor,
-and keeps the identity that comes back. Everything else, from a year of daily candles down to the
-last traded price, is fetched at the moment it is asked for. UBI runs on the same machine and
-caches in its own Redis, so a cache here would be a second copy of a cache that is already warm,
-with its own staleness to reason about. Date ranges are not batched either, because UBI serves any
-range in one request.
-
-**Duplication between families is on purpose.** `tradingmachine.assets.fixed_income` was copied from
-`tradingmachine.assets.equities` rather than sharing a base with it, and the six holdings members appear
-separately in `tradingmachine.assets.equities`, `tradingmachine.assets.funds` and `tradingmachine.assets.mutual_funds`. Each family then reads
-as one self-contained file, and a fact that turns out to be true only of bonds can be written into
-the bond file without anyone checking what else inherits it. The shared mechanism that genuinely
-is identical lives in `tradingmachine.assets.instruments`.
-
-**The order vocabulary is plain strings.** `"buy"`, `"limit"`, `"cnc"` and `"day"` are passed
-through as they are written, with no enums and no constants, because UBI validates them and would
-have to be asked anyway. The same reasoning applies to prices and quantities, which reach UBI
-exactly as given. See [Orders](../guides/orders.md).
-
-**Order types are built in UBI, not here.** Since UBI gained its order engine, anything it can work
-out itself is sent to it as a description rather than computed here: a price read from the order
-book, a quantity read from a position, or a whole synthetic order such as a bracket. The price
-wrappers, the position methods and `tradingmachine.orders` are therefore thin, and a new kind of
-order belongs in UBI first. See [Synthetic orders](../guides/synthetic-orders.md).
+The first time an order like the second one is sent, `place_order` sends it once as a dry run before the real one, to prove that UBI's order engine is running. [Placement modes](placement-modes.md#the-placement-mode-probe) describes that probe.
 
 ## Where to go next
 
-| Page | What it covers |
-| --- | --- |
-| [The instrument model](instrument-model.md) | What a single instrument object holds, fetches and refuses |
-| [The UBI client](ubi-client.md) | The single access token, the one retry, and the shared client |
-| [Errors](errors.md) | Both exception hierarchies and which one to catch when |
+The pages in this tab go deeper into each part of the design.
+
+<div class="grid cards" markdown>
+
+-   :material-family-tree:{ .lg .middle } **The instrument model**
+
+    ---
+
+    The class hierarchy from `Instrument` to the 27 family classes, what lives at each level, and how the synthetic orders and the account relate to it.
+
+    [:octicons-arrow-right-24: The instrument model](instrument-model.md)
+
+-   :material-swap-vertical:{ .lg .middle } **Placement modes**
+
+    ---
+
+    UBI's direct and engine modes, what the library sends as descriptions rather than values, and the dry-run probe that protects the first such order.
+
+    [:octicons-arrow-right-24: Placement modes](placement-modes.md)
+
+-   :material-scale-balance:{ .lg .middle } **Design choices**
+
+    ---
+
+    Ten decisions that shape the library, each with its problem, its reasoning, its cost and where to see it in the code.
+
+    [:octicons-arrow-right-24: Design choices](design-choices.md)
+
+-   :material-folder-outline:{ .lg .middle } **Repository structure**
+
+    ---
+
+    Every package and module, how many there are, and which package imports which.
+
+    [:octicons-arrow-right-24: Repository structure](../project/structure.md)
+
+</div>
