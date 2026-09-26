@@ -85,9 +85,10 @@ recovering is both simpler and more reliable.
 | `disconnect()` | Revokes the token on the server and forgets it locally |
 | `status()` | Asks the server whether the session is connected and when the token expires |
 | `get(path, params=None)` | A `GET` with query parameters |
-| `post(path, body=None, params=None)` | A `POST` with an optional JSON body |
-| `put`, `patch`, `delete` | The same shape as `post` |
+| `post(path, body=None, params=None, timeout_seconds=None)` | A `POST` with an optional JSON body, and an optional timeout for this one request |
+| `put`, `patch`, `delete` | The same shape as `post`, without the timeout |
 | `token_expires_at` | The server's expiry time for the current token, or `None` before the first connect |
+| `placement_mode` | `engine` or `direct`, whichever UBI was last seen placing orders with, or `None` while it is not known |
 
 The body parameter is called `body` rather than `json` so that it does not shadow the standard
 library's `json` module; it is handed to `requests` as `json=`. `delete` takes a body too, because
@@ -97,7 +98,12 @@ from Flask and is raised as `ServerError`.
 
 Every request carries a timeout, 30 seconds unless the constructor is told otherwise, and a
 request that never gets a response at all raises `UnreachableError` rather than a status-code
-error. See [Errors](errors.md).
+error. See [Errors](errors.md). `post` alone can override that for one request, because
+`POST /api/orders/flatten` cancels and closes one thing after another and can take longer.
+
+`placement_mode` is set by `TradeableInstrument.place_order`, which checks whether UBI is running
+its order engine before sending an order that only the engine understands. See
+[Orders](../guides/orders.md).
 
 ## Why the credentials live in MongoDB
 

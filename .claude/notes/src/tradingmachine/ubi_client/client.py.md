@@ -71,3 +71,9 @@ The old client repeated the parse-and-raise code in `connect`, `disconnect` and 
 ## Verified on 2026-09-14
 
 A live check against UBI on `http://127.0.0.1:8080` passed every case: connecting returned a 36-character token and an expiry one day later; `status()`, `/api/brokers/details` and `/api/instruments/segments` returned data; an invalid `instrument_id` raised `BadRequestError`; a PATCH raised `ServerError` with status 405; a stale token reconnected and succeeded with a new token; a wrong secret raised `AuthenticationError`; and a closed port raised `UnreachableError`.
+
+## `placement_mode` and the per-request timeout, added on 2026-09-26
+
+`placement_mode` records whether UBI was last seen placing orders through its order engine (`engine`) or directly (`direct`), and is None until an order has shown which. UBI has no route that reports its mode: `placement_mode` is only an attribute on its `OrdersBlueprint` and is never served. Engine mode does leave a mark on every answer to `POST /api/orders/place`, though, including dry runs and refusals, because `IntentHandoff.engine_answer` adds an `intent_id` to each one, and direct mode never adds it. `TradeableInstrument.place_order` reads that mark and stores the result here, so the probe it makes costs one dry run per client rather than one per order. It is a public attribute on the client rather than on the instrument because every instrument shares one client, and the mode belongs to the server the client talks to.
+
+`post` takes an optional `timeout_seconds` that overrides the client's own 30 seconds for one request, passed down through `_request` and `_send`. It exists for `POST /api/orders/flatten`, which cancels every open order, waits up to five seconds for the cancels to be confirmed and then closes each position one after another, so an account with several positions can take well over 30 seconds to answer. Only `post` takes it, because no other route is that slow.

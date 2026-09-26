@@ -27,6 +27,7 @@ class UnifiedBrokerInterface:
 
     Attributes:
         token_expires_at: The str time at which the current access token expires, as reported by the server, or None before the first connect.
+        placement_mode: The str placement mode UBI was last seen using, `engine` or `direct`, or None while it is not known; `tradingmachine.assets.instruments.TradeableInstrument.place_order` sets it.
     """
 
     def __init__(
@@ -61,6 +62,7 @@ class UnifiedBrokerInterface:
         self._api_key = None
         self._api_secret = None
         self.token_expires_at = None
+        self.placement_mode = None
         self._load_credentials()
 
     def _load_credentials(self) -> None:
@@ -164,6 +166,7 @@ class UnifiedBrokerInterface:
         path: str,
         body: Any = None,
         params: dict | None = None,
+        timeout_seconds: float | None = None,
     ) -> Any:
         """Sends a POST request.
 
@@ -171,6 +174,7 @@ class UnifiedBrokerInterface:
             path: The str route, starting with `/api/`.
             body: The request body, of any JSON-serialisable type, or None for no body.
             params: A dict of query string parameters, or None.
+            timeout_seconds: The float number of seconds to wait for this one response, or None to use the client's own timeout.
 
         Returns:
             The parsed JSON response body, of any JSON type, or None when the body is not JSON.
@@ -178,7 +182,13 @@ class UnifiedBrokerInterface:
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
         """
-        return self._request("POST", path, params=params, body=body)
+        return self._request(
+            "POST",
+            path,
+            params=params,
+            body=body,
+            timeout_seconds=timeout_seconds,
+        )
 
     def put(
         self,
@@ -250,6 +260,7 @@ class UnifiedBrokerInterface:
         params: dict | None = None,
         body: Any = None,
         is_retry: bool = False,
+        timeout_seconds: float | None = None,
     ) -> Any:
         """Sends an authenticated request, reconnecting once if the token is refused.
 
@@ -259,6 +270,7 @@ class UnifiedBrokerInterface:
             params: A dict of query string parameters, or None.
             body: The request body, of any JSON-serialisable type, or None for no body.
             is_retry: A bool that is True when this call is already the retry after a refused token.
+            timeout_seconds: The float number of seconds to wait for the response, or None to use the client's own timeout.
 
         Returns:
             The parsed JSON response body, of any JSON type, or None when the body is not JSON.
@@ -271,11 +283,25 @@ class UnifiedBrokerInterface:
         headers = {
             "access-token": self._access_token,
         }
-        response = self._send(method, path, headers, params, body)
+        response = self._send(
+            method,
+            path,
+            headers,
+            params,
+            body,
+            timeout_seconds=timeout_seconds,
+        )
         response_body = self._parse_body(response)
         if response.status_code == 401 and not is_retry:
             self._access_token = None
-            return self._request(method, path, params, body, is_retry=True)
+            return self._request(
+                method,
+                path,
+                params,
+                body,
+                is_retry=True,
+                timeout_seconds=timeout_seconds,
+            )
         if not response.ok:
             self._raise_for_failure(response, response_body)
         return response_body
@@ -287,6 +313,7 @@ class UnifiedBrokerInterface:
         headers: dict,
         params: dict | None,
         body: Any,
+        timeout_seconds: float | None = None,
     ) -> requests.Response:
         """Sends one HTTP request to the server.
 
@@ -296,6 +323,7 @@ class UnifiedBrokerInterface:
             headers: A dict of request headers.
             params: A dict of query string parameters, or None.
             body: The request body, of any JSON-serialisable type, or None for no body.
+            timeout_seconds: The float number of seconds to wait for the response, or None to use the client's own timeout.
 
         Returns:
             The requests.Response received, whatever its status code.
@@ -304,6 +332,8 @@ class UnifiedBrokerInterface:
             UnreachableError: The request failed before a response arrived, such as a refused connection or a timeout.
         """
         url = f"{self._base_url}{path}"
+        if timeout_seconds is None:
+            timeout_seconds = self._timeout_seconds
         try:
             return requests.request(
                 method,
@@ -311,7 +341,7 @@ class UnifiedBrokerInterface:
                 headers=headers,
                 params=params,
                 json=body,
-                timeout=self._timeout_seconds,
+                timeout=timeout_seconds,
             )
         except requests.RequestException as error:
             raise exceptions.UnreachableError(
