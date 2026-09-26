@@ -31,10 +31,11 @@ The chart below counts the members documented on each page of this tab, which sh
   "data": {
     "values": [
       {"page": "Price wrappers", "members": 32},
-      {"page": "Market data", "members": 15},
+      {"page": "Market data", "members": 17},
+      {"page": "The UBI client", "members": 12},
       {"page": "Orders", "members": 10},
       {"page": "Positions", "members": 8},
-      {"page": "The UBI client", "members": 8},
+      {"page": "Read-only market data", "members": 8},
       {"page": "Holdings", "members": 6},
       {"page": "Finding instruments", "members": 5},
       {"page": "Instruments", "members": 1},
@@ -62,12 +63,14 @@ An instrument is looked up once when you construct it, and from then on every me
 
 ## Market data
 
-These members read candles, quotes and the order book. The first four work on every instrument; the order-book values exist only on instruments that can be traded, because an index has no order book.
+These members read candles, quotes and the order book. The first six work on every instrument; the order-book values exist only on instruments that can be traded, because an index has no order book.
 
 | Kind | Member | Description |
 |---|---|---|
 | <span class="member method">method</span> | [`prices`](market-data.md#prices) | Fetches the instrument's candles for a range from UBI. |
+| <span class="member method">method</span> | [`prices_document`](market-data.md#prices_document) | Fetches the same candles together with UBI's facts about them, such as the price basis and the range read. |
 | <span class="member property">property</span> | [`quote`](market-data.md#quote) | The instrument's full unified quote, read from UBI on every access. |
+| <span class="member property">property</span> | [`additional_details`](market-data.md#additional_details) | The extra attributes each broker publishes about the instrument, such as its ISIN, read from UBI on every access. |
 | <span class="member property">property</span> | [`last_price`](market-data.md#last_price) | The instrument's last traded price, read from UBI on every access. |
 | <span class="member property">property</span> | [`ohlc`](market-data.md#ohlc) | The day's open, high and low with the last and previous close prices, read from UBI on every access. |
 | <span class="member property">property</span> | [`bids`](market-data.md#bids) | The buy side of the order book, read from UBI on every access. |
@@ -202,14 +205,37 @@ Holdings are shares kept for the long term in a demat account. Only `Equity`, `F
 
 | Kind | Member | Description |
 |---|---|---|
-| <span class="member method">method</span> | [`connect`](client.md#connect) | Exchanges the api key and secret for a new access token. |
+| <span class="member method">method</span> | [`connect`](client.md#connect) | Asks the token source to connect to UBI for an access token. |
+| <span class="member method">method</span> | [`exchange_credentials`](client.md#exchange_credentials) | Exchanges an api key and secret for an access token, which is what token sources call to connect. |
 | <span class="member method">method</span> | [`disconnect`](client.md#disconnect) | Revokes the access token in force on the server. |
 | <span class="member method">method</span> | [`status`](client.md#status) | Reports whether the session is connected and when its token expires. |
+| <span class="member property">property</span> | [`greeting`](client.md#greeting) | UBI's welcome message, read without an access token, which shows whether UBI is running. |
 | <span class="member method">method</span> | [`get`](client.md#get) | Sends a GET request. |
 | <span class="member method">method</span> | [`post`](client.md#post) | Sends a POST request. |
 | <span class="member method">method</span> | [`put`](client.md#put) | Sends a PUT request. |
 | <span class="member method">method</span> | [`patch`](client.md#patch) | Sends a PATCH request. |
 | <span class="member method">method</span> | [`delete`](client.md#delete) | Sends a DELETE request. |
+| <span class="member method">method</span> | [`stream_get`](client.md#stream_get) | Sends a GET whose answer is read as it arrives, for very large answers. |
+| <span class="member method">method</span> | [`close`](client.md#close) | Closes the client's pooled connections to UBI. |
+
+The client asks a token source for its access token. The default one uses the api key and secret in this project's MongoDB, and [Token sources](client.md#token-sources) lists the others and says when to use each.
+
+## Read-only market data
+
+These classes read UBI's market data by instrument id, for programs that deal with thousands of instruments at once and should not build an instrument object for each. The last three read UBI's own Redis and MongoDB directly, and never write to them. The [Read-only market data](read-only-market-data.md) page documents them all.
+
+| Kind | Member | Description |
+|---|---|---|
+| <span class="member class">class</span> | [`InstrumentCatalogue`](read-only-market-data.md#instrumentcatalogue) | UBI's instrument data looked up by instrument id, with nothing read until a method is called. |
+| <span class="member property">property</span> | [`greeting`, `segments`, `mapping_date`](read-only-market-data.md#greeting-segments-and-mapping_date) | Whether UBI is running, its segments, and the date of its instrument catalogue. |
+| <span class="member method">method</span> | [`details`, `additional_details`, `quote`](read-only-market-data.md#details-additional_details-and-quote) | One instrument's identity, its brokers' extra attributes, and its quote. |
+| <span class="member method">method</span> | [`prices_document`](read-only-market-data.md#prices_document) | One instrument's candles together with UBI's facts about them. |
+| <span class="member method">method</span> | [`open_master`](read-only-market-data.md#open_master) | Opens UBI's whole instrument master for reading in batches. |
+| <span class="member class">class</span> | [`PricesDocument`](read-only-market-data.md#pricesdocument) | UBI's whole answer from the prices route, with a method that builds the candle DataFrame. |
+| <span class="member class">class</span> | [`InstrumentMasterStream`](read-only-market-data.md#instrumentmasterstream) | The instrument master, read in batches as it arrives. |
+| <span class="member class">class</span> | [`StoredLoginReader`](read-only-market-data.md#storedloginreader) | Reads the access token UBI has stored in its own Redis and MongoDB. |
+| <span class="member class">class</span> | [`StoredLoginTokenSource`](read-only-market-data.md#storedlogintokensource) | A token source that uses UBI's stored token and connects only as a last resort. |
+| <span class="member class">class</span> | [`LiveQuoteReader`](read-only-market-data.md#livequotereader) | Reads the live quotes of many instruments from UBI's Redis in one round trip. |
 
 ## Reference pages
 

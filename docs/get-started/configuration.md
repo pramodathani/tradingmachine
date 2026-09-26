@@ -54,7 +54,7 @@ Three rules follow from that, and they explain most surprises.
 | `TRADINGMACHINE_TIMESCALEDB_USERNAME` | | :material-check: | `tradingmachine` | The superuser |
 | `TRADINGMACHINE_TIMESCALEDB_PASSWORD` | | :material-check: | | The superuser's password |
 
-The library reads exactly six variables, all through `Configuration`. The Redis and TimescaleDB variables exist for the containers and for code that has not been written yet. The file also holds a leftover `PYTHONPATH` line from before the project became an installable library; it does nothing, and it is the cause of the harmless Compose warning shown on [Installation](installation.md#4-start-the-containers).
+The library reads exactly six variables, all through `Configuration`. The Redis and TimescaleDB variables exist for the containers and for code that has not been written yet. The readers in `tradingmachine.ubi_stores` read no variables at all, because they read UBI's own Redis and MongoDB rather than these, and the program that uses them passes UBI's store settings in; [Read-only market data](../python-api/read-only-market-data.md#redissettings-and-mongosettings) shows how. The file also holds a leftover `PYTHONPATH` line from before the project became an installable library; it does nothing, and it is the cause of the harmless Compose warning shown on [Installation](installation.md#4-start-the-containers).
 
 A `.env` with placeholder values is shown below. The hosts are illustrative: on the development machine the databases are reached through the machine's local network address, while UBI is always reached on `127.0.0.1`, because it binds only there.
 
