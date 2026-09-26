@@ -239,6 +239,8 @@ class OverlapStudies(price_analysis.PriceAnalysis):
     ) -> pd.DataFrame | None:
         """Adds Tillson's T3 triple exponential moving average of one candle column.
 
+        This is T3, not the TEMA most charting tools show under the same name; mulloy_triple_exponential_moving_average gives that one.
+
         Args:
             window: The int number of candles in each calculation window.
             volume_factor: The float volume factor that sets how strongly T3 smooths, between 0 and 1.
@@ -269,6 +271,47 @@ class OverlapStudies(price_analysis.PriceAnalysis):
             timeperiod=window,
             vfactor=volume_factor,
         )
+        return prices
+
+    def mulloy_triple_exponential_moving_average(
+        self,
+        window: int = 10,
+        column: str = "close",
+        interval: str = "day",
+        from_date: datetime.date | str | None = None,
+        to_date: datetime.date | str | None = None,
+        days: int | None = None,
+        adjusted: bool = True,
+    ) -> pd.DataFrame | None:
+        """Adds Patrick Mulloy's triple exponential moving average (TEMA) of one candle column.
+
+        This is the TEMA most charting tools show: three times an exponential moving average, less three times its double smoothing, plus its triple smoothing. triple_exponential_moving_average gives Tillson's T3 instead.
+
+        Args:
+            window: The int number of candles in each calculation window.
+            column: The str name of the candle column to use, such as `close`.
+            interval: The str candle interval, such as `day` or `5minute`.
+            from_date: The first day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            to_date: The last day of the range as a datetime.date or a `YYYY-MM-DD` str, or None when days is given.
+            days: The int number of days to count back from today, or None when from_date and to_date are given.
+            adjusted: A bool that is True for prices adjusted for splits and bonuses.
+
+        Returns:
+            A pandas.DataFrame of the candles with a `tema_<window>` column added, or None when UBI has no candles for the range.
+
+        Raises:
+            UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+        """
+        prices = self.prices(
+            interval=interval,
+            from_date=from_date,
+            to_date=to_date,
+            days=days,
+            adjusted=adjusted,
+        )
+        if prices is None:
+            return None
+        prices[f"tema_{window}"] = talib.TEMA(prices[column], timeperiod=window)
         return prices
 
     def kaufman_adaptive_moving_average(
