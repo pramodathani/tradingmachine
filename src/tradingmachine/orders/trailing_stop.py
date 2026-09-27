@@ -1,6 +1,6 @@
 """The `trailing_stop` synthetic order type: a real stop at the broker whose trigger follows the market up, never down.
 
-The stop sits at the exchange as a stop-limit, so it keeps protecting the position while UBI is down, and UBI moves its trigger with modifications as the best price improves. Give `trail_points` or `trail_percent`, not both.
+The stop sits at the exchange as a stop-limit, so it keeps protecting the position while UBI is down, and UBI moves its trigger with modifications as the best price improves. Give `trail_points` or `trail_percent`, not both. With `activate_at`, it is a trailing take-profit: nothing is placed until the last traded price reaches that level, the answer is HTTP 202 with an `outcome` of `armed`, and the stop then trails from there.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class TrailingStopOrder(synthetic_order.SyntheticOrder):
     """A real stop at the broker whose trigger follows the market up, never down.
 
-    The stop sits at the exchange as a stop-limit, so it keeps protecting the position while UBI is down, and UBI moves its trigger with modifications as the best price improves. Give `trail_points` or `trail_percent`, not both.
+    The stop sits at the exchange as a stop-limit, so it keeps protecting the position while UBI is down, and UBI moves its trigger with modifications as the best price improves. Give `trail_points` or `trail_percent`, not both. With `activate_at`, it is a trailing take-profit: nothing is placed until the last traded price reaches that level, the answer is HTTP 202 with an `outcome` of `armed`, and the stop then trails from there.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -34,6 +34,7 @@ class TrailingStopOrder(synthetic_order.SyntheticOrder):
         trail_points: The float fixed trailing distance in rupees, or None.
         trail_percent: The float trailing distance as a percentage of the best price seen, or None.
         step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+        activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which makes the order a trailing take-profit that answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
     """
 
     SYNTHETIC_TYPE = "trailing_stop"
@@ -56,10 +57,12 @@ class TrailingStopOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         trail_points: float | None = None,
         trail_percent: float | None = None,
         step_ticks: int | None = None,
+        activate_at: float | None = None,
     ):
         """Initialises the order template and this type's own settings.
 
@@ -79,10 +82,12 @@ class TrailingStopOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             trail_points: The float fixed trailing distance in rupees, or None.
             trail_percent: The float trailing distance as a percentage of the best price seen, or None.
             step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+            activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which makes the order a trailing take-profit that answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
 
         Raises:
             Nothing.
@@ -102,12 +107,14 @@ class TrailingStopOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.stop_limit_offset = stop_limit_offset
         self.trail_points = trail_points
         self.trail_percent = trail_percent
         self.step_ticks = step_ticks
+        self.activate_at = activate_at
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -123,4 +130,5 @@ class TrailingStopOrder(synthetic_order.SyntheticOrder):
             "trail_points": self.trail_points,
             "trail_percent": self.trail_percent,
             "step_ticks": self.step_ticks,
+            "activate_at": self.activate_at,
         }

@@ -5,3 +5,5 @@
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 It is not an Atlas row: it is the plain order UBI's engine runs when no `synthetic` object is sent. It exists as a named class so that a plain order can be marked `closes_position`, which is how `TradeableInstrument.reduce_position` and `liquidate_position` use it through `place_order`.
+
+Since 2026-09-27 naming `simple` also has a third use: UBI holds a plain limit order in its virtual order book by default, and a body that names any `synthetic` type, `simple` included, is sent as that type, so a `SimpleOrder` with a limit price goes to the broker at once.

@@ -1,6 +1,6 @@
 """The `scheduled` synthetic order type: an order held until a time of day and then placed.
 
-Times are India wall-clock times, and a time that has already passed today is refused rather than taken to mean tomorrow. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+Times are India wall-clock times, and on a trading day a time that has already passed is refused rather than taken to mean tomorrow. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day, and the answer names the date. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -24,12 +24,12 @@ from tradingmachine.orders import synthetic_order
 class ScheduledOrder(synthetic_order.SyntheticOrder):
     """An order held until a time of day and then placed.
 
-    Times are India wall-clock times, and a time that has already passed today is refused rather than taken to mean tomorrow. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    Times are India wall-clock times, and on a trading day a time that has already passed is refused rather than taken to mean tomorrow. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day, and the answer names the date. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
-        at_time: The str time of day to place the order, as `HH:MM` or `HH:MM:SS` India time, later today.
+        at_time: The str time of day to place the order, as `HH:MM` or `HH:MM:SS` India time, later on the trading day.
     """
 
     SYNTHETIC_TYPE = "scheduled"
@@ -52,6 +52,7 @@ class ScheduledOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
     ):
         """Initialises the order template and this type's own settings.
@@ -62,7 +63,7 @@ class ScheduledOrder(synthetic_order.SyntheticOrder):
             product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
-            at_time: The str time of day to place the order, as `HH:MM` or `HH:MM:SS` India time, later today.
+            at_time: The str time of day to place the order, as `HH:MM` or `HH:MM:SS` India time, later on the trading day.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
@@ -72,6 +73,7 @@ class ScheduledOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
 
         Raises:
@@ -92,6 +94,7 @@ class ScheduledOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.at_time = at_time

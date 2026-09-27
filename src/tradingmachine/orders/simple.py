@@ -1,6 +1,6 @@
 """The `simple` synthetic order type: one plain order sent to one broker, with nothing watching it afterwards.
 
-This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful only to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits.
+This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful for three things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
 
 Typical usage example:
 
@@ -23,7 +23,7 @@ from tradingmachine.orders import synthetic_order
 class SimpleOrder(synthetic_order.SyntheticOrder):
     """One plain order sent to one broker, with nothing watching it afterwards.
 
-    This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful only to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits.
+    This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful for three things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
 
     The order template's attributes are described on `SyntheticOrder`, and this type adds none of its own.
     """
@@ -47,6 +47,7 @@ class SimpleOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
     ):
         """Initialises the order template and this type's own settings.
@@ -66,6 +67,7 @@ class SimpleOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
 
         Raises:
@@ -86,6 +88,7 @@ class SimpleOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
 

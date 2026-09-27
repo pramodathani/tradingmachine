@@ -65,6 +65,7 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         stop_price: float | None = None,
         stop_limit_price: float | None = None,
@@ -91,6 +92,7 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             stop_price: The float trigger of the stop armed after the break, or None.
             stop_limit_price: The float limit of that stop, required with `stop_price`, or None.
@@ -114,6 +116,7 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.buy_trigger = buy_trigger

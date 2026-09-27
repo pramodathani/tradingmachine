@@ -53,6 +53,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         randomise_percent: float | None = None,
     ):
@@ -74,6 +75,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             randomise_percent: The float percentage by which each slice may vary either way, at or above 0 and below 100, or None to let UBI use 0.
 
@@ -95,6 +97,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.slice_quantity = slice_quantity

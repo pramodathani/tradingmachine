@@ -4,7 +4,7 @@
 
 ## Why `place()` goes through `place_order`
 
-Every order in the library is built in one place. Sending through `place_order` means the body is assembled by the same code as a plain order, and every synthetic class is covered by the engine-mode check there, so a bracket cannot go out as an unprotected entry when UBI is in direct mode. The alternative, posting to `/api/orders/place` from here, would have been a second body builder and a second place to forget the check.
+Every order in the library is built in one place. Sending through `place_order` means the body is assembled by the same code as a plain order, so a synthetic order and a plain one cannot drift apart. The alternative, posting to `/api/orders/place` from here, would have been a second body builder. Until 2026-09-27 `place_order` also refused to send a synthetic order when UBI placed orders directly, without its engine; UBI removed that mode that day, so the check went too.
 
 ## The template
 
@@ -24,4 +24,10 @@ Every argument after the instrument is keyword-only. The classes take between fi
 
 ## What the answer looks like
 
-A type that acts at once answers with the broker's answer and a `parent_id`; `freeze_slicer` and `ladder` add a list of `order_ids`. A type that waits for a price or a time answers HTTP 202, which the client treats as success, with an `outcome` of `armed` or `scheduled` and a `broker` and `order_id` of None. The `parent_id` is then the only handle on the order, and UBI has no REST route to list or cancel a parent, which is recorded in this project's former Known issues page, which the documentation rebuild of 2026-09-26 removed and which `git show b5761c0:docs/contributing/known-issues.md` still prints.
+A type that acts at once answers with the broker's answer and a `parent_id`; `freeze_slicer` and `ladder` add a list of `order_ids`. Since 2026-09-27 the types that send several orders at once share one rule for the combined `outcome`: `accepted` when all were accepted, `partial` with HTTP 207 when some were, and `unknown` or `rejected` otherwise. HTTP 207 is a success status, so a partial answer is returned, and the caller must read each order's own outcome in it. A type that waits for a price or a time answers HTTP 202, which the client also treats as success, with an `outcome` of `armed` or `scheduled` and a `broker` and `order_id` of None.
+
+## `parent_id`, `cancel()`, `parent`, `orders` and `trades`
+
+The `parent_id` is the only handle on an order that has not reached a broker. When the package was written UBI had no route to read or cancel a parent, so the id was only returned. On 2026-09-27 UBI added `GET /api/orders/parents`, `DELETE /api/orders/parents` and a `parent_id` filter on the order and trade books, so `place()` now keeps the id on the object and the object can act on itself: `cancel()` cancels the parent and its resting legs, `parent` reads the engine's own record, and `orders` and `trades` read the broker orders and fills it has produced. They go through `TradeableInstrument` methods of the same names, so the routes are called from one place, and each refuses with `ValueError` before `place()` has run, or after a dry run, which records nothing and so gives no id.
+
+`reduce_only` is sent only as a literal `True`, for the same reason as `closes_position`: UBI refuses anything but true or false, and a False says nothing UBI does not assume.
