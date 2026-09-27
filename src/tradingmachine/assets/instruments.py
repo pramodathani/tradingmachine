@@ -59,6 +59,8 @@ ORDER_MODIFY_PATH = "/api/orders/modify"
 
 ORDER_CANCEL_PATH = "/api/orders/cancel"
 
+ORDER_PARENTS_PATH = "/api/orders/parents"
+
 POSITIONS_PATH = "/api/portfolio/positions"
 
 OPEN_ORDER_STATUSES = [
@@ -867,7 +869,7 @@ class TradeableInstrument(Instrument):
 
         An outcome of `accepted` means the broker took the order, not that the order survived. The exchange can still refuse it afterwards, which is what happens to an ordinary order sent while the market is closed, so the order's real fate is read from `orders` rather than from this answer. Neither this class nor UBI checks the market's hours, so use `after_market` to queue an order for the next session.
 
-        A `price_reference`, a `quantity_reference` or a `synthetic` object is acted on only by UBI's order engine, and UBI in direct mode would validate it and then ignore it. So before the first such order a client sends, the same body is sent once as a dry run, and the order goes ahead only when the answer shows the engine handled it. The finding is kept on the shared client as `placement_mode`, so the check costs one dry run per client.
+        Every order goes through UBI's order engine, which is the only way UBI places orders. A plain `limit` order with a price of its own, `day` validity, no `synthetic` object and `after_market` False is not sent to a broker straight away: the engine holds it as a `virtual_limit` order and sends it only once the other side of the book reaches its price, answering HTTP 202 with an outcome of `armed`, a `parent_id` and no `order_id`. Such a held order is changed with `modify_order(parent_id=...)` and cancelled with `cancel_parent`, and it never appears in `orders` until it has been sent. Pass `synthetic={"type": "simple"}` to send a limit order at once, which matters for an instrument that has no live quote, because the engine would hold its order for the whole day without ever sending it.
 
         Args:
             transaction_type: The str side of the order, `buy` or `sell`. UBI overrides it for a quantity reference that reduces or closes a position.
@@ -886,18 +888,17 @@ class TradeableInstrument(Instrument):
             synthetic: A dict that makes the order one of UBI's synthetic order types, such as `{"type": "bracket", "stop_price": 990, "stop_limit_price": 988, "target_price": 1010}`, or None for a plain order. The classes in `tradingmachine.orders` build it.
 
         Returns:
-            A dict with `broker`, `instrument_id`, `order_id`, `outcome`, `status_message`, `broker_response`, `skipped` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. The `order_id` is None unless the outcome is `accepted`. In engine mode the dict also has `intent_id`, and `parent_id` for an order the engine recorded; `freeze_slicer` and `ladder` orders add a list of `order_ids`; and a synthetic order that is waiting for a price or a time answers with an outcome of `armed` or `scheduled` and a `broker` and `order_id` of None.
+            A dict with `broker`, `instrument_id`, `order_id`, `outcome`, `status_message`, `broker_response`, `skipped`, `timing_ms` and `intent_id`, and `parent_id` for an order the engine recorded, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. The `order_id` is None unless the outcome is `accepted`. A held limit order, and a synthetic order that is waiting for a price or a time, answers with an outcome of `armed` or `scheduled` and a `broker` and `order_id` of None. The types that send several orders at once add a list of `order_ids`, and their `outcome` is `partial` when some of those orders were accepted and some were not.
 
         Raises:
             BadRequestError: A field is invalid, the price fields do not fit the order type, or a synthetic order's own fields are wrong.
             LossLockoutError: The day's loss is past UBI's daily loss limit.
             NotFoundError: No broker has a mapping for this instrument.
-            ConflictError: A quantity reference asked to reduce or close a position that is not held, or the engine read the order too late to place it.
+            ConflictError: A quantity reference asked to reduce or close a position that is not held, a reduce-only order would not reduce the position, or the engine read the order too late or had already started it before a restart.
             OrderRejectedError: The broker refused the order, and the detail holds its answer.
             RateLimitError: The broker's daily order cap has no room for this order.
-            ServiceUnavailableError: No broker could take the order, or a price reference could not be resolved.
-            OrderOutcomeUnknownError: The order was sent but its outcome is unknown, so read the order book before sending it again.
-            DirectPlacementError: The order carries a reference or a synthetic object and UBI is placing orders directly.
+            ServiceUnavailableError: No broker could take the order, the order engine is not running, or a price reference could not be resolved.
+            OrderOutcomeUnknownError: The order was sent but its outcome is unknown, so read the order book, or `Account.intent` with the detail's `intent_id`, before sending it again.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         body = {
@@ -922,89 +923,11 @@ class TradeableInstrument(Instrument):
         for field, value in optional_fields.items():
             if value is not None:
                 body[field] = value
-        needs_engine = (
-            price_reference is not None
-            or quantity_reference is not None
-            or synthetic is not None
-        )
-        unified_broker_interface = self._unified_broker_interface
-        if needs_engine and not dry_run:
-            if unified_broker_interface.placement_mode != "engine":
-                self._probe_placement_mode(body)
-        try:
-            answer = unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
-        except ubi_exceptions.UnifiedBrokerInterfaceError as error:
-            if needs_engine:
-                self._record_engine_refusal(error)
-            raise
-        if needs_engine:
-            self._record_placement_mode(answer, was_sent=not dry_run)
-        return answer
-
-    def _probe_placement_mode(self, body: dict) -> None:
-        """Sends an order body once as a dry run to learn whether UBI's order engine will handle it.
-
-        Args:
-            body: The dict order body that is about to be sent for real.
-
-        Raises:
-            DirectPlacementError: UBI answered without an `intent_id`, so it is placing orders directly and nothing was sent.
-            UnifiedBrokerInterfaceError: UBI refused the dry run, which it would also have done to the real order.
-        """
-        unified_broker_interface = self._unified_broker_interface
-        probe_body = dict(body)
-        probe_body["dry_run"] = True
-        try:
-            answer = unified_broker_interface.post(
-                ORDER_PLACE_PATH,
-                body=probe_body,
-            )
-        except ubi_exceptions.UnifiedBrokerInterfaceError as error:
-            self._record_engine_refusal(error)
-            raise
-        self._record_placement_mode(answer, was_sent=False)
-
-    def _record_engine_refusal(
-        self,
-        error: ubi_exceptions.UnifiedBrokerInterfaceError,
-    ) -> None:
-        """Stores engine mode when a refusal shows UBI's order engine answered it.
-
-        A refusal says nothing about the mode unless its body carries an `intent_id`, because a malformed body is refused before the engine sees it.
-
-        Args:
-            error: The ubi_exceptions.UnifiedBrokerInterfaceError UBI answered an order with.
-
-        Raises:
-            Nothing.
-        """
-        if isinstance(error.detail, dict) and "intent_id" in error.detail:
-            self._unified_broker_interface.placement_mode = "engine"
-
-    def _record_placement_mode(self, answer: dict, was_sent: bool) -> None:
-        """Stores which placement mode an answer shows UBI to be in, and refuses direct mode.
-
-        Args:
-            answer: The dict UBI answered an order with.
-            was_sent: A bool that is True when the order was sent for real rather than as a dry run.
-
-        Raises:
-            DirectPlacementError: The answer has no `intent_id`, so UBI placed or would place the order without its order engine.
-        """
-        unified_broker_interface = self._unified_broker_interface
-        if isinstance(answer, dict) and "intent_id" in answer:
-            unified_broker_interface.placement_mode = "engine"
-            return
-        unified_broker_interface.placement_mode = "direct"
-        if was_sent:
-            message = "UBI placed this order directly, without its order engine, so it went out as a plain order and its price reference, quantity reference or synthetic object was ignored; read the order book before doing anything else"
-        else:
-            message = "UBI is placing orders directly, without its order engine, so it would ignore this order's price reference, quantity reference or synthetic object; nothing was sent"
-        raise ubi_exceptions.DirectPlacementError(message, detail=answer)
+        return self._unified_broker_interface.post(ORDER_PLACE_PATH, body=body)
 
     def modify_order(
         self,
-        order_id: str,
+        order_id: str | None = None,
         quantity: int | None = None,
         price: float | None = None,
         trigger_price: float | None = None,
@@ -1013,6 +936,7 @@ class TradeableInstrument(Instrument):
         disclosed_quantity: int | None = None,
         broker: str | None = None,
         dry_run: bool = False,
+        parent_id: str | None = None,
     ) -> dict:
         """Changes one pending order through UBI.
 
@@ -1020,8 +944,12 @@ class TradeableInstrument(Instrument):
 
         Those order books are copies that UBI's own collectors refresh every few seconds, so an order placed a moment ago is not in them yet and raises NotFoundError. Wait for the order to appear in `orders` before changing it.
 
+        An order that is a leg of one of UBI's synthetic orders is handed to the engine, which lets the order type carry on from the change, so a trailing stop trails from the new trigger. Only its `price`, `trigger_price` and `quantity` can change, and anything else raises ConflictError.
+
+        An order the engine is still holding, such as a plain limit order waiting for the other side to reach its price, has no broker order id yet. Name it by the `parent_id` that `place_order` answered with instead of `order_id`; only its `price` and `quantity` can change, and nothing is sent to a broker.
+
         Args:
-            order_id: The str id the broker gave the order, as `place_order` returned it.
+            order_id: The str id the broker gave the order, as `place_order` returned it, or None when naming a held order by `parent_id`.
             quantity: The int new total quantity in underlying units, counting what is already filled, or None to leave it.
             price: The float new limit price in rupees, or None to leave it.
             trigger_price: The float new trigger price in rupees, or None to leave it.
@@ -1030,23 +958,26 @@ class TradeableInstrument(Instrument):
             disclosed_quantity: The int new quantity to show on the exchange, or None to leave it.
             broker: The str name of the broker holding the order, which is needed only after a ConflictError reporting that two brokers share the id, or None.
             dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
+            parent_id: The str id of an order the engine is still holding, as `place_order` returned it, or None when naming a broker order by `order_id`.
 
         Returns:
-            A dict with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `outcome`, `status_message`, `broker_response` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent.
+            A dict with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `outcome`, `status_message`, `broker_response` and `timing_ms`, and `parent_id` and `synthetic_type` for a leg of a synthetic order, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. A held order answers with `parent_id`, `synthetic_type`, `held` set to True, the new `price` and `quantity`, and an `outcome` of `accepted`.
 
         Raises:
             BadRequestError: No field was given to change, or a field is invalid or is one this broker cannot change.
-            NotFoundError: No broker's order book holds this order id.
-            ConflictError: The order is already complete, cancelled, rejected or expired, or two brokers hold the id and the detail lists them under `brokers`.
+            NotFoundError: No broker's order book holds this order id, or the engine holds no parent with this parent id.
+            ConflictError: The order is already complete, cancelled, rejected or expired, two brokers hold the id and the detail lists them under `brokers`, a leg of a synthetic order was asked to change a field other than its price, trigger price or quantity, or a held order has already been sent, when the detail names its `broker` and `order_id`.
             OrderRejectedError: The broker refused the change, and the detail holds its answer.
+            ServiceUnavailableError: The broker's order rate budget was full, so the change was not sent.
             OrderOutcomeUnknownError: The change was sent but its outcome is unknown.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         body = {
-            "order_id": order_id,
             "dry_run": dry_run,
         }
         changeable_fields = {
+            "order_id": order_id,
+            "parent_id": parent_id,
             "quantity": quantity,
             "price": price,
             "trigger_price": trigger_price,
@@ -1072,19 +1003,22 @@ class TradeableInstrument(Instrument):
 
         Those order books are copies that UBI's own collectors refresh every few seconds, so an order placed a moment ago is not in them yet and raises NotFoundError. Wait for the order to appear in `orders` before cancelling it.
 
+        An order that is a leg of one of UBI's synthetic orders is cancelled through the engine, so the order type knows about it, but the synthetic order itself carries on. Use `cancel_parent` to stop a synthetic order, or to cancel an order the engine is still holding, which has no broker order id.
+
         Args:
             order_id: The str id the broker gave the order, as `place_order` returned it.
             broker: The str name of the broker holding the order, which is needed only after a ConflictError reporting that two brokers share the id, or None.
             dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
 
         Returns:
-            A dict with `broker`, `order_id`, `status_before_cancel`, `outcome`, `status_message`, `broker_response` and `timing_ms`, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent.
+            A dict with `broker`, `order_id`, `status_before_cancel`, `outcome`, `status_message`, `broker_response` and `timing_ms`, and `parent_id` and `synthetic_type` for a leg of a synthetic order, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent.
 
         Raises:
             BadRequestError: The order id, broker or dry run flag is malformed.
             NotFoundError: No broker's order book holds this order id.
             ConflictError: The order is already complete, cancelled, rejected or expired, or two brokers hold the id and the detail lists them under `brokers`.
             OrderRejectedError: The broker refused the cancellation, and the detail holds its answer.
+            ServiceUnavailableError: The broker's order rate budget was full, so the cancellation was not sent.
             OrderOutcomeUnknownError: The cancellation was sent but its outcome is unknown.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -1097,36 +1031,229 @@ class TradeableInstrument(Instrument):
         return self._unified_broker_interface.delete(ORDER_CANCEL_PATH, body=body)
 
     def cancel_open_orders(self) -> pd.DataFrame | None:
-        """Cancels every order in this instrument that is still waiting in the market.
+        """Cancels every order in this instrument that is still waiting, whether at a broker or held in UBI's order engine.
 
-        Each order is cancelled on its own, naming the broker holding it, and every one is attempted even when an earlier one fails. A failure is reported in the returned frame rather than raised, so one order that can no longer be cancelled does not leave the rest of them open.
+        The engine's open parents in this instrument are cancelled first, each with the orders it has resting at a broker, because a synthetic order left running could place a new order after its old ones were cancelled. Then every open order in the order book that did not belong to one of those parents is cancelled in one request. Every order and parent is attempted even when an earlier one fails, and a failure is reported in the returned frame rather than raised, so one order that can no longer be cancelled does not leave the rest of them open.
 
         Returns:
-            A pandas.DataFrame with one row per order, holding `order_id`, `broker`, `cancelled` and `error`, where `error` is None for an order that was cancelled and the name and message of the failure for one that was not, or None when this instrument has no open orders.
+            A pandas.DataFrame with one row per parent or order, holding `parent_id`, `order_id`, `broker`, `cancelled` and `error`, where `parent_id` is None for an order cancelled on its own, `order_id` and `broker` are None for a parent, and `error` is None for a cancel that was accepted and the status and message of the failure otherwise, or None when nothing in this instrument is waiting.
+
+        Raises:
+            BrokerError: No broker's order book could be read.
+            ServiceUnavailableError: UBI's order book document is missing or too old to serve, or UBI's parents could not be read.
+            UnifiedBrokerInterfaceError: The order book or the parents could not be read for any other reason, or the list of cancels was refused whole. A failure to cancel one order or parent is reported in the frame instead.
+        """
+        outcomes = []
+        cancelled_parent_ids = []
+        open_parents = self.parents
+        if open_parents is not None:
+            for parent_id in open_parents["parent_order_id"]:
+                outcome, engine_answered = self._cancel_one_parent(parent_id)
+                if engine_answered:
+                    cancelled_parent_ids.append(parent_id)
+                outcomes.append(outcome)
+        open_orders = self.open_orders
+        if open_orders is not None:
+            orders_to_cancel = []
+            for row in open_orders.to_dict("records"):
+                if row.get("engine_parent_id") in cancelled_parent_ids:
+                    continue
+                orders_to_cancel.append(
+                    {
+                        "order_id": row["order_id"],
+                        "broker": row["broker"],
+                    }
+                )
+            outcomes.extend(self._cancel_order_list(orders_to_cancel))
+        if not outcomes:
+            return None
+        return pd.DataFrame(outcomes)
+
+    def _cancel_one_parent(self, parent_id: str) -> tuple[dict, bool]:
+        """Cancels one parent for `cancel_open_orders`, reporting a failure rather than raising it.
+
+        Args:
+            parent_id: The str id of the parent to cancel.
+
+        Returns:
+            A tuple (outcome, engine_answered), where outcome is a dict with `parent_id`, `order_id`, `broker`, `cancelled` and `error` for the returned frame, and engine_answered is a bool that is True when the engine took the cancel, so the parent's own orders need no separate cancel.
+
+        Raises:
+            Nothing.
+        """
+        outcome = {
+            "parent_id": parent_id,
+            "order_id": None,
+            "broker": None,
+            "cancelled": True,
+            "error": None,
+        }
+        try:
+            answer = self.cancel_parent(parent_id)
+        except ubi_exceptions.UnifiedBrokerInterfaceError as error:
+            outcome["cancelled"] = False
+            outcome["error"] = f"{type(error).__name__}: {error.message}"
+            return outcome, False
+        state = answer.get("state")
+        if state != "cancelled":
+            outcome["cancelled"] = False
+            outcome["error"] = (
+                f"the parent is {state}, because a broker refused or did not confirm the cancel of one of its orders"
+            )
+        return outcome, True
+
+    def _cancel_order_list(self, orders_to_cancel: list[dict]) -> list[dict]:
+        """Cancels broker orders in one request for `cancel_open_orders`, reporting each failure rather than raising it.
+
+        Args:
+            orders_to_cancel: A list of dicts, each with the `order_id` and `broker` of one order.
+
+        Returns:
+            A list of dicts, one per order in the same order, each with `parent_id`, `order_id`, `broker`, `cancelled` and `error` for the returned frame, which is empty when orders_to_cancel is.
+
+        Raises:
+            UnifiedBrokerInterfaceError: UBI refused the whole list, or could not be reached.
+        """
+        if not orders_to_cancel:
+            return []
+        answer = self._unified_broker_interface.delete(
+            ORDER_CANCEL_PATH,
+            body={
+                "orders": orders_to_cancel,
+            },
+        )
+        outcomes = []
+        for result in answer["results"]:
+            order = orders_to_cancel[result["request_index"]]
+            outcome = {
+                "parent_id": None,
+                "order_id": order["order_id"],
+                "broker": order["broker"],
+                "cancelled": True,
+                "error": None,
+            }
+            if result["status"] != 200:
+                response = result["response"]
+                message = response.get("error") or response.get("status_message")
+                outcome["cancelled"] = False
+                outcome["error"] = f"HTTP {result['status']}: {message}"
+            outcomes.append(outcome)
+        return outcomes
+
+    @property
+    def parents(self) -> pd.DataFrame | None:
+        """The synthetic orders and held orders in this instrument that UBI's order engine has not finished.
+
+        A parent is one order the engine was asked for, such as a bracket, a trailing stop or a held limit order, and its legs are the broker orders it placed. This is the only way to see a parent that has placed nothing yet, such as an armed trigger. UBI lists every open parent in the account, so this reads them all and keeps this instrument's own.
+
+        Returns:
+            A pandas.DataFrame with one row per parent, holding UBI's parent fields, among them `parent_order_id`, `synthetic_type`, `state`, `instrument_id`, `body`, `parameters` and `legs`, or None when no parent in this instrument is open.
+
+        Raises:
+            ServiceUnavailableError: UBI's parents could not be read.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(ORDER_PARENTS_PATH)["parents"]
+        return self._frame_for_this_instrument(rows)
+
+    def parent(self, parent_id: str) -> dict:
+        """Reads one of the order engine's parents, whether or not it has finished.
+
+        UBI finds the parent by its id alone, so this does not check that it belongs to this instrument.
+
+        Args:
+            parent_id: The str `parent_id` that `place_order` answered with.
+
+        Returns:
+            A dict holding the parent as the engine keeps it, with `parent_order_id`, `synthetic_type`, `state`, `instrument_id`, the caller's `body`, the type's `parameters` and one entry per leg under `legs`.
+
+        Raises:
+            NotFoundError: The order engine holds no parent with this id.
+            ServiceUnavailableError: UBI's parents could not be read.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self._unified_broker_interface.get(
+            ORDER_PARENTS_PATH,
+            params={
+                "parent_id": parent_id,
+            },
+        )
+
+    def cancel_parent(self, parent_id: str) -> dict:
+        """Cancels one of the order engine's parents, with every leg it still has resting at a broker.
+
+        This is how a synthetic order is stopped and how an order the engine is still holding is cancelled. A position the parent has already opened is not closed.
+
+        When a broker refuses the cancel of one leg, or its outcome is unknown, UBI answers HTTP 207, which is returned rather than raised, with the parent's `state` as `cancelling` rather than `cancelled`. The parent no longer acts, and becomes `cancelled` once the broker reports that leg finished, so read `cancelled_legs` to see which one may still be live, and call this again to retry it.
+
+        Args:
+            parent_id: The str `parent_id` that `place_order` answered with.
+
+        Returns:
+            A dict with `parent_id`, `synthetic_type`, `state`, `intent_id` and `cancelled_legs`, one entry per leg with its `leg_id`, `broker`, `order_id`, `outcome` and `status_message`.
+
+        Raises:
+            BadRequestError: The parent id is malformed.
+            NotFoundError: The order engine holds no parent with this id.
+            ConflictError: The parent has already finished.
+            ServiceUnavailableError: The order engine is not running.
+            OrderOutcomeUnknownError: The engine did not answer in time.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self._unified_broker_interface.delete(
+            ORDER_PARENTS_PATH,
+            body={
+                "parent_id": parent_id,
+            },
+        )
+
+    def parent_orders(self, parent_id: str) -> pd.DataFrame | None:
+        """Today's broker orders that one of the order engine's parents placed.
+
+        Args:
+            parent_id: The str `parent_id` that `place_order` answered with.
+
+        Returns:
+            A pandas.DataFrame shaped like `orders`, whose `leg_role` column says what each order was to the parent, such as `entry`, `stop` or `target`, or None when the parent has placed nothing that the order book shows yet.
 
         Raises:
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
-            UnifiedBrokerInterfaceError: The order book could not be read for any other reason. A failure to cancel one order is reported in the frame instead.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        frame = self.open_orders
-        if frame is None:
+        rows = self._unified_broker_interface.get(
+            ORDER_DETAILS_PATH,
+            params={
+                "parent_id": parent_id,
+            },
+        )["orders"]
+        if not rows:
             return None
-        outcomes = []
-        for row in frame.to_dict("records"):
-            outcome = {
-                "order_id": row["order_id"],
-                "broker": row["broker"],
-                "cancelled": True,
-                "error": None,
-            }
-            try:
-                self.cancel_order(row["order_id"], broker=row["broker"])
-            except ubi_exceptions.UnifiedBrokerInterfaceError as error:
-                outcome["cancelled"] = False
-                outcome["error"] = f"{type(error).__name__}: {error.message}"
-            outcomes.append(outcome)
-        return pd.DataFrame(outcomes)
+        return pd.DataFrame(rows)
+
+    def parent_trades(self, parent_id: str) -> pd.DataFrame | None:
+        """Today's trades in the broker orders that one of the order engine's parents placed.
+
+        Args:
+            parent_id: The str `parent_id` that `place_order` answered with.
+
+        Returns:
+            A pandas.DataFrame shaped like `trades`, or None when none of the parent's orders has traded.
+
+        Raises:
+            BrokerError: No broker's trade book could be read.
+            ServiceUnavailableError: UBI's trade book document is missing or too old to serve.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        rows = self._unified_broker_interface.get(
+            ORDER_TRADES_PATH,
+            params={
+                "parent_id": parent_id,
+            },
+        )["trades"]
+        if not rows:
+            return None
+        return pd.DataFrame(rows)
 
     @property
     def orders(self) -> pd.DataFrame | None:
@@ -1134,10 +1261,10 @@ class TradeableInstrument(Instrument):
 
         UBI serves the whole account's order book and has no endpoint for one instrument, so reading this reads the whole book and keeps this instrument's own rows. The book is not merged across brokers, so one order placed at one broker appears once, and the same instrument traded at two brokers gives a row from each.
 
-        The `status` column holds UBI's own upper-case status, one of `PENDING`, `OPEN`, `COMPLETE`, `CANCELLED`, `REJECTED` or `EXPIRED`. An order still waiting in the market is `PENDING` at some brokers and `OPEN` at others, so `open_orders` is the way to ask for those, and `completed_orders`, `rejected_orders` and `cancelled_orders` give the other common groups already filtered. Any status without a member of its own, such as `EXPIRED`, is found by filtering this frame.
+        The `status` column holds UBI's own upper-case status, one of `PENDING`, `OPEN`, `COMPLETE`, `CANCELLED`, `REJECTED` or `EXPIRED`. An order still waiting in the market is `PENDING` at some brokers and `OPEN` at others, so `open_orders` is the way to ask for those, and `completed_orders`, `rejected_orders` and `cancelled_orders` give the other common groups already filtered. Any status without a member of its own, such as `EXPIRED`, is found by filtering this frame. An order UBI's order engine is still holding, such as a limit order waiting for the book to reach its price, has not reached a broker and is not here; it is in `parents`.
 
         Returns:
-            A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, or None when this instrument has no orders today.
+            A pandas.DataFrame with UBI's order fields, among them `broker`, `order_id`, `status`, `transaction_type`, `product`, `order_type`, `quantity`, `filled_quantity`, `price`, `trigger_price`, `average_price` and `order_timestamp`, and `engine_parent_id`, `leg_role`, `synthetic_type` and `intent_id`, which name the order engine parent that placed the order and are None for an order placed elsewhere, or None when this instrument has no orders today.
 
         Raises:
             BrokerError: No broker's order book could be read.
@@ -1150,7 +1277,7 @@ class TradeableInstrument(Instrument):
     def open_orders(self) -> pd.DataFrame | None:
         """Today's orders in this instrument that can still be changed.
 
-        An order counts as open while it is waiting in the market, which UBI reports as `PENDING` at some brokers and `OPEN` at others. Those are the orders `modify_order` and `cancel_order` will accept; every other status is final.
+        An order counts as open while it is waiting in the market, which UBI reports as `PENDING` at some brokers and `OPEN` at others. Those are the orders `modify_order` and `cancel_order` will accept; every other status is final. An order UBI's order engine is still holding has not reached the market, so it is not here; `parents` lists it.
 
         Returns:
             A pandas.DataFrame shaped like `orders`, or None when nothing is waiting in the market for this instrument.
@@ -1369,10 +1496,13 @@ class TradeableInstrument(Instrument):
         validity: str | None = None,
         after_market: bool = False,
         tag: str | None = None,
+        hold: bool = True,
     ) -> dict:
         """Buys at a price of your choosing, or better.
 
         A limit buy never pays more than the price given. It waits in the market until someone sells at that price or lower, and it may never fill at all.
+
+        UBI's order engine holds a `day` limit order that is not an after-market order rather than resting it at a broker, and sends it only once the other side of the book reaches the price, so an order that never fills costs no order messages. Until then `place_order` answers with an outcome of `armed` and a `parent_id` rather than an `order_id`, the order is not in `orders` but in `parents`, and it is changed with `modify_order(parent_id=...)` and cancelled with `cancel_parent`.
 
         Args:
             price: The float limit price in rupees.
@@ -1381,6 +1511,7 @@ class TradeableInstrument(Instrument):
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
+            hold: A bool that is True to let UBI's order engine hold a `day` order until the other side of the book reaches the price, and False to send it to a broker at once. An after-market order is always sent at once, whatever this says. Pass False for an instrument with no live quote, whose order the engine would otherwise hold all day without sending.
 
         Returns:
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
@@ -1390,6 +1521,11 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
+        synthetic = None
+        if not hold:
+            synthetic = {
+                "type": "simple",
+            }
         return self.place_order(
             transaction_type="buy",
             order_type="limit",
@@ -1399,6 +1535,7 @@ class TradeableInstrument(Instrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            synthetic=synthetic,
         )
 
     def sell_at_limit_price(
@@ -1409,10 +1546,13 @@ class TradeableInstrument(Instrument):
         validity: str | None = None,
         after_market: bool = False,
         tag: str | None = None,
+        hold: bool = True,
     ) -> dict:
         """Sells at a price of your choosing, or better.
 
         A limit sell never accepts less than the price given. It waits in the market until someone buys at that price or higher, and it may never fill at all.
+
+        UBI's order engine holds a `day` limit order that is not an after-market order rather than resting it at a broker, and sends it only once the other side of the book reaches the price, so an order that never fills costs no order messages. Until then `place_order` answers with an outcome of `armed` and a `parent_id` rather than an `order_id`, the order is not in `orders` but in `parents`, and it is changed with `modify_order(parent_id=...)` and cancelled with `cancel_parent`.
 
         Args:
             price: The float limit price in rupees.
@@ -1421,6 +1561,7 @@ class TradeableInstrument(Instrument):
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
+            hold: A bool that is True to let UBI's order engine hold a `day` order until the other side of the book reaches the price, and False to send it to a broker at once. An after-market order is always sent at once, whatever this says. Pass False for an instrument with no live quote, whose order the engine would otherwise hold all day without sending.
 
         Returns:
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
@@ -1430,6 +1571,11 @@ class TradeableInstrument(Instrument):
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
+        synthetic = None
+        if not hold:
+            synthetic = {
+                "type": "simple",
+            }
         return self.place_order(
             transaction_type="sell",
             order_type="limit",
@@ -1439,6 +1585,7 @@ class TradeableInstrument(Instrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            synthetic=synthetic,
         )
 
     def buy_at_best_bid_price(
@@ -1465,7 +1612,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1508,7 +1654,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1551,7 +1696,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1594,7 +1738,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1637,7 +1780,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1679,7 +1821,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1721,7 +1862,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1763,7 +1903,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1807,7 +1946,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1854,7 +1992,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1899,7 +2036,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1941,7 +2077,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -1983,7 +2118,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2026,7 +2160,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2069,7 +2202,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2112,7 +2244,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2155,7 +2286,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2198,7 +2328,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2241,7 +2370,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2284,7 +2412,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2327,7 +2454,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2370,7 +2496,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2413,7 +2538,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2456,7 +2580,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2499,7 +2622,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2542,7 +2664,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2585,7 +2706,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2628,7 +2748,6 @@ class TradeableInstrument(Instrument):
 
         Raises:
             ServiceUnavailableError: UBI could not work the price out, because there is no live quote, the order book is not that deep or no tick size is agreed, which is what the book looks like outside market hours.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the price reference; nothing was sent.
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2798,7 +2917,6 @@ class TradeableInstrument(Instrument):
         Raises:
             PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
             ConflictError: The product named is not held in this instrument.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the quantity reference; nothing was sent.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         return self._place_to_close_position(
@@ -2838,7 +2956,6 @@ class TradeableInstrument(Instrument):
         Raises:
             PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
             ConflictError: The product named is not held in this instrument.
-            DirectPlacementError: UBI is placing orders directly, so it would ignore the quantity reference; nothing was sent.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         return self._place_to_close_position(

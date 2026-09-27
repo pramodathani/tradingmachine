@@ -201,6 +201,7 @@ class FixedIncome(instruments.TradeableInstrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            hold=False,
         )
 
     def reduce_holdings(
@@ -351,6 +352,7 @@ class FixedIncome(instruments.TradeableInstrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            hold=False,
         )
 
     @classmethod

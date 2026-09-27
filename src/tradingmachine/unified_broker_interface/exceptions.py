@@ -95,10 +95,6 @@ class UnreachableError(UnifiedBrokerInterfaceError):
     """The Unified Broker Interface could not be reached, so no response arrived."""
 
 
-class DirectPlacementError(UnifiedBrokerInterfaceError):
-    """UBI places orders directly rather than through its order engine, so it would ignore a price reference, a quantity reference or a synthetic order."""
-
-
 EXCEPTION_FOR_STATUS_CODE = {
     400: BadRequestError,
     401: AuthenticationError,

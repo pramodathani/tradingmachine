@@ -27,7 +27,6 @@ class UnifiedBrokerInterface:
 
     Attributes:
         token_expires_at: The str time at which the current access token expires, as reported by the server, or None before the first connect.
-        placement_mode: The str placement mode UBI was last seen using, `engine` or `direct`, or None while it is not known; `tradingmachine.assets.instruments.TradeableInstrument.place_order` sets it.
     """
 
     def __init__(
@@ -62,7 +61,6 @@ class UnifiedBrokerInterface:
         self._api_key = None
         self._api_secret = None
         self.token_expires_at = None
-        self.placement_mode = None
         self._load_credentials()
 
     def _load_credentials(self) -> None:

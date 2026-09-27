@@ -133,3 +133,7 @@ The three order methods were exercised offline, with `place_order` replaced by a
 | 10 held, all pledged | `liquidate_holdings()` | `HoldingError`, every unit is pledged |
 
 Eight orders were recorded and none was sent. No real order has ever gone through these methods.
+
+## Limit orders are sent at once, since 2026-09-27
+
+Since 2026-09-27 UBI's order engine holds a plain `day` limit order until a live quote shows the other side of the book reaching its price, and it never acts on a stale quote. No broker that serves quotes carries this segment, so a held order here would wait all day and never be sent. The holdings methods therefore call `buy_at_limit_price` and `sell_at_limit_price` with `hold=False`, which asks UBI for its `simple` type and sends the order to a broker at once, as it was sent before the change. The general reasoning is in the note on `src/tradingmachine/assets/instruments.py`.

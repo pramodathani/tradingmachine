@@ -171,6 +171,7 @@ class MutualFund(instruments.TradeableInstrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            hold=False,
         )
 
     def reduce_holdings(
@@ -321,6 +322,7 @@ class MutualFund(instruments.TradeableInstrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            hold=False,
         )
 
     @classmethod

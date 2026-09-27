@@ -38,11 +38,12 @@ The old free-standing function `raise_for_response` became the client method `_r
 
 ## The order engine's status codes, added on 2026-09-26
 
-UBI gained an order engine on 2026-09-23, and when it runs in engine mode (`UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`) `POST /api/orders/place` can answer with codes and meanings that direct mode never produced. The source is `../unified_broker_interface/docs/rest-api/order-engine.md`, in the table of engine-only answers.
+UBI gained an order engine on 2026-09-23, and since 2026-09-27 every order goes through it, so `POST /api/orders/place` can answer with codes and meanings that UBI's former direct placement never produced. The source is `../unified_broker_interface/docs/rest-api/order-engine.md`, in the table of engine-only answers.
 
 | Status | Engine meaning | Class |
 |---|---|---|
-| 202 | A synthetic order is armed or scheduled and nothing has reached a broker yet | none, because a 2xx is a success and the client returns the body |
+| 202 | A synthetic order or a held limit order is armed or scheduled and nothing has reached a broker yet | none, because a 2xx is a success and the client returns the body |
+| 207 | Some of the orders of a type that sends several at once were accepted and some were not, or a parent's cancel left a leg possibly live | none, for the same reason; the body's `outcome` is `partial`, or the parent's `state` is `cancelling` |
 | 403 | The daily loss lockout is on | `LossLockoutError`, new |
 | 409 | The intent went stale, or a quantity reference asked to reduce or close a position that is not held | `ConflictError`, with its docstring widened |
 | 429 | The broker's daily order cap has no room for this kind of order | `RateLimitError`, with its docstring widened |
@@ -51,4 +52,4 @@ UBI gained an order engine on 2026-09-23, and when it runs in engine mode (`UNIF
 
 `LossLockoutError` is named for what the 403 means rather than called `ForbiddenError`, because the loss lockout is the only thing UBI answers 403 for, and a caller who catches it wants to know that the day is over, not that a permission is missing. `POST /api/orders/flatten` also answers 207 when part of it failed; that is a 2xx as well, so it is read from the body's `flat` field rather than raised.
 
-`DirectPlacementError` is the one class not produced by a status code. The client raises it itself, with `status_code=None`, when UBI turns out to be in direct mode and the order carries a `price_reference`, a `quantity_reference` or a `synthetic` object. In direct mode UBI validates those objects' shapes and then ignores them, so a bracket goes out as an unprotected entry and a limit order carrying only a price reference goes out at price 0, and UBI refuses none of it. The check that raises it lives in `TradeableInstrument.place_order`; see the note on `src/tradingmachine/assets/instruments.py`.
+`DirectPlacementError` was the one class not produced by a status code, raised by the client itself when UBI turned out to be placing orders directly and would have ignored a price reference, a quantity reference or a synthetic object. UBI removed direct placement on 2026-09-27, so the class was removed; the note on `src/tradingmachine/assets/instruments.py` has the reasoning.
