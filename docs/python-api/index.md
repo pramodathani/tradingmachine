@@ -32,13 +32,13 @@ The chart below counts the members documented on each page of this tab, which sh
     "values": [
       {"page": "Price wrappers", "members": 32},
       {"page": "Market data", "members": 15},
-      {"page": "Orders", "members": 10},
+      {"page": "Orders", "members": 15},
       {"page": "Positions", "members": 8},
       {"page": "The UBI client", "members": 8},
       {"page": "Holdings", "members": 6},
       {"page": "Finding instruments", "members": 5},
       {"page": "Instruments", "members": 1},
-      {"page": "The account", "members": 1}
+      {"page": "The account", "members": 3}
     ]
   },
   "mark": {"type": "bar", "cornerRadiusEnd": 3, "color": "#ff7043"},
@@ -50,7 +50,7 @@ The chart below counts the members documented on each page of this tab, which sh
 }
 ```
 
-Two pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 42 order classes in `tradingmachine.orders`, and [Instruments](instruments.md) documents the 27 instrument classes. The thirteen classes of candle analysis, about 190 methods, have their own [Analysis](../analysis/index.md) tab.
+Two pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 53 order classes in `tradingmachine.orders`, and [Instruments](instruments.md) documents the 27 instrument classes. The thirteen classes of candle analysis, about 190 methods, have their own [Analysis](../analysis/index.md) tab.
 
 ## Instruments
 
@@ -99,20 +99,25 @@ These class methods find instruments rather than read one. `search` exists on `E
 !!! danger "The red badges place real orders"
     Members with a <span class="member writes">places orders</span> badge send orders through UBI to real brokers, with real money. Pass `dry_run=True` to `place_order`, `modify_order` or `cancel_order` to have UBI check an order and show the request it would send, without sending it.
 
-These members place, change and cancel orders in one instrument, and read that instrument's rows out of the day's order book and trade book.
+These members place, change and cancel orders in one instrument, read that instrument's rows out of the day's order book and trade book, and read the order engine's parents, which are the synthetic orders and held limit orders UBI is working.
 
 | Kind | Member | Description |
 |---|---|---|
 | <span class="member writes">places orders</span> | [`place_order`](orders.md#place_order) | Places one order in this instrument through UBI. |
 | <span class="member writes">places orders</span> | [`modify_order`](orders.md#modify_order) | Changes one pending order through UBI. |
 | <span class="member writes">places orders</span> | [`cancel_order`](orders.md#cancel_order) | Cancels one pending order through UBI. |
-| <span class="member writes">places orders</span> | [`cancel_open_orders`](orders.md#cancel_open_orders) | Cancels every order in this instrument that is still waiting in the market. |
+| <span class="member writes">places orders</span> | [`cancel_open_orders`](orders.md#cancel_open_orders) | Cancels every order in this instrument that is still waiting, whether at a broker or held in UBI's order engine. |
+| <span class="member writes">places orders</span> | [`cancel_parent`](orders.md#cancel_parent) | Cancels one of the order engine's parents, with every leg it still has resting at a broker. |
 | <span class="member property">property</span> | [`orders`](orders.md#orders) | Every one of today's orders in this instrument, whatever its status. |
 | <span class="member property">property</span> | [`open_orders`](orders.md#open_orders) | Today's orders in this instrument that can still be changed. |
 | <span class="member property">property</span> | [`completed_orders`](orders.md#completed_orders) | Today's orders in this instrument that filled in full. |
 | <span class="member property">property</span> | [`rejected_orders`](orders.md#rejected_orders) | Today's orders in this instrument that a broker or the exchange refused. |
 | <span class="member property">property</span> | [`cancelled_orders`](orders.md#cancelled_orders) | Today's orders in this instrument that were cancelled. |
 | <span class="member property">property</span> | [`trades`](orders.md#trades) | Today's trades in this instrument. |
+| <span class="member property">property</span> | [`parents`](orders.md#parents) | This instrument's synthetic orders and held orders that the order engine has not finished. |
+| <span class="member method">method</span> | [`parent`](orders.md#parent) | Reads one of the order engine's parents, whether or not it has finished. |
+| <span class="member method">method</span> | [`parent_orders`](orders.md#parent_orders) | Today's broker orders that one parent placed. |
+| <span class="member method">method</span> | [`parent_trades`](orders.md#parent_trades) | Today's trades in the broker orders that one parent placed. |
 
 ## Price wrappers
 
@@ -190,11 +195,13 @@ Holdings are shares kept for the long term in a demat account. Only `Equity`, `F
 
 ## The account
 
-`Account` acts on the whole account rather than on one instrument. Its one member is the kill switch.
+`Account` acts on the whole account rather than on one instrument. It holds the kill switch and two readers of UBI's order engine.
 
 | Kind | Member | Description |
 |---|---|---|
-| <span class="member writes">places orders</span> | [`flatten`](account.md#flatten) | Cancels every open order at every broker, then closes every position in the account. |
+| <span class="member writes">places orders</span> | [`flatten`](account.md#flatten) | Stops every synthetic order, cancels every open order at every broker, then closes every position in the account. |
+| <span class="member property">property</span> | [`parents`](account.md#parents) | Every synthetic order and held order the order engine has not finished, in every instrument. |
+| <span class="member method">method</span> | [`intent`](account.md#intent) | Reads what the order engine did with one order after its placement stopped waiting. |
 
 ## The UBI client
 

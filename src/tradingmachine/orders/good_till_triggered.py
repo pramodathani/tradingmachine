@@ -1,6 +1,6 @@
 """The `gtt` synthetic order type: a limit-if-touched order that keeps waiting across days until it fires or expires.
 
-Native Indian stops expire at the end of the day, and this is what brokers sell as GTT for multi-day holdings. A gap through the level fires it at the open, and nothing that watches prices can act on a price that never traded. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+Native Indian stops expire at the end of the day, and this is what brokers sell as GTT for multi-day holdings. A gap through the level fires it at the open, and nothing that watches prices can act on a price that never traded. `trigger_price` here is the level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
     """A limit-if-touched order that keeps waiting across days until it fires or expires.
 
-    Native Indian stops expire at the end of the day, and this is what brokers sell as GTT for multi-day holdings. A gap through the level fires it at the open, and nothing that watches prices can act on a price that never traded. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    Native Indian stops expire at the end of the day, and this is what brokers sell as GTT for multi-day holdings. A gap through the level fires it at the open, and nothing that watches prices can act on a price that never traded. `trigger_price` here is the level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -34,6 +34,8 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
         limit_price: The float limit price in rupees of the order sent. Above zero.
         valid_days: The int number of days to keep waiting, from 1 to 365, or None to let UBI use 30.
         trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
+        trigger_on: The str price compared with the level and how it must confirm, `last`, `bid`, `ask`, `mid`, `double_last` or `held`, or None to let UBI use `last`.
+        hold_seconds: The float number of seconds the level must stay reached before a `held` trigger fires, which `held` requires, or None.
     """
 
     SYNTHETIC_TYPE = "gtt"
@@ -56,9 +58,12 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         valid_days: int | None = None,
         trigger_direction: str | None = None,
+        trigger_on: str | None = None,
+        hold_seconds: float | None = None,
     ):
         """Initialises the order template and this type's own settings.
 
@@ -78,9 +83,12 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             valid_days: The int number of days to keep waiting, from 1 to 365, or None to let UBI use 30.
             trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
+            trigger_on: The str price compared with the level and how it must confirm, `last`, `bid`, `ask`, `mid`, `double_last` or `held`, or None to let UBI use `last`.
+            hold_seconds: The float number of seconds the level must stay reached before a `held` trigger fires, which `held` requires, or None.
 
         Raises:
             Nothing.
@@ -100,12 +108,15 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.trigger_level = trigger_price
         self.limit_price = limit_price
         self.valid_days = valid_days
         self.trigger_direction = trigger_direction
+        self.trigger_on = trigger_on
+        self.hold_seconds = hold_seconds
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -121,4 +132,6 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
             "limit_price": self.limit_price,
             "valid_days": self.valid_days,
             "trigger_direction": self.trigger_direction,
+            "trigger_on": self.trigger_on,
+            "hold_seconds": self.hold_seconds,
         }

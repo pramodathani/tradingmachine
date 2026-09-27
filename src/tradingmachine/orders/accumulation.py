@@ -1,6 +1,6 @@
 """The `accumulation` synthetic order type: a fixed quantity bought at a fixed interval, each purchase resting on its own side of the book.
 
-This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread.
+This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class AccumulationOrder(synthetic_order.SyntheticOrder):
     """A fixed quantity bought at a fixed interval, each purchase resting on its own side of the book.
 
-    This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread.
+    This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -55,6 +55,7 @@ class AccumulationOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
     ):
         """Initialises the order template and this type's own settings.
@@ -76,6 +77,7 @@ class AccumulationOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
 
         Raises:
@@ -96,6 +98,7 @@ class AccumulationOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.every_minutes = every_minutes

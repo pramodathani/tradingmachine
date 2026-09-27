@@ -1,0 +1,136 @@
+"""The `two_sided_quote` synthetic order type: a bid and an offer kept around the fair price, leaning away from the inventory they build.
+
+This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The template's `quantity` is the size of each quote. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+
+Typical usage example:
+
+  order = two_sided_quote.TwoSidedQuoteOrder(
+      share,
+      transaction_type="buy",
+      product="mis",
+      order_type="limit",
+      quantity=10,
+      price=1000.0,
+      half_spread_points=1.0,
+      most_inventory=50,
+      skew_ticks=2,
+      step_ticks=2,
+      dry_run=True,
+  )
+  answer = order.place()
+"""
+
+from tradingmachine.assets import instruments
+from tradingmachine.orders import synthetic_order
+
+
+class TwoSidedQuoteOrder(synthetic_order.SyntheticOrder):
+    """A bid and an offer kept around the fair price, leaning away from the inventory they build.
+
+    This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The template's `quantity` is the size of each quote. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+
+    The order template's attributes are described on `SyntheticOrder`.
+
+    Attributes:
+        half_spread_points: The float distance in rupees each quote sits from the fair price. Above zero.
+        most_inventory: The int largest net position in underlying units the quotes may build, at least 1.
+        skew_ticks: The int number of ticks both quotes move against the position for each order's worth held, at or above zero, or None to let UBI use 0.
+        step_ticks: The int smallest move in ticks worth a modification, at least 1, or None to let UBI use 1.
+        fair_price: The str price the quotes are kept around, `mid` or `last`, or None to let UBI use `mid`.
+    """
+
+    SYNTHETIC_TYPE = "two_sided_quote"
+
+    def __init__(
+        self,
+        instrument: instruments.TradeableInstrument,
+        *,
+        transaction_type: str,
+        product: str,
+        order_type: str,
+        quantity: int | None,
+        half_spread_points: float,
+        most_inventory: int,
+        price: float | None = None,
+        trigger_price: float | None = None,
+        validity: str | None = None,
+        disclosed_quantity: int | None = None,
+        after_market: bool = False,
+        tag: str | None = None,
+        price_reference: dict | None = None,
+        quantity_reference: dict | None = None,
+        closes_position: bool = False,
+        reduce_only: bool = False,
+        dry_run: bool = False,
+        skew_ticks: int | None = None,
+        step_ticks: int | None = None,
+        fair_price: str | None = None,
+    ):
+        """Initialises the order template and this type's own settings.
+
+        Args:
+            instrument: The instruments.TradeableInstrument to place the order in.
+            transaction_type: The str side of the order, `buy` or `sell`.
+            product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
+            order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
+            quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
+            half_spread_points: The float distance in rupees each quote sits from the fair price. Above zero.
+            most_inventory: The int largest net position in underlying units the quotes may build, at least 1.
+            price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
+            trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.
+            validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
+            disclosed_quantity: The int quantity to show on the exchange, or None to disclose the whole order.
+            after_market: A bool that is True to send the order as an after-market order.
+            tag: A str of up to twenty letters and digits to label the order with, or None.
+            price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
+            quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
+            closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
+            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            skew_ticks: The int number of ticks both quotes move against the position for each order's worth held, at or above zero, or None to let UBI use 0.
+            step_ticks: The int smallest move in ticks worth a modification, at least 1, or None to let UBI use 1.
+            fair_price: The str price the quotes are kept around, `mid` or `last`, or None to let UBI use `mid`.
+
+        Raises:
+            Nothing.
+        """
+        super().__init__(
+            instrument,
+            transaction_type=transaction_type,
+            product=product,
+            order_type=order_type,
+            quantity=quantity,
+            price=price,
+            trigger_price=trigger_price,
+            validity=validity,
+            disclosed_quantity=disclosed_quantity,
+            after_market=after_market,
+            tag=tag,
+            price_reference=price_reference,
+            quantity_reference=quantity_reference,
+            closes_position=closes_position,
+            reduce_only=reduce_only,
+            dry_run=dry_run,
+        )
+        self.half_spread_points = half_spread_points
+        self.most_inventory = most_inventory
+        self.skew_ticks = skew_ticks
+        self.step_ticks = step_ticks
+        self.fair_price = fair_price
+
+    def synthetic_fields(self) -> dict:
+        """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
+
+        Returns:
+            A dict of UBI field names to values, where a value of None means the field is left out.
+
+        Raises:
+            Nothing.
+        """
+        return {
+            "half_spread_points": self.half_spread_points,
+            "most_inventory": self.most_inventory,
+            "skew_ticks": self.skew_ticks,
+            "step_ticks": self.step_ticks,
+            "fair_price": self.fair_price,
+        }

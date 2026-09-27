@@ -7,3 +7,5 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row B5 m
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 In the price-trigger types UBI's `synthetic.trigger_price` is the touch level, not the order's own trigger. The class takes it as `trigger_price`, because that is UBI's name, stores it as `trigger_level` so it cannot be mistaken for the template's `trigger_price` attribute, and does not accept an order trigger at all, since the order it fires is a limit.
+
+On 2026-09-27 UBI added `trigger_on` and `hold_seconds` to its price-trigger base, the Atlas's G10 trigger methods, so the class gained both. UBI refuses them on the types that choose their own watched price, `indicator_triggered`, `hidden_stop`, `candle_close_stop` and `virtual_limit`, so those classes do not take them.

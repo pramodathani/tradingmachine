@@ -56,7 +56,7 @@ Four ideas shape everything above.
 
 **Nothing is cached and nothing is validated locally.** An instrument looks itself up once, at construction, and after that every candle, quote, order and position is fetched at the moment you ask. Prices and quantities reach UBI exactly as given, with no rounding to the tick size and no checking against the lot size, because UBI and the broker behind it hold those rules and this layer would only be guessing.
 
-**Order types are built in UBI, not here.** UBI's order engine can work a price out from the order book, a quantity out from a position, and run a bracket or a trailing stop on its own. So the price wrappers, the position methods and `tradingmachine.orders` only describe what is wanted and let UBI do it, and they need UBI to run in engine mode; `place_order` checks that before sending anything that depends on it.
+**Order types are built in UBI, not here.** UBI's order engine can work a price out from the order book, a quantity out from a position, and run a bracket or a trailing stop on its own. So the price wrappers, the position methods and `tradingmachine.orders` only describe what is wanted and let UBI do it. Every order goes through UBI's order engine, which also holds a plain limit order until the book reaches its price rather than resting it at a broker.
 
 **Duplication between asset classes is deliberate.** `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it.
 
@@ -154,7 +154,7 @@ src/tradingmachine/orders/
 ├── synthetic_order.py     SyntheticOrder, the shared base
 ├── order_candidate.py     OrderCandidate, one leg of a multi-instrument order
 ├── exposure_watch.py      ExposureWatch, one watched instrument of an exposure hedge
-└── bracket.py, …          one module per UBI synthetic order type, forty-two in all
+└── bracket.py, …          one module per UBI synthetic order type, fifty-three in all
 
 src/tradingmachine/accounts/
 └── account.py             Account, whose flatten is UBI's kill switch

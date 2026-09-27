@@ -1,6 +1,6 @@
 """The `virtual_limit` synthetic order type: a limit order held inside UBI and sent only when the other side of the book reaches its price.
 
-Nothing rests at the exchange, so the order is invisible until it is sent, and UBI estimates where it would have stood in the queue. The template must be a `limit` order with a price. With `paper` set, nothing is ever sent and the order is filled on paper from that estimate. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+Nothing rests at the exchange, so the order is invisible until it is sent, and UBI estimates where it would have stood in the queue. The template must be a `limit` order with a price. With `paper` set, nothing is ever sent and the order is filled on paper from that estimate. UBI now runs every plain `limit` order with a price, `day` validity and no `synthetic` object as this type by default, so this class is needed only for `paper`. While it is held, its price and quantity are changed with `TradeableInstrument.modify_order(parent_id=...)` and it is cancelled with `TradeableInstrument.cancel_parent` or `cancel()`; once sent, it is changed by its broker order id like any other order. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class VirtualLimitOrder(synthetic_order.SyntheticOrder):
     """A limit order held inside UBI and sent only when the other side of the book reaches its price.
 
-    Nothing rests at the exchange, so the order is invisible until it is sent, and UBI estimates where it would have stood in the queue. The template must be a `limit` order with a price. With `paper` set, nothing is ever sent and the order is filled on paper from that estimate. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    Nothing rests at the exchange, so the order is invisible until it is sent, and UBI estimates where it would have stood in the queue. The template must be a `limit` order with a price. With `paper` set, nothing is ever sent and the order is filled on paper from that estimate. UBI now runs every plain `limit` order with a price, `day` validity and no `synthetic` object as this type by default, so this class is needed only for `paper`. While it is held, its price and quantity are changed with `TradeableInstrument.modify_order(parent_id=...)` and it is cancelled with `TradeableInstrument.cancel_parent` or `cancel()`; once sent, it is changed by its broker order id like any other order. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -51,6 +51,7 @@ class VirtualLimitOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         paper: bool = False,
     ):
@@ -71,6 +72,7 @@ class VirtualLimitOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             paper: A bool that is True to fill the order on paper and never send anything.
 
@@ -92,6 +94,7 @@ class VirtualLimitOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.paper = paper

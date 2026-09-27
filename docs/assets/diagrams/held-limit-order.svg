@@ -1,0 +1,65 @@
+<svg class="tm-svg" viewBox="0 0 900 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tm-held-title tm-held-description">
+  <title id="tm-held-title">How UBI's order engine holds a plain limit order</title>
+  <desc id="tm-held-description">Your program calls buy_at_limit_price. UBI hands the order to its order engine, which does not send it to a broker but holds it and answers at once with HTTP 202, an outcome of armed and a parent_id. Later, live quotes reach the engine, and once the best offer reaches the buy price the engine sends the limit order to a broker.</desc>
+  <path id="tm-held-call" class="wire" d="M140,165 L190,165"/>
+  <path id="tm-held-out" class="wire" d="M360,165 L620,165"/>
+  <path id="tm-held-back" class="wire" d="M620,195 L360,195"/>
+  <path id="tm-held-answer" class="wire" d="M190,195 L140,195"/>
+  <path id="tm-held-quote" class="wire" d="M800,180 L760,180"/>
+  <path id="tm-held-broker" class="wire" d="M690,220 L690,290"/>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;0.06;1" calcMode="linear"><mpath href="#tm-held-call"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="1;1;0;0" keyTimes="0;0.06;0.07;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.08;0.22;1" calcMode="linear"><mpath href="#tm-held-out"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.08;0.09;0.22;0.23;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.26;0.4;1" calcMode="linear"><mpath href="#tm-held-back"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.26;0.27;0.4;0.41;1"/>
+  </circle>
+  <circle class="dot ok" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.41;0.46;1" calcMode="linear"><mpath href="#tm-held-answer"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.41;0.42;0.46;0.47;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.5;0.56;1" calcMode="linear"><mpath href="#tm-held-quote"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.5;0.51;0.56;0.57;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.6;0.66;1" calcMode="linear"><mpath href="#tm-held-quote"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.6;0.61;0.66;0.67;1"/>
+  </circle>
+  <circle class="dot alt" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.7;0.76;1" calcMode="linear"><mpath href="#tm-held-quote"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.7;0.71;0.76;0.77;1"/>
+  </circle>
+  <circle class="dot" r="6" opacity="0">
+    <animateMotion dur="10s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;0.8;0.9;1" calcMode="linear"><mpath href="#tm-held-broker"/></animateMotion>
+    <animate attributeName="opacity" dur="10s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;0.8;0.81;0.9;0.91;1"/>
+  </circle>
+  <text class="title" x="20" y="34">A plain day limit order is held, not sent</text>
+  <text class="small" x="20" y="54">Orange: the order. Green: the answer, HTTP 202 armed with a parent_id. Blue: live quotes reaching the engine.</text>
+  <rect class="box" x="20" y="155" width="120" height="50" rx="25"/>
+  <text x="80" y="185" text-anchor="middle">Your program</text>
+  <rect class="accent-box" x="190" y="140" width="170" height="80" rx="8"/>
+  <text class="mono" x="275" y="170" text-anchor="middle">buy_at_limit_price</text>
+  <text class="small" x="275" y="190" text-anchor="middle">TradeableInstrument</text>
+  <text class="small" x="275" y="206" text-anchor="middle">price 1000, day validity</text>
+  <rect class="box" x="410" y="140" width="150" height="80" rx="8"/>
+  <text class="title" x="485" y="166" text-anchor="middle">UBI</text>
+  <text class="mono" x="485" y="188" text-anchor="middle">POST</text>
+  <text class="mono" x="485" y="204" text-anchor="middle">/api/orders/place</text>
+  <rect class="box" x="620" y="140" width="140" height="80" rx="8"/>
+  <text class="title" x="690" y="166" text-anchor="middle">Order engine</text>
+  <text class="small" x="690" y="186" text-anchor="middle">holds it as</text>
+  <text class="mono" x="690" y="204" text-anchor="middle">virtual_limit</text>
+  <rect class="box" x="800" y="155" width="80" height="50" rx="6"/>
+  <text x="840" y="185" text-anchor="middle">Live quote</text>
+  <rect class="box" x="645" y="290" width="90" height="44" rx="6"/>
+  <text x="690" y="317" text-anchor="middle">Broker</text>
+  <text class="small" x="485" y="244" text-anchor="middle">202, outcome armed, parent_id, no order_id</text>
+  <text class="small" x="680" y="270" text-anchor="end">sent once the best offer is at or below 1000</text>
+  <text class="small" x="20" y="360">Until it is sent the order is in parents, not in orders; change it with modify_order(parent_id=...) and cancel it with cancel_parent.</text>
+</svg>

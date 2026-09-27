@@ -34,7 +34,6 @@ sequenceDiagram
     You->>Share: place_order(..., price_reference, dry_run=True)
     Share->>UBI: POST /api/orders/place with dry_run true
     UBI-->>Share: the broker request it would send, with intent_id
-    Share->>Client: placement_mode = "engine"
     Share-->>You: the dry-run answer
 ```
 
@@ -177,26 +176,24 @@ option = equities.EquityIndexOption(
 !!! danger "These are real orders"
     `place_order` sends real orders to real brokers with real money unless `dry_run=True` is passed. Every call in this section passes it. With a dry run, UBI chooses a broker and builds that broker's request, then hands it back without sending it.
 
-The first rehearsal is a plain limit order: buy one share for delivery at 1000 rupees. The answer shows the broker UBI chose and the exact form it would have posted. The account identifiers in the form have been replaced with `XX000000`.
+The first rehearsal is a plain limit order: buy one share for delivery at 1000 rupees. The answer shows the broker UBI chose and the exact form it would have posted. The account identifiers in the form have been replaced with `XX000000`. Both rehearsals were captured on 2026-09-26, the day before UBI began holding plain limit orders in its engine; a plain limit order sent for real today is held until the book reaches its price, as [Order engine](../architecture/order-engine.md#plain-limit-orders-are-held) explains, and its dry run may answer differently from the one shown.
 
 === "Python"
 
     ```python
     answer = reliance.place_order("buy", "limit", 1, "cnc", price=1000, dry_run=True)
     print(answer)
-    print(reliance.shared_unified_broker_interface().placement_mode)
     ```
 
 === "Output"
 
     ```text
     {'broker': 'shoonya', 'dry_run': True, 'instrument_id': '3f92570a-9924-5bf5-9f9d-e006cd9f4202', 'intent_id': '520360eee8e9494ab580e96e093d715c', 'request': {'form': {'actid': 'XX000000', 'amo': 'NO', 'dscqty': '0', 'exch': 'NSE', 'ordersource': 'API', 'prc': '1000', 'prctyp': 'LMT', 'prd': 'C', 'qty': '1', 'ret': 'DAY', 'trantype': 'B', 'trgprc': '0', 'tsym': 'RELIANCE-EQ', 'uid': 'XX000000'}, 'method': 'POST', 'url': 'https://api.shoonya.com/NorenWClientAPI/PlaceOrder'}, 'skipped': [], 'tag': None, 'timing_ms': {'preparation': 1.594}}
-    None
     ```
 
-The answer carries an `intent_id`, which is the mark UBI's order engine leaves on every answer. Even so, `placement_mode` is still `None`, because a plain order works in either mode and the library never checks the mode for one.
+The answer carries an `intent_id`, which UBI's order engine adds to every answer.
 
-The second rehearsal was captured in a separate run the same morning, in a fresh Python process, so its client started with `placement_mode` at `None` too. It replaces the price with a description of it: buy at the best offer, level 1, and let UBI's engine read the price from the live book and round it to the tick. This is what the price wrappers such as `buy_at_best_offer_price` send.
+The second rehearsal was captured in a separate run the same morning. It replaces the price with a description of it: buy at the best offer, level 1, and let UBI's engine read the price from the live book and round it to the tick. This is what the price wrappers such as `buy_at_best_offer_price` send.
 
 === "Python"
 
@@ -213,19 +210,17 @@ The second rehearsal was captured in a separate run the same morning, in a fresh
         dry_run=True,
     )
     print(answer)
-    print(repr(reliance.shared_unified_broker_interface().placement_mode))
     ```
 
 === "Output"
 
     ```text
     {'broker': 'stoxkart', 'dry_run': True, 'instrument_id': '3f92570a-9924-5bf5-9f9d-e006cd9f4202', 'intent_id': '584e0a7f6cb84dc18fe0e64da9f4db69', 'request': {'json': {'action': 'BUY', 'algo_id': '99999', 'disclose_quantity': '0', 'exchange': 'NSE', 'order_type': 'LIMIT', 'price': '1226.0', 'product_type': 'DELIVERY', 'quantity': '1', 'stop_loss_price': '0', 'token': '2885', 'trailing_stop_loss': '0', 'trigger_price': '0', 'validity': 'DAY'}, 'method': 'POST', 'url': 'https://openapi.stoxkart.com/orders/normal'}, 'skipped': [], 'tag': None, 'timing_ms': {'preparation': 1.98}}
-    'engine'
     ```
 
-Two things changed. The engine resolved the reference to a price of `1226.0`, which is the best offer the quote showed earlier on this page. And because this order carried a reference and its answer carried an `intent_id`, the library recorded that UBI is in engine mode, so `placement_mode` is now `'engine'` on the shared client. A live order with a reference would now go straight through, without the extra dry run the library sends first when it does not yet know the mode. The two answers also chose different brokers, Shoonya and Stoxkart; UBI chooses the broker for each order itself.
+The engine resolved the reference to a price of `1226.0`, which is the best offer the quote showed earlier on this page. The two answers also chose different brokers, Shoonya and Stoxkart; UBI chooses the broker for each order itself. A limit order priced only by a reference is never held, so this one would be sent at once.
 
-[The placement-mode probe](../architecture/placement-modes.md#the-placement-mode-probe) explains the check, and [Orders](../python-api/orders.md#place_order) documents `place_order` in full.
+[Order engine](../architecture/order-engine.md) explains what UBI's engine does with an order, and [Orders](../python-api/orders.md#place_order) documents `place_order` in full.
 
 ## Where to go next
 

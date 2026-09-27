@@ -106,11 +106,11 @@ The table below counts what the library holds today, so you can judge the size o
 | What | Count | Where |
 |---|---:|---|
 | Instrument classes | 27 | `src/tradingmachine/assets/`, in seven family modules |
-| Synthetic order classes | 42 | `src/tradingmachine/orders/`, one module each |
+| Synthetic order classes | 53 | `src/tradingmachine/orders/`, one module each |
 | Analysis methods inherited by every instrument | 192 | `src/tradingmachine/assets/analysis/`, in thirteen classes |
 | Price wrappers such as `buy_at_best_bid_price` | 32 | `TradeableInstrument` in `src/tradingmachine/assets/instruments.py` |
-| Exception classes | 46 | 32 in `assets/exceptions.py`, 14 in `unified_broker_interface/exceptions.py` |
-| Python modules | 77 | `src/tradingmachine/` |
+| Exception classes | 45 | 32 in `assets/exceptions.py`, 13 in `unified_broker_interface/exceptions.py` |
+| Python modules | 88 | `src/tradingmachine/` |
 
 ## What the library adds to UBI
 

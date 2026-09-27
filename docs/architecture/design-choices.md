@@ -13,7 +13,7 @@ The table below lists every record on this page with its main benefit and its ma
 | [No local tick or lot validation](#no-local-tick-or-lot-validation) | One source of truth for exchange rules | A bad price is found by a round trip, not before it |
 | [Plain strings rather than enums](#plain-strings-rather-than-enums) | No second list of allowed values to keep in step | A typo is caught by UBI, not by your editor |
 | [Row lists become DataFrames](#row-lists-become-dataframes) | Orders, trades and candles filter and sort directly | Callers need pandas, and "no rows" is None rather than an empty frame |
-| [Order types are built in UBI, not here](#order-types-are-built-in-ubi-not-here) | One implementation of each order type | These orders need UBI in engine mode, and a probe to prove it |
+| [Order types are built in UBI, not here](#order-types-are-built-in-ubi-not-here) | One implementation of each order type | Every order depends on UBI's order engine running, and a plain limit order is held there rather than sent |
 | [One self-contained class per case](#one-self-contained-class-per-case) | Each class can be read, fixed and changed alone | The same code is repeated across classes |
 | [A derivative does not hold its underlying](#a-derivative-does-not-hold-its-underlying) | No extra request per contract and no fragile join | The caller builds the underlying when it wants one |
 | [Discovery reads the master rather than search](#discovery-reads-the-master-rather-than-search) | Live contracts are always found | A whole segment is downloaded on each call |
@@ -105,13 +105,13 @@ flowchart LR
 
 **Why.** Keeping each order type in one place avoids two implementations that diverge. It also fixed two real faults: the price is now read immediately before the order is placed rather than one request earlier, and a midpoint is rounded to the tick instead of landing between ticks where the exchange refuses it.
 
-**The cost.** These orders need UBI in engine mode, and UBI in direct mode would silently ignore the descriptions. So `place_order` probes the mode with a dry run before the first such order, as [Placement modes](placement-modes.md#the-placement-mode-probe) describes. An empty or shallow order book now comes back as UBI's HTTP 503, `ServiceUnavailableError`, and the old local `OrderError` was deleted.
+**The cost.** Every order depends on UBI's order engine, and when it is not running UBI refuses the order with HTTP 503. Until UBI removed its direct placement mode on 2026-09-27, `place_order` also had to send a dry run before the first such order to prove the engine was in use. UBI's engine also makes choices of its own, such as holding a plain limit order until the book reaches its price, which [Order engine](order-engine.md#plain-limit-orders-are-held) describes. An empty or shallow order book now comes back as UBI's HTTP 503, `ServiceUnavailableError`, and the old local `OrderError` was deleted.
 
 **In the code.** `place_order` and the wrappers in `src/tradingmachine/assets/instruments.py`, and every module in `src/tradingmachine/orders/`. When a new order convenience is wanted, the first question is whether UBI already offers it; if it does not, it belongs in UBI.
 
 ## One self-contained class per case
 
-**The problem.** The six classes of an asset family differ only in a segment constant, a base class and an error class, and the 42 synthetic order types differ only in their settings. Each group could be one parameterised class, or a hierarchy of intermediate bases such as `Futures` and `Option`.
+**The problem.** The six classes of an asset family differ only in a segment constant, a base class and an error class, and the 53 synthetic order types differ only in their settings. Each group could be one parameterised class, or a hierarchy of intermediate bases such as `Futures` and `Option`.
 
 **The choice.** Each case is its own class, written out in full. The family classes inherit directly from `TradeableInstrument` or `NonTradeableInstrument` with no intermediate base, and each asset-class module is copied from `equities.py` rather than sharing code with it, even the roughly 180 lines of holdings logic. Each synthetic order type is its own class in its own module, over a shallow `SyntheticOrder` base that holds only what is truly identical: storing the template, building the `synthetic` object and sending it.
 

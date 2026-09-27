@@ -7,3 +7,5 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row B7 t
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 UBI keeps a real stop-limit at the broker and moves its trigger, the Atlas's resting build, so the stop keeps protecting the position while UBI is down. `trail_points` and `trail_percent` are both optional here and UBI requires exactly one.
+
+On 2026-09-27 UBI added `activate_at`, the Atlas's G9 trailing take-profit, so the class gained it; with it the order answers HTTP 202 and places nothing until the level is reached.

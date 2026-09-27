@@ -7,3 +7,5 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row C2 g
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 It fills the gap between `day` and `ioc`, the only two validities Indian exchanges offer.
+
+On 2026-09-27 UBI added `at_expiry`, the Atlas's G5 limit that becomes marketable at a time, so the class gained it. UBI also moved every time-based type onto the instrument's exchange trading calendar that day, so a time sent on a closed day means the next trading day.

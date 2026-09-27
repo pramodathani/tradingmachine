@@ -20,6 +20,8 @@ Typical usage example:
   answer = order.place()
 """
 
+import pandas as pd
+
 from tradingmachine.assets import instruments
 
 
@@ -43,7 +45,9 @@ class SyntheticOrder:
         price_reference: A dict describing the price for UBI to work out, or None.
         quantity_reference: A dict describing the quantity for UBI to work out, or None.
         closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+        reduce_only: A bool that is True to have UBI check every leg against the net position held in the leg's instrument and product just before sending it, and refuse with HTTP 409 any leg that is not on the closing side or is bigger than the position.
         dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+        parent_id: The str id UBI's order engine gave this order when `place()` sent it, or None before then and after a dry run, which records nothing.
     """
 
     SYNTHETIC_TYPE = "simple"
@@ -65,6 +69,7 @@ class SyntheticOrder:
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
     ):
         """Initialises the order template.
@@ -84,6 +89,7 @@ class SyntheticOrder:
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
 
         Raises:
@@ -103,7 +109,9 @@ class SyntheticOrder:
         self.price_reference = price_reference
         self.quantity_reference = quantity_reference
         self.closes_position = closes_position
+        self.reduce_only = reduce_only
         self.dry_run = dry_run
+        self.parent_id = None
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -118,7 +126,7 @@ class SyntheticOrder:
 
     @property
     def synthetic(self) -> dict:
-        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, and `closes_position` when it is True."""
+        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, and `closes_position` and `reduce_only` when each is True."""
         document = {
             "type": self.SYNTHETIC_TYPE,
         }
@@ -127,25 +135,26 @@ class SyntheticOrder:
                 document[field] = value
         if self.closes_position:
             document["closes_position"] = True
+        if self.reduce_only:
+            document["reduce_only"] = True
         return document
 
     def place(self) -> dict:
-        """Sends the order to UBI's order engine through `TradeableInstrument.place_order`.
+        """Sends the order to UBI's order engine through `TradeableInstrument.place_order`, and keeps the `parent_id` the engine answers with.
 
         Returns:
-            The dict `place_order` returns. A type that acts at once answers with the broker's answer and a `parent_id`; a type that waits for a price or a time answers with an `outcome` of `armed` or `scheduled`, a `broker` and `order_id` of None, and a `parent_id`, which is the only handle on the order until it reaches a broker.
+            The dict `place_order` returns. A type that acts at once answers with the broker's answer and a `parent_id`; a type that waits for a price or a time answers with an `outcome` of `armed` or `scheduled`, a `broker` and `order_id` of None, and a `parent_id`, which is the only handle on the order until it reaches a broker. The types that send several orders at once, `freeze_slicer`, `ladder`, `grid`, `two_sided_quote`, `basket`, `oco`, `bracket` and `two_sided_breakout`, answer with one combined `outcome`: `accepted` when every order was accepted, `partial` with HTTP 207 when only some were, which is returned rather than raised, and otherwise `unknown` or `rejected`, which are raised.
 
         Raises:
             BadRequestError: A template field is invalid, or one of this type's own settings is missing or wrong.
             LossLockoutError: The day's loss is past UBI's daily loss limit.
-            ConflictError: The engine refused to act on the account's state, such as a post-only order that would cross the book.
+            ConflictError: The engine refused to act on the account's state, such as a post-only order that would cross the book or a reduce-only leg that would not reduce the position, or the engine had already started this order before a restart.
             RateLimitError: The broker's daily order cap has no room for this order.
-            ServiceUnavailableError: No broker could take the order, or a price UBI needed could not be read.
+            ServiceUnavailableError: No broker could take the order, a price UBI needed could not be read, or the order engine is not running.
             OrderOutcomeUnknownError: The engine did not answer in time, so the order may still be placed.
-            DirectPlacementError: UBI is placing orders directly, so it would place the template as a plain order; nothing was sent.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        return self.instrument.place_order(
+        answer = self.instrument.place_order(
             transaction_type=self.transaction_type,
             order_type=self.order_type,
             quantity=self.quantity,
@@ -161,3 +170,68 @@ class SyntheticOrder:
             quantity_reference=self.quantity_reference,
             synthetic=self.synthetic,
         )
+        if isinstance(answer, dict) and answer.get("parent_id") is not None:
+            self.parent_id = answer["parent_id"]
+        return answer
+
+    def cancel(self) -> dict:
+        """Cancels this order in UBI's order engine, with every leg it still has resting at a broker.
+
+        A position the order has already opened is not closed.
+
+        Returns:
+            The dict `TradeableInstrument.cancel_parent` returns, with `parent_id`, `synthetic_type`, `state` and a `cancelled_legs` list. Its `state` is `cancelling` rather than `cancelled` when a broker refused a leg's cancel, so that leg may still be live.
+
+        Raises:
+            ValueError: The order has not been placed, so there is no parent to cancel.
+            NotFoundError: The engine holds no parent with this id.
+            ConflictError: The parent has already finished.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.instrument.cancel_parent(self._placed_parent_id())
+
+    @property
+    def parent(self) -> dict:
+        """The order as UBI's order engine holds it now, with its `state`, the caller's `body`, the type's `parameters` and one entry per leg, read from UBI on every access.
+
+        Raises:
+            ValueError: The order has not been placed, so there is no parent to read.
+            NotFoundError: The engine holds no parent with this id.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.instrument.parent(self._placed_parent_id())
+
+    @property
+    def orders(self) -> pd.DataFrame | None:
+        """Today's broker orders this order has placed, as a pandas.DataFrame shaped like `TradeableInstrument.orders`, or None when it has placed none yet.
+
+        Raises:
+            ValueError: The order has not been placed, so it has no orders.
+            UnifiedBrokerInterfaceError: The order book could not be read.
+        """
+        return self.instrument.parent_orders(self._placed_parent_id())
+
+    @property
+    def trades(self) -> pd.DataFrame | None:
+        """Today's fills of the broker orders this order has placed, as a pandas.DataFrame shaped like `TradeableInstrument.trades`, or None when nothing has filled yet.
+
+        Raises:
+            ValueError: The order has not been placed, so it has no trades.
+            UnifiedBrokerInterfaceError: The trade book could not be read.
+        """
+        return self.instrument.parent_trades(self._placed_parent_id())
+
+    def _placed_parent_id(self) -> str:
+        """Gives the engine's id for this order, refusing when it has not been placed.
+
+        Returns:
+            The str `parent_id` that `place()` kept.
+
+        Raises:
+            ValueError: `place()` has not been called, was a dry run, or was answered without a `parent_id`.
+        """
+        if self.parent_id is None:
+            raise ValueError(
+                f"This {self.SYNTHETIC_TYPE} order has no parent_id, because place() has not sent it to UBI's order engine yet, or sent it only as a dry run"
+            )
+        return self.parent_id

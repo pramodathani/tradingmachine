@@ -12,7 +12,6 @@ You rarely use either class directly, because every instrument and the account a
 | <span class="member method">method</span> | [`status`](#status) | Reports whether the session is connected and when it expires |
 | <span class="member method">method</span> | [`get`](#get), [`post`](#post), [`put`](#put), [`patch`](#patch), [`delete`](#delete) | Send one request to any UBI route |
 | <span class="member property">attribute</span> | [`token_expires_at`](#token_expires_at) | When the current token expires, as UBI reported it |
-| <span class="member property">attribute</span> | [`placement_mode`](#placement_mode) | Whether UBI was last seen placing orders through its engine or directly |
 | <span class="member class">class</span> | [`Configuration`](#configuration) | The settings for one process, read from the environment on first use |
 
 ## UnifiedBrokerInterface
@@ -44,7 +43,7 @@ This example builds a client of its own and reads the session status. It sends a
 
 #### Returns
 
-The constructor returns the client, with `token_expires_at` and `placement_mode` both `None`.
+The constructor returns the client, with `token_expires_at` set to `None`.
 
 #### Raises
 
@@ -235,33 +234,6 @@ UBI reports a failure as a status code and a JSON body, and has no error-type fi
 ## token_expires_at
 
 `token_expires_at` is a public attribute holding the `str` time the current token expires, exactly as UBI reported it, or `None` before the first connect and after a disconnect. The client never reads it; it is there for code that wants to show the expiry or plan around it.
-
-## placement_mode
-
-`placement_mode` is a public attribute recording how UBI was last seen placing orders. UBI has no route that reports its mode, so the client learns it from the answers to orders, and the attribute has one of the three values in the table below.
-
-| Value | Meaning | How it gets there |
-|---|---|---|
-| `None` | Not known yet | The starting value, and it stays so after plain orders, which work in either mode |
-| `"engine"` | UBI hands orders to its order engine | An order answer, a dry run or an engine refusal carried an `intent_id` |
-| `"direct"` | UBI places orders itself and would ignore a reference or a synthetic object | An answer to an order carrying one of them had no `intent_id` |
-
-The attribute lives on the client rather than on an instrument, because every instrument shares the client and the mode belongs to the server. [`place_order`](orders.md#place_order) sets it, and it probes with one dry run before the first live order that carries a `price_reference`, a `quantity_reference` or a `synthetic` object. [The placement-mode probe](../architecture/placement-modes.md#the-placement-mode-probe) explains the check in full.
-
-The captures on 2026-09-26 show both states. After a plain dry-run limit order `placement_mode` was still `None`, and after a dry run carrying `price_reference={"kind": "offer_level", "level": 1}` it was `'engine'`.
-
-=== "Python"
-
-    ```python
-    shared_client = reliance.shared_unified_broker_interface()
-    print(repr(shared_client.placement_mode))
-    ```
-
-=== "Output"
-
-    ```text
-    'engine'
-    ```
 
 ## Configuration
 

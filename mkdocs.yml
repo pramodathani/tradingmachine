@@ -183,7 +183,7 @@ nav:
   - Architecture:
       - architecture/index.md
       - The instrument model: architecture/instrument-model.md
-      - Placement modes: architecture/placement-modes.md
+      - Order engine: architecture/order-engine.md
       - Design choices: architecture/design-choices.md
   - Project:
       - project/index.md

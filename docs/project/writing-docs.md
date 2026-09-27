@@ -222,7 +222,7 @@ A dot moves along a path with `<animateMotion>` and `<mpath>`. Every `id` in a f
 <circle class="dot ok" r="6"><animateMotion dur="1s" repeatCount="indefinite"><mpath href="#tm-docs-build-output"/></animateMotion></circle>
 ```
 
-A dot that should wait, so that a request and its answer take turns, uses `calcMode="linear"` with `keyTimes` and `keyPoints`, and an `<animate>` on its opacity to hide it while it waits; `placement-probe.svg` on [Placement modes](../architecture/placement-modes.md) works this way. Draw the dots before the boxes, so a dot passing behind a box is hidden rather than drawn over its text.
+A dot that should wait, so that a request and its answer take turns, uses `calcMode="linear"` with `keyTimes` and `keyPoints`, and an `<animate>` on its opacity to hide it while it waits; `held-limit-order.svg` on [Order engine](../architecture/order-engine.md) works this way. Draw the dots before the boxes, so a dot passing behind a box is hidden rather than drawn over its text.
 
 Each SVG also carries a `<title>` and a `<desc>` for screen readers, and has no blank lines inside it, because a blank line would end the HTML block when the file is pasted into the page. A page includes it with the snippets extension, inside a `figure` with a one-sentence caption, and with no blank lines between the four lines:
 

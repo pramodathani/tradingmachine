@@ -10,7 +10,6 @@ The table below lists every class on this page.
 |---|---|---|
 | <span class="member class">class</span> | [`UnifiedBrokerInterfaceError`](#unifiedbrokerinterfaceerror) | The base of every failure reported by, or on the way to, UBI |
 | <span class="member class">class</span> | [Twelve status classes](#the-ubi-client-errors) | One per HTTP status UBI returns, plus a catch-all and one for no answer at all |
-| <span class="member class">class</span> | [`DirectPlacementError`](#directplacementerror) | UBI would ignore an order's reference or synthetic object |
 | <span class="member class">class</span> | [`InstrumentError`](#instrumenterror) | The base of every problem with an instrument |
 | <span class="member class">class</span> | [Four behaviour errors](#the-instrument-errors) | Tradeable, non-tradeable, position and holding |
 | <span class="member class">class</span> | [Twenty-seven family errors](#the-family-errors) | One per named instrument class, raised when UBI has no such instrument |
@@ -35,7 +34,6 @@ classDiagram
     UnifiedBrokerInterfaceError <|-- OrderOutcomeUnknownError
     UnifiedBrokerInterfaceError <|-- ServerError
     UnifiedBrokerInterfaceError <|-- UnreachableError
-    UnifiedBrokerInterfaceError <|-- DirectPlacementError
     class UnifiedBrokerInterfaceError {
         +str message
         +int status_code
@@ -113,13 +111,12 @@ UBI reports a failure as an HTTP status and a JSON body, with no error-type fiel
 | <span class="status s4">422</span> | [`OrderRejectedError`](#orderrejectederror) | The broker refused the order |
 | <span class="status s4">429</span> | [`RateLimitError`](#ratelimiterror) | The broker is at its order rate limit or daily order cap |
 | <span class="status s5">502</span> | [`BrokerError`](#brokererror) | No broker's data could be read |
-| <span class="status s5">503</span> | [`ServiceUnavailableError`](#serviceunavailableerror) | Data is stale or not kept, no broker can take the order, or a price reference cannot be resolved |
+| <span class="status s5">503</span> | [`ServiceUnavailableError`](#serviceunavailableerror) | Data is stale or not kept, no broker can take the order, a price reference cannot be resolved, the order engine is not running, or a broker's order rate budget is full |
 | <span class="status s5">504</span> | [`OrderOutcomeUnknownError`](#orderoutcomeunknownerror) | The order was sent but its outcome is unknown |
 | <span class="status s5">500</span>, 405 and any other | [`ServerError`](#servererror) | A failure with no more specific class |
 | none | [`UnreachableError`](#unreachableerror) | No answer arrived at all |
-| none | [`DirectPlacementError`](#directplacementerror) | Raised by the library itself, not by a status code |
 
-A 2xx is never raised. That includes UBI's 202 for a synthetic order that is armed or scheduled, and its 207 for a flatten that partly failed, which `Account.flatten` returns for you to read.
+A 2xx is never raised. That includes UBI's 202 for a held limit order or a synthetic order that is armed or scheduled; its 207 for a type that sends several orders when only some were accepted, whose `outcome` is `partial`; its 207 for a parent whose cancel left one leg possibly live, whose `state` is `cancelling`; and its 207 for a flatten that partly failed, which `Account.flatten` returns for you to read.
 
 The exception's `message` is the body's `error` field, or its `status_message` when there is no `error`, or else `UBI returned HTTP <status>`. For a 422 and a 504 UBI answers with the order document rather than an error body, so the order is in `detail`. [Errors and status codes](https://pramodathani.github.io/unified_broker_interface/rest-api/errors/) on the UBI site lists every message UBI can send.
 
@@ -143,12 +140,11 @@ flowchart LR
     D -- "ConflictError" --> D5["Read orders or positions,<br/>the state has moved on"]
     D -- "ServiceUnavailableError or BrokerError" --> D6["Start the UBI service<br/>the message names"]
     D -- "UnreachableError" --> D7["Start UBI, check<br/>TRADINGMACHINE_UBI_BASE_URL"]
-    D -- "DirectPlacementError" --> D8["Run UBI in engine mode"]
     D -- "AuthenticationError" --> D9["Make the MongoDB settings<br/>match UBI's key and secret"]
 ```
 
 !!! danger "Never resend an order after `OrderOutcomeUnknownError`"
-    The order may well have reached the broker. Read [`orders`](orders.md) and look for it before sending anything again, or you may end up holding twice what you meant to.
+    The order may well have reached the broker. Read [`orders`](orders.md), or read the engine's answer with [`Account.intent`](account.md#intent) and the `intent_id` in the exception's `detail`, before sending anything again, or you may end up holding twice what you meant to.
 
 ## The UBI client errors
 
@@ -161,7 +157,7 @@ These classes live in `tradingmachine.unified_broker_interface.exceptions`. Catc
 | Attribute | Type | Description |
 |---|---|---|
 | `message` | `str` | What went wrong, from the body's `error` or `status_message`, or a generic text naming the status |
-| `status_code` | `int` or `None` | The HTTP status, or `None` when no answer arrived or the library raised it itself |
+| `status_code` | `int` or `None` | The HTTP status, or `None` when no answer arrived |
 | `detail` | `dict` | The parsed JSON body, or an empty dict when there was none |
 
 The example below catches one subclass and reads all three. It is built from the code, and its output was not captured.
@@ -188,7 +184,7 @@ The example below catches one subclass and reads all three. It is built from the
 
 ### LossLockoutError
 
-`LossLockoutError` means HTTP 403, which UBI's order engine answers only when the day's loss is past its daily loss limit. Every new order is refused until the next trading day, so do not retry. The body carries an `intent_id`, which also tells the library UBI is in engine mode.
+`LossLockoutError` means HTTP 403, which UBI's order engine answers only when the day's loss is past its daily loss limit. Every new order is refused until the next trading day, so do not retry. The body carries the order's `intent_id`.
 
 ### NotFoundError
 
@@ -196,7 +192,15 @@ The example below catches one subclass and reads all three. It is built from the
 
 ### ConflictError
 
-`ConflictError` means HTTP 409: the request conflicts with the account's state. The common causes are modifying or cancelling an order that is no longer open, a `reduce_position` or `liquidate_position` naming a product that is not held, and an order the engine read too late to place. Read [`orders`](orders.md) or [`net_positions`](positions.md) to see what changed.
+`ConflictError` means HTTP 409: the request conflicts with the account's state. The common causes are listed below.
+
+- Modifying or cancelling an order that is no longer open, or cancelling a parent that has already finished.
+- A `reduce_position` or `liquidate_position` naming a product that is not held.
+- A reduce-only order, one sent with `reduce_only=True`, whose leg would not reduce the net position when it was about to be sent. Nothing was sent.
+- An order the engine read too late to place, or one whose intent had already started a parent before an engine restart, in which case the `detail` carries the `parent_id` to read.
+- Changing a leg of a synthetic order in a field other than its price, trigger price or quantity, or changing a held order that has already been sent.
+
+ Read [`orders`](orders.md) or [`net_positions`](positions.md) to see what changed.
 
 ### OrderRejectedError
 
@@ -216,14 +220,14 @@ The example below catches one subclass and reads all three. It is built from the
 
 - UBI has no recent quote and no broker that serves quotes carries the instrument, which is always true of a cash bond, a fixed income index and a mutual fund.
 - A document UBI keeps, such as positions, is missing or too old to serve.
-- No broker can take the order, or the engine's rate budget is full.
+- No broker can take the order, or the broker's order rate budget is full. The rate budget also covers `modify_order` and `cancel_order`, which then send nothing; this cause is worth retrying a moment later.
 - A price reference cannot be resolved: there is no live quote, the book is too shallow for the level asked for, or the brokers do not agree on a tick size.
-- The order engine is not running, so nothing was queued.
+- The order engine is not running, so nothing was queued. UBI places every order through it, and it also runs `cancel_parent` and the changes to an order the engine placed.
 - For commodities, UBI does not trust the contract's size that day, which the body reports as `contract_size_status`.
 
 ### OrderOutcomeUnknownError
 
-`OrderOutcomeUnknownError` means HTTP 504: the order was sent, or handed to the engine, and whether it took effect is unknown. The order may exist. Read the order book before doing anything else. In engine mode the message is taken from `status_message`, such as "the order engine did not answer within 5.0 seconds, so this order may still be placed".
+`OrderOutcomeUnknownError` means HTTP 504: the order was sent, or handed to the engine, and whether it took effect is unknown. The order may exist. Read the order book before doing anything else. When UBI's order engine did not answer in time, the message is taken from `status_message`, such as "the order engine did not answer within 5.0 seconds, so this order may still be placed".
 
 ### ServerError
 
@@ -232,16 +236,6 @@ The example below catches one subclass and reads all three. It is built from the
 ### UnreachableError
 
 `UnreachableError` means no answer arrived at all: the connection was refused, the address was wrong, or the request timed out. Its `status_code` is `None`, and the original `requests` exception is chained as its cause. Check that UBI is running and that `TRADINGMACHINE_UBI_BASE_URL` points at it.
-
-### DirectPlacementError
-
-`DirectPlacementError` is raised by the library, not by a status code, so its `status_code` is `None`. It means UBI is placing orders directly rather than through its order engine, so it would validate and then silently ignore an order's `price_reference`, `quantity_reference` or `synthetic` object. [`place_order`](orders.md#place_order) raises it in the three situations listed below.
-
-1. Before the first live order carrying one of those objects, the library sends the same body as a dry run. When the answer has no `intent_id`, it raises this error and sends nothing.
-2. After a live order carrying one of them, when the answer has no `intent_id`, UBI must have been switched to direct mode since the check. The order has already gone out as a plain order, so the message says so and tells you to read the order book.
-3. A dry run carrying one of them is not probed first, because it is its own probe, and it raises this error when its answer has no `intent_id`.
-
-Start UBI with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine` and the order engine service running. [The placement-mode probe](../architecture/placement-modes.md#the-placement-mode-probe) explains the check.
 
 ## The instrument errors
 

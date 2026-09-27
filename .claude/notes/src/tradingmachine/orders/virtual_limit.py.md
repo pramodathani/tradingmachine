@@ -5,3 +5,5 @@
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 It is not an Atlas row; UBI added it on 2026-09-24 with its `virtual_book` queue estimate. `paper` is sent only when True, because UBI counts only a literal true and False says nothing UBI does not assume.
+
+Since 2026-09-27 UBI holds every plain limit order with a price, `day` validity and no `synthetic` object as a `virtual_limit` by default, controlled by `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` on the UBI side. The class is kept for `paper` and to ask for the type explicitly.

@@ -7,3 +7,5 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row B12 
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 The module name spells out `gtt`. It does not protect against a gap, because nothing that watches prices can act on a price that never traded. `trigger_price` is stored as `trigger_level`.
+
+On 2026-09-27 UBI added `trigger_on` and `hold_seconds` to its price-trigger base, the Atlas's G10 trigger methods, so the class gained both. UBI refuses them on the types that choose their own watched price, `indicator_triggered`, `hidden_stop`, `candle_close_stop` and `virtual_limit`, so those classes do not take them.

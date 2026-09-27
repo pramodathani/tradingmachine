@@ -16,7 +16,7 @@
   <text class="mono" x="450" y="157" text-anchor="middle">Equity, EquityIndexOption, BracketOrder, Account, ...</text>
   <rect class="accent-box" x="120" y="195" width="660" height="54" rx="8"/>
   <text class="title" x="450" y="218" text-anchor="middle">UnifiedBrokerInterface, one client shared by every object</text>
-  <text class="mono" x="450" y="237" text-anchor="middle">one access token, reconnect on 401, placement_mode</text>
+  <text class="mono" x="450" y="237" text-anchor="middle">one access token, reconnect on 401</text>
   <text class="small" x="282" y="282">reads come up</text>
   <text class="small" x="618" y="282" text-anchor="end">orders go down</text>
   <rect class="wire-solid" x="60" y="290" width="780" height="176" rx="10" stroke-dasharray="2 4"/>

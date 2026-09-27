@@ -37,7 +37,7 @@ Two classes need care. No broker that serves quotes carries a cash bond or a mut
 
 Every order these members send uses the `cnc` product, and there is no parameter to change it. `cnc` is the only product that buys into or sells out of a demat account. Selling a holding as `mis` would not sell your shares at all: it would open an intraday short position beside them, which the broker squares off before the close, so the mistake would cost money twice and leave the holding untouched. Removing the parameter makes that impossible to do by accident.
 
-The order methods send plain market or limit orders through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price), [`buy_at_limit_price`](price-wrappers.md#buy_at_limit_price) and their sell twins, so they work in either of UBI's placement modes.
+The order methods send plain market or limit orders through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price), [`buy_at_limit_price`](price-wrappers.md#buy_at_limit_price) and their sell twins. A limit order is held by UBI's order engine until the book reaches its price, except for `MutualFund` and `FixedIncome`, which pass `hold=False` because nothing quotes them and a held order would never be sent. [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains why.
 
 ## Free units and pledged units
 

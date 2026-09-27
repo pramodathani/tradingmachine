@@ -1,6 +1,6 @@
 """The `daily_stop` synthetic order type: a native stop placed afresh every morning for a position held overnight.
 
-Native Indian stops expire at the end of the day. This re-places one each morning at `arm_at`, after the opening auction has settled. When the market has already opened past the stop, it closes the position with a limit instead of placing a stop that would fire at whatever the gap left. UBI never works out references for this type, so give real numbers. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+Native Indian stops expire at the end of the day. This re-places one each trading morning at `arm_at`, after the opening auction has settled, never on a weekend or an exchange holiday, and an order sent after that day's `arm_at` first arms on the next trading day, which the answer names as `first_arm_on`. When the market has already opened past the stop, it closes the position with a limit instead of placing a stop that would fire at whatever the gap left. UBI never works out references for this type, so give real numbers. `valid_days` counts calendar days. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class DailyStopOrder(synthetic_order.SyntheticOrder):
     """A native stop placed afresh every morning for a position held overnight.
 
-    Native Indian stops expire at the end of the day. This re-places one each morning at `arm_at`, after the opening auction has settled. When the market has already opened past the stop, it closes the position with a limit instead of placing a stop that would fire at whatever the gap left. UBI never works out references for this type, so give real numbers. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    Native Indian stops expire at the end of the day. This re-places one each trading morning at `arm_at`, after the opening auction has settled, never on a weekend or an exchange holiday, and an order sent after that day's `arm_at` first arms on the next trading day, which the answer names as `first_arm_on`. When the market has already opened past the stop, it closes the position with a limit instead of placing a stop that would fire at whatever the gap left. UBI never works out references for this type, so give real numbers. `valid_days` counts calendar days. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -58,6 +58,7 @@ class DailyStopOrder(synthetic_order.SyntheticOrder):
         price_reference: dict | None = None,
         quantity_reference: dict | None = None,
         closes_position: bool = False,
+        reduce_only: bool = False,
         dry_run: bool = False,
         arm_at: str | None = None,
         valid_days: int | None = None,
@@ -81,6 +82,7 @@ class DailyStopOrder(synthetic_order.SyntheticOrder):
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
+            reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             arm_at: The str time of day to place the stop, as `HH:MM` or `HH:MM:SS` India time, or None to let UBI use `09:20`.
             valid_days: The int number of days to keep re-placing it, from 1 to 365, or None to let UBI use 30.
@@ -103,6 +105,7 @@ class DailyStopOrder(synthetic_order.SyntheticOrder):
             price_reference=price_reference,
             quantity_reference=quantity_reference,
             closes_position=closes_position,
+            reduce_only=reduce_only,
             dry_run=dry_run,
         )
         self.stop_price = stop_price

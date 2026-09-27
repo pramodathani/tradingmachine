@@ -1,6 +1,6 @@
 """UBI's synthetic order types, one class per type, each in its own module.
 
-A synthetic order is an order no Indian exchange offers, built by UBI's order engine out of ordinary broker orders: a bracket, a trailing stop, an iceberg, a time-sliced order and so on. Each class takes an instrument and an order template, the ordinary order fields, plus its own settings, and `place()` sends it through `TradeableInstrument.place_order`. They need UBI to run in engine mode, and `place_order` refuses to send them otherwise. Several of them place, change or cancel real orders long after `place()` has returned, so send `dry_run=True` first.
+A synthetic order is an order no Indian exchange offers, built by UBI's order engine out of ordinary broker orders: a bracket, a trailing stop, an iceberg, a time-sliced order and so on. Each class takes an instrument and an order template, the ordinary order fields, plus its own settings, and `place()` sends it through `TradeableInstrument.place_order`. UBI's order engine, which places every order UBI accepts, runs them, so it has to be running. Several of them place, change or cancel real orders long after `place()` has returned, so send `dry_run=True` first.
 
 The module names spell out the abbreviations UBI uses for the type names:
 
@@ -48,6 +48,19 @@ The module names spell out the abbreviations UBI uses for the type names:
 | `legged_spread` | `legged_spread` | `LeggedSpreadOrder` |
 | `strategy_stop` | `strategy_stop` | `StrategyStopOrder` |
 | `exposure_hedge` | `exposure_hedge` | `ExposureHedgeOrder` |
+| `opening_auction` | `opening_auction` | `OpeningAuctionOrder` |
+| `closing_price` | `closing_price` | `ClosingPriceOrder` |
+| `underlying_peg` | `underlying_peg` | `UnderlyingPegOrder` |
+| `volatility` | `volatility` | `VolatilityOrder` |
+| `stepped_stop` | `stepped_stop` | `SteppedStopOrder` |
+| `close_on_trigger` | `close_on_trigger` | `CloseOnTriggerOrder` |
+| `stop_and_reverse` | `stop_and_reverse` | `StopAndReverseOrder` |
+| `attached_hedge` | `attached_hedge` | `AttachedHedgeOrder` |
+| `scale_with_profit_taker` | `scale_with_profit_taker` | `ScaleWithProfitTakerOrder` |
+| `two_sided_quote` | `two_sided_quote` | `TwoSidedQuoteOrder` |
+| `account_conditional` | `account_conditional` | `AccountConditionalOrder` |
+
+Every class also takes `reduce_only`, which has UBI refuse any leg that would not reduce the position held. Once `place()` has sent an order, the object keeps its `parent_id`, and its `cancel()`, `parent`, `orders` and `trades` members act on or read that parent in UBI's order engine.
 
 `synthetic_order` holds the shared base, `SyntheticOrder`, and `order_candidate` and `exposure_watch` hold the two small classes the multi-instrument types take as arguments.
 
