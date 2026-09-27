@@ -16,9 +16,9 @@ The animation below shows the five layers between your program and a broker's se
 The numbered list below describes each layer from the top, with where it lives.
 
 1. **Instrument, order and account objects** are what your program builds and calls. An `Equity`, an `EquityIndexOption` or a `CommodityFutures` is one instrument; a `BracketOrder` or a `TrailingStopOrder` describes one synthetic order; an `Account` stands for the whole trading account. They live in `tradingmachine.assets`, `tradingmachine.orders` and `tradingmachine.accounts`. None of them holds any market data between calls; each read is a fresh request.
-2. **The shared client**, `UnifiedBrokerInterface` in `tradingmachine.unified_broker_interface.client`, is the only code that speaks HTTP. Every object in a process sends its requests through the same client, because UBI holds a single access token for the whole application and a second client would log the first one out. The client connects on first use, reconnects and retries once on HTTP 401, turns each failure status into its own exception class, and remembers which [placement mode](placement-modes.md) UBI was last seen in.
+2. **The shared client**, `UnifiedBrokerInterface` in `tradingmachine.unified_broker_interface.client`, is the only code that speaks HTTP. Every object in a process sends its requests through the same client, because UBI holds a single access token for the whole application and a second client would log the first one out. The client connects on first use, reconnects and retries once on HTTP 401, and turns each failure status into its own exception class.
 3. **UBI's REST API** listens on `http://127.0.0.1:8080`. It answers almost every read from its own Redis and TimescaleDB, which its background scripts keep filled from the brokers, so a read never waits for a broker. It is documented route by route on the [UBI site](https://pramodathani.github.io/unified_broker_interface/rest-api/).
-4. **UBI's order engine** is a separate UBI process that places orders on the REST API's behalf when UBI runs with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. It works out prices and quantities that were described rather than stated, and it runs the 42 synthetic order types, some of which keep placing orders long after your call has returned. See [Order engine](https://pramodathani.github.io/unified_broker_interface/rest-api/order-engine/) on the UBI site.
+4. **UBI's order engine** is a separate UBI process that places every order on the REST API's behalf. It works out prices and quantities that were described rather than stated, holds plain limit orders until the book reaches their price, and runs the 53 synthetic order types, some of which keep placing orders long after your call has returned. See [Order engine](https://pramodathani.github.io/unified_broker_interface/rest-api/order-engine/) on the UBI site.
 5. **The ten brokers** are Dhan, Flattrade, Fyers, Groww, INDmoney, Kotak, Shoonya, Stoxkart, Wisdom Capital and Zerodha. UBI logs in to each of them and chooses which one sends a given order; this library never names a broker and never talks to one.
 
 !!! note "What the library does not do"
@@ -32,9 +32,9 @@ The rules below keep the layers independent. The table shows, for each part, wha
 |---|:---:|:---:|:---:|---|
 | Your program | :material-minus: through the objects, or directly for a route no object wraps | :material-close: | :material-close: | Whatever it chooses |
 | Instrument, order and account objects | :material-check: | :material-close: only through the client | :material-close: | Only the instrument's identity, lot size and tick size, read once at construction |
-| Shared client, `UnifiedBrokerInterface` | :material-minus: it is the client | :material-check: the only code that does | :material-close: | The access token, its expiry and `placement_mode` |
-| UBI REST API | :material-close: | :material-minus: it is the API | :material-check: for orders in direct mode, and for a quote when no fresh one is cached | Everything, in Redis, TimescaleDB and MongoDB |
-| UBI order engine | :material-close: | :material-close: | :material-check: every placement in engine mode | Armed and working synthetic orders |
+| Shared client, `UnifiedBrokerInterface` | :material-minus: it is the client | :material-check: the only code that does | :material-close: | The access token and its expiry |
+| UBI REST API | :material-close: | :material-minus: it is the API | :material-check: for modifications, cancellations and flatten's cancels, and for a quote when no fresh one is cached | Everything, in Redis, TimescaleDB and MongoDB |
+| UBI order engine | :material-close: | :material-close: | :material-check: every placement | Held limit orders and armed and working synthetic orders |
 | Brokers | :material-close: | :material-close: | :material-minus: | The real orders, trades, positions and holdings |
 
 The one rule that matters most for a caller is the second row. An instrument object never opens its own connection, so any number of instruments, synthetic orders and an `Account` can live in one process and share one login. [The instrument model](instrument-model.md#one-shared-client) explains how the client is shared.
@@ -71,7 +71,7 @@ sequenceDiagram
     O-->>P: dict with broker, order_id, outcome
 ```
 
-The first time an order like the second one is sent, `place_order` sends it once as a dry run before the real one, to prove that UBI's order engine is running. [Placement modes](placement-modes.md#the-placement-mode-probe) describes that probe.
+Every order takes the second path, through the engine. A plain limit order stops at the engine, which holds it until the book reaches its price; [Order engine](order-engine.md) describes that and the parents the engine keeps.
 
 ## Where to go next
 
@@ -87,13 +87,13 @@ The pages in this tab go deeper into each part of the design.
 
     [:octicons-arrow-right-24: The instrument model](instrument-model.md)
 
--   :material-swap-vertical:{ .lg .middle } **Placement modes**
+-   :material-swap-vertical:{ .lg .middle } **Order engine**
 
     ---
 
-    UBI's direct and engine modes, what the library sends as descriptions rather than values, and the dry-run probe that protects the first such order.
+    What the library sends as descriptions rather than values, why a plain limit order is held, what a parent is, and how to read an answer that arrived late.
 
-    [:octicons-arrow-right-24: Placement modes](placement-modes.md)
+    [:octicons-arrow-right-24: Order engine](order-engine.md)
 
 -   :material-scale-balance:{ .lg .middle } **Design choices**
 

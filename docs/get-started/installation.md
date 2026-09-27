@@ -10,7 +10,7 @@ The table below summarises the steps and what each one leaves behind.
 | [2. The virtual environment](#2-create-the-virtual-environment) | `python3.14 -m venv .venv` | A private Python 3.14 in `.venv/` |
 | [3. The library](#3-install-the-library) | `pip install -e ".[docs,development]"` | `tradingmachine` importable from anywhere, with its seven dependencies |
 | [4. The containers](#4-start-the-containers) | `docker compose up -d` | Redis, MongoDB and TimescaleDB on ports 2002 to 2004 |
-| [5. UBI](#5-make-sure-ubi-is-running-in-engine-mode) | UBI's own services | UBI answering on `127.0.0.1:8080`, placing orders through its engine |
+| [5. UBI](#5-make-sure-ubi-and-its-order-engine-are-running) | UBI's own services | UBI answering on `127.0.0.1:8080`, placing orders through its engine |
 
 The diagram below shows what is running on the machine once every step is done, and which of those pieces the library talks to.
 
@@ -123,21 +123,19 @@ Ports 2002 to 2004 were chosen so this project can run beside UBI, whose own con
 
 The usernames, passwords and database names in `.env` are read only when a container starts with an empty volume. Changing them later does not change the existing database; change the credential inside the database, or delete the volume and start again.
 
-## 5. Make sure UBI is running in engine mode
+## 5. Make sure UBI and its order engine are running
 
-UBI is a separate project with its own installation, documented on [its own site](https://pramodathani.github.io/unified_broker_interface/get-started/). This library needs three things from it, listed below.
+UBI is a separate project with its own installation, documented on [its own site](https://pramodathani.github.io/unified_broker_interface/get-started/). This library needs two things from it, listed below.
 
 1. **UBI's REST API answers on `http://127.0.0.1:8080`.** UBI binds to `127.0.0.1` by default, so it is reachable only from the same machine, unlike the databases.
-2. **UBI runs in engine mode.** UBI's own `.env` must set `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. In UBI's default direct mode, the library's plain orders still work, but anything carrying a price reference, a quantity reference or a synthetic order is refused by the library with [`DirectPlacementError`](../python-api/errors.md#directplacementerror) before it is sent.
-3. **UBI's order engine service is running.** Engine mode hands every order to a separate process, `unified-orders@order_engine.service`. If the setting says `engine` but the process is stopped, every order is refused, or waits and fails with [`OrderOutcomeUnknownError`](../python-api/errors.md#orderoutcomeunknownerror); that happened on this machine on 2026-09-26 before the engine was started.
+2. **UBI's order engine service is running.** UBI hands every order to a separate process, `unified-orders@order_engine.service`, and has done so for every order since it removed its direct placement mode on 2026-09-27. While the process is stopped, UBI refuses every order with HTTP 503, which the library raises as [`ServiceUnavailableError`](../python-api/errors.md#serviceunavailableerror).
 
-The output below shows the three checks on the development machine on 2026-09-26. UBI's greeting route needs no token, so `curl` can call it directly.
+The output below shows the two checks on the development machine on 2026-09-26. UBI's greeting route needs no token, so `curl` can call it directly.
 
 === "Command"
 
     ```bash
     curl http://127.0.0.1:8080/api/
-    grep ORDER_PLACEMENT ~/Projects/unified_broker_interface/.env
     systemctl --user is-active unified-rest-api.service unified-orders@order_engine.service
     ```
 
@@ -145,7 +143,6 @@ The output below shows the three checks on the development machine on 2026-09-26
 
     ```text
     {"message":"Welcome to the Unified Broker Interface API"}
-    UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine
     active
     active
     ```

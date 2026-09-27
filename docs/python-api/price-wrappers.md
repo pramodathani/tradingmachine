@@ -112,16 +112,14 @@ Apart from the two market and the two limit wrappers, no wrapper reads the order
 flowchart LR
     A["buy_at_second_best_offer_price<br/>quantity=10, product=mis"] --> B["place_order<br/>order_type limit, no price<br/>price_reference offer_level 2"]
     B --> C{"Is UBI's order<br/>engine running?"}
-    C -- "not yet known" --> D["one dry run to find out"]
-    D --> C
-    C -- "no" --> E["DirectPlacementError<br/>nothing is sent"]
+    C -- "no" --> E["ServiceUnavailableError<br/>HTTP 503, nothing is sent"]
     C -- "yes" --> F["UBI reads the quote,<br/>takes offer level 2,<br/>rounds it to the tick"]
     F --> G{"Is the book<br/>that deep?"}
     G -- "no" --> H["ServiceUnavailableError<br/>HTTP 503"]
     G -- "yes" --> I["limit order sent<br/>to a broker"]
 ```
 
-Because the price-reference wrappers depend on the engine, they need UBI running with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine`. The market and limit wrappers send a plain price and work in either mode, which is also why the holdings methods, which only use those four, work in either mode. [Placement modes](../architecture/placement-modes.md) explains the difference.
+Every order goes through UBI's order engine, so every wrapper needs it running. A limit order priced by a reference is never held by the engine, so these wrappers send their order at once; only the two limit wrappers can be held, as described [below](#market-and-limit). [Order engine](../architecture/order-engine.md) explains what the engine does.
 
 The wrappers have no `dry_run` argument. To preview one, send the same order through `place_order`. The example below previews `buy_at_best_offer_price(quantity=1, product="cnc")` on RELIANCE; its output was captured from a local UBI on 2026-09-26, reformatted across lines, when the only level in the book was one offer at 1226.0.
 
@@ -154,7 +152,7 @@ The wrappers have no `dry_run` argument. To preview one, send the same order thr
 
 ## Common parameters
 
-Every wrapper takes the same five parameters, in the same positions, so you can switch from one to another by changing only its name. The two limit wrappers put `price` first, and the two marketable wrappers add `buffer_percent` at the end.
+Every wrapper takes the same five parameters, in the same positions, so you can switch from one to another by changing only its name. The two limit wrappers put `price` first and add `hold` at the end, and the two marketable wrappers add `buffer_percent` at the end.
 
 | Name | Type | Required | Default | Description |
 |---|---|:---:|---|---|
@@ -164,6 +162,7 @@ Every wrapper takes the same five parameters, in the same positions, so you can 
 | `validity` | `str` or `None` | no | `None` | `day` or `ioc`. UBI uses `day` when it is `None`. |
 | `after_market` | `bool` | no | `False` | `True` sends an after-market order. |
 | `tag` | `str` or `None` | no | `None` | A label of up to twenty letters and digits. |
+| `hold` | `bool` | no | `True` | For the limit pair only: `True` lets UBI's order engine hold a `day` order until the other side of the book reaches the price, and `False` sends it to a broker at once. |
 | `buffer_percent` | `float` or `None` | no | `None` | For the marketable pair only: how far past the best price to set the cap, such as `0.5` for half a per cent. A negative number moves it the other way. |
 
 Anything beyond these, such as a disclosed quantity, a stop, or one of the offsets below, is a reason to call `place_order` directly.
@@ -178,8 +177,7 @@ Every wrapper can raise any exception `place_order` raises. The table below list
 
 | Exception | When |
 |---|---|
-| `ServiceUnavailableError` | UBI could not work the price out: there is no live quote, the book is not as deep as the level asked for, or the brokers do not agree on a tick size. This is what an order book looks like outside market hours. |
-| `DirectPlacementError` | UBI is placing orders directly, without its engine, so it would ignore the reference. Nothing was sent. |
+| `ServiceUnavailableError` | UBI could not work the price out: there is no live quote, the book is not as deep as the level asked for, or the brokers do not agree on a tick size. This is what an order book looks like outside market hours. It is also raised when UBI's order engine is not running. |
 | `BadRequestError` | A field is invalid, or the offsets pushed the price to zero or below. |
 | `OrderRejectedError` | The broker refused the order. |
 | `UnifiedBrokerInterfaceError` | Any other failure reported by, or on the way to, UBI. |
@@ -254,11 +252,13 @@ The table below shows how each wrapper would fare against that book, by UBI's ru
 | `buy_at_market_price`, `sell_at_market_price`, the limit pair | Not affected, because they send no reference. |
 
 !!! tip "Ask for a shallower level, or state the price"
-    When a 503 names the book's depth, ask for a shallower level or a kind that needs less of the book, such as `last`. When the market is closed, a plain limit order with `after_market=True` is the order that will survive until the next session.
+    When a 503 names the book's depth, ask for a shallower level or a kind that needs less of the book, such as `last`. When the market is closed, a limit order with `after_market=True` is the order that will survive until the next session, because UBI sends an after-market order to the broker at once rather than holding it in its engine.
 
 ## Market and limit
 
-These four send a plain order with no reference, so they work in either of UBI's placement modes. They are the ones the position and holdings methods use.
+These four send a plain order with no reference. They are the ones the position and holdings methods use.
+
+UBI's order engine holds a `day` limit order from the two limit wrappers rather than resting it at a broker, and sends it only once the other side of the book reaches the price, so an order that never fills costs no order messages. Until then the answer has an `outcome` of `armed` and a `parent_id` instead of an `order_id`, the order is in [`parents`](orders.md#parents) rather than in `orders`, and it is changed with [`modify_order(parent_id=...)`](orders.md#modify_order) and cancelled with [`cancel_parent`](orders.md#cancel_parent). Pass `hold=False` to send the order to a broker at once, which an instrument with no live quote needs, because the engine would otherwise hold its order all day without sending it. The holdings methods of `MutualFund` and `FixedIncome` always pass it; [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) lists when else to.
 
 The example below buys ten shares at market for an intraday position, and places a limit sell of the same ten at 1250 rupees.
 
@@ -275,7 +275,7 @@ The example below buys ten shares at market for an intraday position, and places
 
 Buys at whatever price the market is asking. A market order takes the best price on offer and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
 
-It sends a `market` order with no price and no reference, so it works in either of UBI's placement modes.
+It sends a `market` order with no price and no reference, and UBI's engine sends it at once.
 
 ### sell_at_market_price
 
@@ -283,23 +283,23 @@ It sends a `market` order with no price and no reference, so it works in either 
 
 Sells at whatever price the market is bidding. A market order takes the best price being bid and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
 
-It sends a `market` order with no price and no reference, so it works in either of UBI's placement modes.
+It sends a `market` order with no price and no reference, and UBI's engine sends it at once.
 
 ### buy_at_limit_price
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `buy_at_limit_price(price, quantity, product, validity=None, after_market=False, tag=None)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `buy_at_limit_price(price, quantity, product, validity=None, after_market=False, tag=None, hold=True)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
 
 Buys at a price of your choosing, or better. A limit buy never pays more than the price given. It waits in the market until someone sells at that price or lower, and it may never fill at all.
 
-It sends a `limit` order at the `price` you give, with no reference, so it works in either of UBI's placement modes.
+It sends a `limit` order at the `price` you give, with no reference. UBI's engine holds it until the book reaches the price, unless `hold` is `False`, which sends `synthetic={"type": "simple"}` so that it goes to a broker at once.
 
 ### sell_at_limit_price
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `sell_at_limit_price(price, quantity, product, validity=None, after_market=False, tag=None)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `sell_at_limit_price(price, quantity, product, validity=None, after_market=False, tag=None, hold=True)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
 
 Sells at a price of your choosing, or better. A limit sell never accepts less than the price given. It waits in the market until someone buys at that price or higher, and it may never fill at all.
 
-It sends a `limit` order at the `price` you give, with no reference, so it works in either of UBI's placement modes.
+It sends a `limit` order at the `price` you give, with no reference. UBI's engine holds it until the book reaches the price, unless `hold` is `False`, which sends `synthetic={"type": "simple"}` so that it goes to a broker at once.
 
 ## Top of the book
 

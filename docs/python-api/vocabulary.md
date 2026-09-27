@@ -22,7 +22,6 @@ The table below is an index of the sections on this page.
 | [Price reference kinds](#price-reference-kinds) | `place_order(price_reference=...)` and the price wrappers |
 | [Quantity reference kinds](#quantity-reference-kinds) | `place_order(quantity_reference=...)` and the position methods |
 | [Synthetic order types](#synthetic-order-types) | `place_order(synthetic=...)` and the classes in `tradingmachine.orders` |
-| [Placement modes](#placement-modes) | The client's `placement_mode` |
 | [Brokers](#brokers) | `carried_by`, the `broker` of a quote or an order, and `broker=` on modify and cancel |
 
 UBI's own glossary is [Constants](https://pramodathani.github.io/unified_broker_interface/rest-api/constants/) on the UBI site, and every value here was checked against it.
@@ -122,7 +121,8 @@ Every answer to placing, modifying or cancelling an order carries an `outcome` s
 | Value | HTTP status | What the library does | Meaning |
 |---|---|---|---|
 | `accepted` | <span class="status s2">200</span> | Returns the answer | The broker took the request. The exchange can still refuse the order afterwards, so read its fate from `orders`. |
-| `armed` | <span class="status s2">202</span> | Returns the answer | A synthetic order is waiting for a price, and nothing has reached a broker yet |
+| `partial` | <span class="status s2">207</span> | Returns the answer | Some of the orders of a type that sends several at once were accepted and some were not; each order's own outcome is listed in the answer |
+| `armed` | <span class="status s2">202</span> | Returns the answer | A held limit order or a synthetic order is waiting for a price, and nothing has reached a broker yet |
 | `scheduled` | <span class="status s2">202</span> | Returns the answer | A synthetic order is waiting for a time |
 | `rejected` | <span class="status s4">422</span> | Raises [`OrderRejectedError`](errors.md#orderrejectederror) | The broker answered and refused |
 | `unknown` | <span class="status s5">504</span> | Raises [`OrderOutcomeUnknownError`](errors.md#orderoutcomeunknownerror) | The request may or may not have taken effect, so read the order book before sending it again |
@@ -226,7 +226,7 @@ A `quantity_reference` describes a quantity instead of stating it, and UBI's eng
 
 ## Synthetic order types
 
-A `synthetic` dict makes an order one of the forty-two order types UBI's engine runs. Its `type` names the kind. The classes in `tradingmachine.orders` build the dict, and their module names spell out UBI's abbreviations; the table below maps each type to its class.
+A `synthetic` dict makes an order one of the fifty-three order types UBI's engine runs. Its `type` names the kind. The classes in `tradingmachine.orders` build the dict, and their module names spell out UBI's abbreviations; the table below maps each type to its class.
 
 | `type` | Class | `type` | Class |
 |---|---|---|---|
@@ -251,17 +251,14 @@ A `synthetic` dict makes an order one of the forty-two order types UBI's engine 
 | `liquidity_seeking` | `LiquiditySeekingOrder` | `legged_spread` | `LeggedSpreadOrder` |
 | `iceberg` | `IcebergOrder` | `strategy_stop` | `StrategyStopOrder` |
 | `accumulation` | `AccumulationOrder` | `exposure_hedge` | `ExposureHedgeOrder` |
+| `opening_auction` | `OpeningAuctionOrder` | `closing_price` | `ClosingPriceOrder` |
+| `underlying_peg` | `UnderlyingPegOrder` | `volatility` | `VolatilityOrder` |
+| `stepped_stop` | `SteppedStopOrder` | `close_on_trigger` | `CloseOnTriggerOrder` |
+| `stop_and_reverse` | `StopAndReverseOrder` | `attached_hedge` | `AttachedHedgeOrder` |
+| `scale_with_profit_taker` | `ScaleWithProfitTakerOrder` | `two_sided_quote` | `TwoSidedQuoteOrder` |
+| `account_conditional` | `AccountConditionalOrder` | | |
 
 Note that `vwap` is both a price reference kind and a synthetic type, and the two mean different things: the first prices one order at the day's average, and the second works an order over time. [Synthetic orders](synthetic-orders.md) documents each class.
-
-## Placement modes
-
-The placement mode says who sends orders to the brokers. It is set on UBI with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT`, and the client records what it has seen in [`placement_mode`](client.md#placement_mode).
-
-| Value | Meaning |
-|---|---|
-| `direct` | UBI's default. The API worker sends the order itself, and ignores any reference or synthetic object. |
-| `engine` | The API hands the order to the order engine, which resolves references and runs synthetic orders. This library needs it. |
 
 ## Brokers
 

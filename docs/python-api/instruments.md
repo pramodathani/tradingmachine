@@ -325,19 +325,13 @@ This method takes no parameters.
 
 #### Example
 
-The capture on 2026-09-26 read the client's `placement_mode` through this method after a dry run with a price reference.
+The example below reads the shared client and asks UBI whether its session is connected. No output was captured for it.
 
 === "Python"
 
     ```python
     client = reliance.shared_unified_broker_interface()
-    print(repr(client.placement_mode))
-    ```
-
-=== "Output"
-
-    ```text
-    'engine'
+    print(client.status())
     ```
 
 #### Returns

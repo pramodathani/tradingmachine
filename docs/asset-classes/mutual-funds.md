@@ -57,6 +57,7 @@ MutualFund(exchange='nse', segment='nse_mutual_funds', symbol='ABSLFTTIDG')
 The three order methods send ordinary `cnc` orders, which is the product UBI accepts for this segment. Two things follow from that.
 
 - **Give a price.** With no quote, there is nothing for a market order to be priced against, so a limit price is the only sensible form. The methods still send a market order if you pass no price, because the library does not second-guess what UBI will accept, but the docstrings ask for a price.
+- **The limit order is sent at once.** Since 2026-09-27 UBI's order engine holds a plain limit order until a live quote shows the other side reaching its price. Nothing quotes a mutual fund, so a held order would wait all day and never be sent. The holdings methods therefore pass `hold=False`, which sends the order to a broker at once, as [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains. Call `buy_at_limit_price` or `sell_at_limit_price` yourself only with `hold=False` too.
 - **Whether it becomes a subscription is up to the broker.** No live order has been sent through these methods, so it is not known how the broker treats a `cnc` order for a mutual fund.
 
 !!! danger "These are real orders"

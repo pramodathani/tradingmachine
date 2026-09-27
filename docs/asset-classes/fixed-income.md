@@ -101,7 +101,7 @@ A row from the middle of that option chain, `633GS2035 2026-09-24 97.25 PE`, was
 
 ## Holding a bond
 
-`FixedIncome` carries the same six holdings members as [`Equity`](equities.md#holding-a-share), copied into the class rather than shared, and no other class in this family has them. `fixed_income` is one of UBI's cash segments, so a bond is reported in the account's holdings exactly as a share is. The members always use the `cnc` product and sell only units that are not pledged. [Holdings](../python-api/holdings.md) documents them.
+`FixedIncome` carries the same six holdings members as [`Equity`](equities.md#holding-a-share), copied into the class rather than shared, and no other class in this family has them. `fixed_income` is one of UBI's cash segments, so a bond is reported in the account's holdings exactly as a share is. The members always use the `cnc` product and sell only units that are not pledged. With a price, they send their limit order with `hold=False`, straight to a broker, because UBI's order engine would otherwise hold it until a live quote reached the price, and nothing quotes a cash bond; [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains the rule. [Holdings](../python-api/holdings.md) documents them.
 
 Two differences from a share are worth knowing. A holding row's `symbol` and `isin` hold the same string here, because the symbol already is the ISIN, which makes matching a holding to its bond more reliable than it is for a share. And a bond held only at Groww is not reported at all, because UBI looks a Groww holding up by the broker's ticker among symbols that are ISINs, and never finds it.
 

@@ -262,10 +262,13 @@ classDiagram
         transaction_type, product, order_type
         quantity, price, trigger_price
         price_reference, quantity_reference
-        closes_position, dry_run
+        closes_position, reduce_only, dry_run
+        parent_id
         synthetic
         synthetic_fields()
         place()
+        cancel()
+        parent, orders, trades
     }
     class BracketOrder {
         SYNTHETIC_TYPE bracket
@@ -303,20 +306,20 @@ classDiagram
     ExposureWatch --> TradeableInstrument
 ```
 
-The three subclasses in the diagram stand for all 42. Every type is its own class in its own module, and each adds only its settings and a `synthetic_fields` method that names them the way UBI does. The base class builds the `synthetic` object, `{"type": ..., **settings}`, and `place()` calls `place_order` with it, so a synthetic order is placed exactly like a plain one and goes through the same [placement-mode probe](placement-modes.md#the-placement-mode-probe).
+The three subclasses in the diagram stand for all 53. Every type is its own class in its own module, and each adds only its settings and a `synthetic_fields` method that names them the way UBI does. The base class builds the `synthetic` object, `{"type": ..., **settings}`, and `place()` calls `place_order` with it, so a synthetic order is placed exactly like a plain one, through [UBI's order engine](order-engine.md). `place()` keeps the `parent_id` UBI answers with, and `cancel()` and the `parent`, `orders` and `trades` properties use it to reach the parent through the instrument's parent members.
 
 Five types take a list of instruments rather than one. `BasketOrder`, `OneCancelsAllOrder`, `LeggedSpreadOrder` and `StrategyStopOrder` take a list of `OrderCandidate` objects, and the first candidate's instrument anchors the request. `ExposureHedgeOrder` is built on the hedge instrument and takes a list of `ExposureWatch` objects for the instruments it watches. [Synthetic orders](../python-api/synthetic-orders.md) documents every type.
 
 ## The account sits above the instruments
 
-`Account`, in `tradingmachine.accounts.account`, stands for the whole trading account rather than one instrument. It takes the same shared client, and its one member, `flatten`, sends `POST /api/orders/flatten`, which cancels every open order at every broker and then closes every position. The caller must pass `confirm="FLATTEN"`. The table below compares it with the closest per-instrument member.
+`Account`, in `tradingmachine.accounts.account`, stands for the whole trading account rather than one instrument. It takes the same shared client. Its `flatten` sends `POST /api/orders/flatten`, which halts every synthetic order the engine is running, cancels every open order at every broker and then closes every position; its `parents` property lists every open parent in the account; and its `intent` method reads the engine's answer to an order whose placement stopped waiting. The caller must pass `confirm="FLATTEN"`. The table below compares it with the closest per-instrument member.
 
 | | `TradeableInstrument.liquidate_all_positions` | `Account.flatten` |
 |---|---|---|
 | Scope | This instrument's positions | Every position and open order in the account |
 | Open orders | Left alone | Cancelled first, at every broker |
 | UBI route | One `POST /api/orders/place` per product held | One `POST /api/orders/flatten` |
-| Armed synthetic orders | Left alone | Left alone, so they can still trade afterwards |
+| Armed synthetic orders | Left alone | Halted first, so they cannot trade afterwards |
 | Timeout | The client's 30 seconds per request | 120 seconds by default, through `post(..., timeout_seconds=...)` |
 
-[The account](../python-api/account.md) documents `flatten` in full.
+[The account](../python-api/account.md) documents its members in full.

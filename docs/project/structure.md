@@ -4,7 +4,7 @@ The repository is an installable Python library with its documentation, its loca
 
 ## The tree
 
-The annotated tree below shows every directory and the files that matter. The 42 synthetic order modules and the 13 analysis modules are summarised rather than listed one by one.
+The annotated tree below shows every directory and the files that matter. The 53 synthetic order modules and the 13 analysis modules are summarised rather than listed one by one.
 
 ```text
 tradingmachine/
@@ -24,7 +24,7 @@ tradingmachine/
 │   ├── python-api/                one page per group of members, Kite Connect style
 │   ├── asset-classes/             one page per family module
 │   ├── analysis/                  indicators, patterns, statistics, signals and backtests
-│   ├── architecture/              layers, the instrument model, placement modes, design choices
+│   ├── architecture/              layers, the instrument model, the order engine, design choices
 │   ├── project/                   this tab
 │   ├── assets/diagrams/           the animated SVG diagrams, included with snippets
 │   └── stylesheets/extra.css      every custom class the pages use
@@ -50,7 +50,7 @@ tradingmachine/
     │   ├── synthetic_order.py     SyntheticOrder, the shared base
     │   ├── order_candidate.py     OrderCandidate, one leg of a multi-instrument order
     │   ├── exposure_watch.py      ExposureWatch, one watched instrument of an exposure hedge
-    │   └── 42 modules             one synthetic order type each, such as bracket.py
+    │   └── 53 modules             one synthetic order type each, such as bracket.py
     ├── unified_broker_interface/
     │   ├── client.py              UnifiedBrokerInterface, the only code that speaks HTTP
     │   └── exceptions.py          one error class per HTTP status UBI returns
@@ -62,35 +62,35 @@ tradingmachine/
 
 ## Module counts
 
-The table below counts the Python files and lines in each package, measured on 2026-09-26. The counts include each package's `__init__.py`.
+The table below counts the Python files and lines in each package, measured on 2026-09-27. The counts include each package's `__init__.py`.
 
 | Package | Python files | Lines | What it holds | Third-party imports |
 |---|---:|---:|---|---|
 | `tradingmachine` | 1 | 17 | The package docstring and `__version__` | none |
-| `tradingmachine.accounts` | 2 | 89 | `Account` | none |
-| `tradingmachine.assets` | 9 | 7,818 | The instrument classes, the 27 family classes and their errors | `pandas` |
+| `tradingmachine.accounts` | 2 | 133 | `Account` | `pandas` |
+| `tradingmachine.assets` | 9 | 7,939 | The instrument classes, the 27 family classes and their errors | `pandas` |
 | `tradingmachine.assets.analysis` | 15 | 7,827 | `PriceAnalysis` and the 13 analysis classes | `talib`, `backtesting`, `numpy`, `pandas` |
-| `tradingmachine.orders` | 46 | 5,381 | `SyntheticOrder`, two helper classes and 42 order types | none |
-| `tradingmachine.unified_broker_interface` | 3 | 513 | `UnifiedBrokerInterface` and its 14 exception classes | `requests`, `pymongo` |
+| `tradingmachine.orders` | 57 | 7,078 | `SyntheticOrder`, two helper classes and 53 order types | `pandas`, for type hints only |
+| `tradingmachine.unified_broker_interface` | 3 | 507 | `UnifiedBrokerInterface` and its 13 exception classes | `requests`, `pymongo` |
 | `tradingmachine.utilities` | 2 | 133 | `Configuration` | `dotenv` |
-| **Total** | **78** | **21,778** | | |
+| **Total** | **89** | **23,634** | | |
 
 The chart below shows the same line counts, which makes it plain that the library's weight is in its instruments and their analysis, not in its plumbing.
 
 ```vegalite
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "description": "Lines of Python in each package of tradingmachine on 2026-09-26",
+  "description": "Lines of Python in each package of tradingmachine on 2026-09-27",
   "width": "container",
   "height": 200,
   "data": {
     "values": [
       {"package": "assets.analysis", "lines": 7827},
-      {"package": "assets", "lines": 7818},
-      {"package": "orders", "lines": 5381},
-      {"package": "unified_broker_interface", "lines": 513},
+      {"package": "assets", "lines": 7939},
+      {"package": "orders", "lines": 7078},
+      {"package": "unified_broker_interface", "lines": 507},
       {"package": "utilities", "lines": 133},
-      {"package": "accounts", "lines": 89},
+      {"package": "accounts", "lines": 133},
       {"package": "tradingmachine", "lines": 17}
     ]
   },
@@ -106,7 +106,7 @@ The chart below shows the same line counts, which makes it plain that the librar
 }
 ```
 
-`.claude/notes/` holds 79 notes. Every source module has one except the five `__init__.py` files that hold no reasoning worth recording: the top-level one and those of `assets`, `assets.analysis`, `unified_broker_interface` and `utilities`. The other six notes cover `mkdocs.yml`, `pyproject.toml`, `docker-compose.yml`, the two scripts and the documentation workflow.
+`.claude/notes/` holds 90 notes. Every source module has one except the five `__init__.py` files that hold no reasoning worth recording: the top-level one and those of `assets`, `assets.analysis`, `unified_broker_interface` and `utilities`. The other six notes cover `mkdocs.yml`, `pyproject.toml`, `docker-compose.yml`, the two scripts and the documentation workflow.
 
 ## Which package imports which
 
@@ -115,7 +115,7 @@ The diagram below shows every import from one package of the library into anothe
 ```mermaid
 flowchart TB
     AC["accounts<br/>Account"]
-    OR["orders<br/>42 synthetic order types"]
+    OR["orders<br/>53 synthetic order types"]
     AS["assets<br/>instruments, 27 family classes, exceptions"]
     AN["assets.analysis<br/>13 analysis classes"]
     UC["unified_broker_interface<br/>client, exceptions"]
@@ -130,7 +130,7 @@ flowchart TB
 
 Three details of the graph are worth knowing.
 
-- `orders` does not import `unified_broker_interface`. A synthetic order sends itself through `TradeableInstrument.place_order`, so the placement-mode probe and the shared client apply to it without any code of its own.
+- `orders` does not import `unified_broker_interface`. A synthetic order sends itself through `TradeableInstrument.place_order`, so the shared client applies to it without any code of its own, and its `cancel()` and `parent` go through the instrument's parent members in the same way.
 - `accounts` imports `assets.instruments` only to call `Instrument.shared_unified_broker_interface()`, so that an `Account` shares the instruments' client instead of logging them out with a second one.
 - Inside `assets`, every family module imports `instruments` and `exceptions`, and `instruments` alone imports the thirteen analysis modules. Inside `orders`, every type imports `synthetic_order`, and the multi-instrument types also import `order_candidate` or `exposure_watch`.
 

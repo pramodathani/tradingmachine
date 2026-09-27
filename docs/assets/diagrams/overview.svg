@@ -59,7 +59,7 @@
   <text class="title" x="85" y="185" text-anchor="middle">Your program</text>
   <rect class="box" x="215" y="68" width="250" height="54" rx="8"/>
   <text class="title" x="340" y="91" text-anchor="middle">Orders and the account</text>
-  <text class="small" x="340" y="109" text-anchor="middle">42 synthetic order classes, Account.flatten</text>
+  <text class="small" x="340" y="109" text-anchor="middle">53 synthetic order classes, Account.flatten</text>
   <rect class="box" x="215" y="150" width="250" height="54" rx="8"/>
   <text class="title" x="340" y="173" text-anchor="middle">Instrument objects</text>
   <text class="small" x="340" y="191" text-anchor="middle">27 classes, from Equity to MutualFund</text>

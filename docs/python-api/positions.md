@@ -84,7 +84,7 @@ The practical difference between the two paths is where a mistake is caught. A m
 
 The reference's optional `product` is spelled the positions' way, `delivery`, `intraday` or `carry`, not the order way. The library translates it for you. UBI's `add_to_position` kind reads no position, so it cannot choose a side, and that is why `add_to_position` still works the side out in the library rather than sending a reference.
 
-Only UBI's order engine resolves a quantity reference, so `reduce_position` and `liquidate_position` need UBI running in engine mode, and they raise `DirectPlacementError` without sending anything when it is not. UBI's page on [quantity references](https://pramodathani.github.io/unified_broker_interface/rest-api/price-quantity-references/#quantity-references) has the full rules.
+UBI's order engine resolves the quantity reference when it sends the order, so `reduce_position` and `liquidate_position` need the engine running, and UBI refuses them with HTTP 503, raised as `ServiceUnavailableError`, when it is not. UBI's page on [quantity references](https://pramodathani.github.io/unified_broker_interface/rest-api/price-quantity-references/#quantity-references) has the full rules.
 
 ## Reading positions
 
@@ -220,7 +220,7 @@ The four members below place orders. `price` is optional on all of them: given, 
 
 This method makes an existing position bigger, or opens a new one. It reads the positions, and the direction follows the one you hold: a long position is added to by buying and a short one by selling. `transaction_type` is needed only when nothing is held yet, and then `product` is needed too, because neither can be read from a position that does not exist. A `transaction_type` that contradicts the position held raises `PositionError` and points you at `reduce_position`, rather than silently reducing the position.
 
-It sends a plain market or limit order through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price) and its three siblings, so it works in either of UBI's placement modes.
+It sends a plain market or limit order through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price) and its three siblings. A limit order sent this way is held by UBI's order engine until the book reaches its price, as [Price wrappers](price-wrappers.md#market-and-limit) explains.
 
 #### Parameters
 
@@ -308,7 +308,7 @@ The `dict` that [`place_order`](orders.md#place_order) returns.
 |---|---|
 | `PositionError` | No product was named and there is not exactly one tradeable position, or the product named is not `cnc`, `mis` or `nrml`. |
 | `ConflictError` | The product named is not held in this instrument, which UBI answers with HTTP 409. |
-| `DirectPlacementError` | UBI is placing orders directly, so it would ignore the quantity reference. Nothing was sent. |
+| `ServiceUnavailableError` | UBI's order engine is not running, so nothing was sent. |
 | `UnifiedBrokerInterfaceError` | Any other failure reported by, or on the way to, UBI. |
 
 ??? note "Under the hood"

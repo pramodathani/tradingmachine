@@ -1,6 +1,6 @@
 # Configuration
 
-The library needs to know three things: where UBI is, where this project's MongoDB is, and UBI's api key and secret. The first two come from environment variables, usually written in a `.env` file at the repository root. The third comes from a document in MongoDB. UBI itself must also be set to engine mode, which is configured in UBI, not here.
+The library needs to know three things: where UBI is, where this project's MongoDB is, and UBI's api key and secret. The first two come from environment variables, usually written in a `.env` file at the repository root. The third comes from a document in MongoDB. UBI's order engine must also be running, which is set up in UBI, not here.
 
 ## Where each setting is read
 
@@ -16,7 +16,7 @@ flowchart LR
     CL -- "reads settings where<br/>broker_name is<br/>unified_broker_interface" --> MG
     MG -- "api_key, api_secret" --> CL
     CL -- "POST /api/session/connect" --> UBI["UBI<br/>127.0.0.1:8080"]
-    UENV["UBI's own .env<br/>ORDER_PLACEMENT=engine"] -.-> UBI
+    UENV["UBI's own .env<br/>order engine settings"] -.-> UBI
 ```
 
 ## How the variables are read
@@ -134,22 +134,17 @@ The table below lists what goes wrong when part of this configuration is missing
 | The right key or secret | [`AuthenticationError`](../python-api/errors.md#authenticationerror) | The first request |
 | UBI itself | [`UnreachableError`](../python-api/errors.md#unreachableerror) | The first request |
 
-## Engine mode is configured in UBI
+## The order engine is configured in UBI
 
-UBI decides whether orders go straight from its API to a broker, which it calls direct mode, or through its order engine, which it calls engine mode. The setting lives in UBI's own `.env`, not in this project, and the library assumes it is `engine`.
+UBI places every order through its order engine, a separate UBI process, and its settings live in UBI's own `.env`, not in this project. There is nothing to configure here. Until 2026-09-27 UBI also had a direct placement mode, chosen with `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT`; that setting no longer exists and UBI ignores it if it is still set.
 
-```bash
-UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT=engine
-```
+The table below shows which parts of the library need the engine running.
 
-The table below shows which parts of the library depend on it. Nothing here can change UBI's mode; the library can only notice it and refuse.
+| Part of the library | Needs the order engine |
+|---|:---:|
+| Candles, quotes, discovery, positions, holdings and order book reads | :material-close: |
+| Every order: `place_order`, every price wrapper, the position and holdings methods, and every class in `tradingmachine.orders` | :material-check: |
+| `modify_order` and `cancel_order` on an order placed outside the engine | :material-close:, UBI sends them from its API |
+| `modify_order` and `cancel_order` on an order the engine placed, `cancel_parent` and `Account.flatten`'s halt | :material-check: |
 
-| Part of the library | Direct mode | Engine mode |
-|---|---|---|
-| Candles, quotes, discovery, positions and holdings reads | Works | Works |
-| `place_order` with a plain price and quantity, and the market and limit wrappers | Works | Works |
-| The other price wrappers, which send a `price_reference` | Refused with `DirectPlacementError`, nothing sent | Works |
-| `reduce_position`, `liquidate_position` and `liquidate_all_positions`, which send a `quantity_reference` | Refused with `DirectPlacementError`, nothing sent | Works |
-| Every class in `tradingmachine.orders`, which sends a `synthetic` object | Refused with `DirectPlacementError`, nothing sent | Works |
-
-UBI has no route that reports its mode, so the library learns it from the first order that needs the engine, by sending that order once as a dry run. [The placement-mode probe](../architecture/placement-modes.md#the-placement-mode-probe) explains how, and [First steps](first-steps.md#rehearse-an-order-with-a-dry-run) shows it happening.
+[Order engine](../architecture/order-engine.md) explains what the engine does with an order, including why it holds a plain limit order.

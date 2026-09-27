@@ -14,7 +14,7 @@ The table below lists what the machine needs, and why each piece is there.
 | The TA-Lib C library | The `TA-Lib` Python package wraps it, and `pip` cannot install the C part |
 | Docker with Compose | `docker-compose.yml` runs this project's Redis, MongoDB and TimescaleDB |
 | A running UBI on `127.0.0.1:8080` | Every candle, quote and order comes from it |
-| UBI in engine mode, with its order engine running | The price wrappers, the position methods and every synthetic order depend on it |
+| UBI's order engine running | UBI places every order through it, and refuses orders while it is stopped |
 | UBI's api key and secret | The client logs in with them, reading them from this project's MongoDB |
 
 !!! warning "UBI trades with real money"
@@ -35,7 +35,7 @@ flowchart LR
     A["TA-Lib C library"] --> B["venv and<br/>pip install -e"]
     B --> C["docker compose up -d"]
     C --> D[".env and the<br/>MongoDB settings document"]
-    D --> E["UBI running<br/>in engine mode"]
+    D --> E["UBI and its<br/>order engine running"]
     E --> F["First steps<br/>in Python"]
     C -.-> MG[("MongoDB<br/>port 2003")]
     D -.-> MG
