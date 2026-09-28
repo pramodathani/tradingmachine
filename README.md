@@ -58,7 +58,7 @@ Four ideas shape everything above.
 
 **Order types are built in UBI, not here.** UBI's order engine can work a price out from the order book, a quantity out from a position, and run a bracket or a trailing stop on its own. So the price wrappers, the position methods and `tradingmachine.orders` only describe what is wanted and let UBI do it. Every order goes through UBI's order engine, which also holds a plain limit order until the book reaches its price rather than resting it at a broker.
 
-**Duplication between asset classes is deliberate.** `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it.
+**Duplication between asset classes is deliberate.** `src/tradingmachine/assets/fixed_income.py` is a copy of `src/tradingmachine/assets/equities.py` rather than a generalisation of it, and each of the five holdable classes carries its own copy of the free-to-sell arithmetic. Each family then reads as one self-contained file, and a fact true only of bonds can be written into the bond file without anyone checking what else inherits it. The exception is what every futures or option contract shares, such as its days to expiry, its underlying's price, a future's basis and an option's greeks, which lives once on the derivative base classes `Futures` and `Option` in `src/tradingmachine/assets/instruments.py`.
 
 ## Asset class coverage
 
@@ -140,14 +140,16 @@ print(infosys.last_price)
 
 ```text
 src/tradingmachine/assets/
-├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument
+├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument, and the
+│                          derivative bases Derivative, Futures, Option, IndexFutures, IndexOption
+├── option_pricing.py      BlackScholes, behind implied volatility and the greeks
 ├── equities.py            the six equity classes, one per UBI equity segment
 ├── fixed_income.py        the six fixed income classes
 ├── commodities.py         the six commodity classes
 ├── currencies.py          the six currency classes
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
-├── exceptions.py          InstrumentError and its thirty-one subclasses
+├── exceptions.py          InstrumentError and its thirty-six subclasses
 └── analysis/              thirteen classes of candle analysis that Instrument inherits
 
 src/tradingmachine/orders/
