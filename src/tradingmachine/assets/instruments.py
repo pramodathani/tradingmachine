@@ -207,6 +207,7 @@ class Instrument(
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and keeps its details.
 
@@ -222,6 +223,7 @@ class Instrument(
             strike_price: The float strike price of an option, or None.
             option_type: The str option type of an option, `CE` or `PE`, or None.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             InstrumentError: UBI has no instrument matching the lookup.
@@ -241,7 +243,23 @@ class Instrument(
             "strike_price": strike_price,
             "option_type": option_type,
         }
-        details = self._fetch_details(lookup)
+        if details is None:
+            details = self._fetch_details(lookup)
+        self._apply_details(details)
+
+    def _apply_details(self, details: dict) -> None:
+        """Copies the instrument's identity, lot size and tick size from UBI's details.
+
+        Args:
+            details: The dict UBI returns from `/api/instruments/details` for this instrument.
+
+        Returns:
+            None.
+
+        Raises:
+            KeyError: details lacks a field every UBI details answer carries, such as `instrument_id`.
+            ValueError: A date in details is not a valid ISO date.
+        """
         self.instrument_id = details["instrument_id"]
         self.exchange = details["exchange"]
         self.segment = details["segment"]
@@ -730,6 +748,7 @@ class TradeableInstrument(Instrument):
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and checks that it is not an index.
 
@@ -743,6 +762,7 @@ class TradeableInstrument(Instrument):
             strike_price: The float strike price of an option, or None.
             option_type: The str option type of an option, `CE` or `PE`, or None.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             TradeableInstrumentError: The instrument is an index.
@@ -760,6 +780,7 @@ class TradeableInstrument(Instrument):
             strike_price=strike_price,
             option_type=option_type,
             unified_broker_interface=unified_broker_interface,
+            details=details,
         )
         if self.segment.endswith(INDEX_SEGMENT_SUFFIX):
             raise exceptions.TradeableInstrumentError(
@@ -3382,6 +3403,7 @@ class NonTradeableInstrument(Instrument):
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and checks that it is an index.
 
@@ -3395,6 +3417,7 @@ class NonTradeableInstrument(Instrument):
             strike_price: A float strike price, or None, since an index has none.
             option_type: A str option type, or None, since an index has none.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             NonTradeableInstrumentError: The instrument is not an index, so it can be traded.
@@ -3412,6 +3435,7 @@ class NonTradeableInstrument(Instrument):
             strike_price=strike_price,
             option_type=option_type,
             unified_broker_interface=unified_broker_interface,
+            details=details,
         )
         if not self.segment.endswith(INDEX_SEGMENT_SUFFIX):
             raise exceptions.NonTradeableInstrumentError(
