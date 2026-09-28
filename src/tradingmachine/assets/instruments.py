@@ -38,6 +38,7 @@ from tradingmachine.assets.analysis import math_operators
 from tradingmachine.assets.analysis import math_transforms
 from tradingmachine.assets.analysis import momentum_indicators
 from tradingmachine.assets.analysis import overlap_studies
+from tradingmachine.assets.analysis import performance_measures
 from tradingmachine.assets.analysis import price_statistics
 from tradingmachine.assets.analysis import price_transforms
 from tradingmachine.assets.analysis import signals
@@ -170,6 +171,7 @@ class Instrument(
     candlestick_patterns.CandlestickPatterns,
     signals.Signals,
     strategy_backtests.StrategyBacktests,
+    performance_measures.PerformanceMeasures,
 ):
     """One instrument in UBI's unified instrument universe.
 
