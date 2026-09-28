@@ -120,6 +120,13 @@ The discovery class methods work as they do for equities. The table below shows 
 | `CommodityIndexFutures.contracts(exchange="mcx")` | 8 rows |
 | `CommodityIndexOption.strikes` for MCXBULLDEX | 118 strikes |
 
+## The contract members
+
+The four derivative classes inherit the [derivative members](../python-api/derivatives.md), such as `days_to_expiry`, `expiry_kind` and `contract_value`, and those work here. The members that need the underlying's price do not, because a `Commodity` has no quote.
+
+!!! warning "The underlying has no quote"
+    `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money` and `moneyness_percent` raise [`ServiceUnavailableError`](../python-api/errors.md#serviceunavailableerror) on every commodity contract, as a live check on 2026-09-28 confirmed for the MCX GOLD future. To price an option, pass the last price of the future of the same month as `underlying_price` to `implied_volatility` or `greeks`. On 2026-09-28 that worked for every CRUDEOIL and NATURALGAS call tried, such as the CRUDEOIL 9250 call for 2026-10-15 at an implied volatility of 0.5916, but not for GOLD options, which had no quote of their own.
+
 ## Errors
 
 The table below lists what the constructors and the order methods can raise in this family.

@@ -2,11 +2,11 @@
 
 Every instrument in the library is an object of one class, and the class says what kind of contract it is. This page shows how those classes are layered, what each layer adds, how an instrument is looked up in UBI, and how the synthetic order classes and the account sit beside the instruments rather than inside them.
 
-## Three levels of class
+## The levels of class
 
-The instrument classes form three levels. The base, `Instrument`, holds everything any instrument can do, including about 190 analysis methods it inherits from thirteen analysis classes. The middle level splits instruments into those that can be traded and indices, which cannot. The bottom level is 27 family classes, one per UBI segment, which is what you actually construct.
+The instrument classes form three levels, with a fourth for contracts. The base, `Instrument`, holds everything any instrument can do, including about 190 analysis methods it inherits from thirteen analysis classes. The middle level splits instruments into those that can be traded and indices, which cannot. Below `TradeableInstrument`, five derivative base classes hold what every futures or option contract shares. The bottom level is 27 family classes, one per UBI segment, which is what you actually construct.
 
-The class diagram below shows the first two levels with their main members. The thirteen analysis classes are drawn as one box to keep the diagram readable; each is a separate class in `tradingmachine.assets.analysis`, and all thirteen share the base `PriceAnalysis`.
+The class diagram below shows the levels above the family classes, with their main members. The thirteen analysis classes are drawn as one box to keep the diagram readable; each is a separate class in `tradingmachine.assets.analysis`, and all thirteen share the base `PriceAnalysis`.
 
 ```mermaid
 classDiagram
@@ -59,22 +59,54 @@ classDiagram
     class NonTradeableInstrument {
         accepts only an index
     }
+    class Derivative {
+        underlying_segment
+        days_to_expiry, expired
+        expiry_kind, next_expiry
+        underlying, underlying_price
+        contract_value
+    }
+    class Futures {
+        basis, basis_percent, cost_of_carry
+        expiries(), contracts()
+    }
+    class Option {
+        intrinsic_value, time_value
+        moneyness_percent, breakeven_price
+        implied_volatility(), greeks()
+        expiries(), strikes(), chain()
+    }
+    class IndexFutures {
+        underlying is an index
+    }
+    class IndexOption {
+        underlying is an index
+    }
     PriceAnalysis <|-- AnalysisClasses
     AnalysisClasses <|-- Instrument
     Instrument <|-- TradeableInstrument
     Instrument <|-- NonTradeableInstrument
+    TradeableInstrument <|-- Derivative
+    Derivative <|-- Futures
+    Derivative <|-- Option
+    Futures <|-- IndexFutures
+    Option <|-- IndexOption
 ```
 
-The diagram lists only the main members of `TradeableInstrument`. The [Python API](../python-api/index.md) tab documents every one of them, and [Analysis](../analysis/index.md) documents the inherited analysis methods.
+The diagram lists only the main members of `TradeableInstrument` and the derivative classes. The [Python API](../python-api/index.md) tab documents every one of them, [Derivatives](../python-api/derivatives.md) the contract members in particular, and [Analysis](../analysis/index.md) the inherited analysis methods.
 
 ## The 27 family classes
 
-The flowchart below shows the bottom level, grouped by the module each class lives in. Every family class inherits directly from `TradeableInstrument` or `NonTradeableInstrument`, with no intermediate "futures" or "option" base, and the four index classes are the only ones built on `NonTradeableInstrument`.
+The flowchart below shows the bottom level, grouped by the module each class lives in. The cash classes and the funds inherit `TradeableInstrument` directly, the four index classes are the only ones built on `NonTradeableInstrument`, and the sixteen futures and option classes inherit `Futures`, `Option`, `IndexFutures` or `IndexOption`, which all sit on `TradeableInstrument` through `Derivative`.
 
 ```mermaid
 flowchart LR
     T["TradeableInstrument"]
     N["NonTradeableInstrument"]
+    FB["Futures"]
+    OB["Option"]
+    IF["IndexFutures"]
+    IO["IndexOption"]
     subgraph EQ["equities.py"]
         E1["Equity"]
         E2["EquityFutures"]
@@ -112,17 +144,21 @@ flowchart LR
         D2["InvestmentTrust"]
         D3["MutualFund"]
     end
-    T --> E1 & E2 & E3 & E5 & E6
-    T --> F1 & F2 & F3 & F5 & F6
-    T --> C1 & C2 & C3 & C5 & C6
-    T --> U1 & U2 & U3 & U5 & U6
+    T --> E1 & F1 & C1 & U1
     T --> D1 & D2 & D3
+    T --> FB & OB
+    FB --> IF
+    OB --> IO
+    FB --> E2 & F2 & C2 & U2
+    OB --> E3 & F3 & C3 & U3
+    IF --> E5 & F5 & C5 & U5
+    IO --> E6 & F6 & C6 & U6
     N --> E4 & F4 & C4 & U4
 ```
 
 The table below counts the classes in each module and says what the module's cash class can do that the others cannot.
 
-| Module | Classes | On `TradeableInstrument` | On `NonTradeableInstrument` | Holdings members on |
+| Module | Classes | Tradeable | On `NonTradeableInstrument` | Holdings members on |
 |---|---:|---:|---:|---|
 | `equities.py` | 6 | 5 | 1 | `Equity` |
 | `fixed_income.py` | 6 | 5 | 1 | `FixedIncome` |
@@ -144,15 +180,18 @@ Each level adds only what is true of every class below it. The table below lists
 | `Instrument` | Identity attributes, `lot_size`, `tick_size`, `carried_by`; `prices`, `quote`, `last_price`, `ohlc`; the protected discovery helpers; the shared client | UBI quotes indices too, and an index's last price is one of the most used values |
 | `TradeableInstrument` | The eleven order-book values, the order and trade readers, `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the 32 price wrappers, the position readers, totals and the four position methods | An index has no order book, no orders and no position |
 | `NonTradeableInstrument` | Nothing new; it only refuses a segment that does not end in `_indices` | The refusal is its whole job |
-| Family class | A fixed segment, a constructor taking exactly that segment's identity fields, its own error class, its discovery class methods, and on five classes the holdings members | The kind of contract is the class, not a segment string passed by hand |
+| `Derivative` | The expiry members, the underlying's segment, object and price, the open interest range and the value of one lot | Every futures and option contract expires and is written on something |
+| `Futures`, `Option` | The basis members on `Futures`; moneyness, intrinsic and time value, implied volatility and greeks on `Option`; the discovery class methods on both | They were identical in all sixteen derivative classes apart from the segment |
+| `IndexFutures`, `IndexOption` | A check that the segment is an index one, and an `underlying` typed as `NonTradeableInstrument` | An index cannot be delivered, so these contracts differ in what their underlying is |
+| Family class | A fixed segment, named in `SEGMENT` on a derivative class, a constructor taking exactly that segment's identity fields, its own error class, `search` on the cash and index classes, and on five classes the holdings members | The kind of contract is the class, not a segment string passed by hand |
 
 The discovery calls follow the same pattern in every six-class module. The table below shows which class methods each kind of class offers.
 
 | Kind of class | Examples | Discovery class methods |
 |---|---|---|
 | A cash security or an index | `Equity`, `EquityIndex`, `Commodity`, `MutualFund` | `search` |
-| A futures class | `EquityFutures`, `CurrencyIndexFutures` | `expiries`, `contracts` |
-| An option class | `EquityOption`, `FixedIncomeIndexOption` | `expiries`, `strikes`, `chain` |
+| A futures class | `EquityFutures`, `CurrencyIndexFutures` | `expiries`, `contracts`, inherited from `Futures` |
+| An option class | `EquityOption`, `FixedIncomeIndexOption` | `expiries`, `strikes`, `chain`, inherited from `Option` |
 
 All of them read `/api/instruments/master` rather than `/api/instruments/search`, for the reason given in [Design choices](design-choices.md#discovery-reads-the-master-rather-than-search).
 
@@ -162,8 +201,8 @@ A member that only reports a value is a property, and a member is a method only 
 
 | Kind | Badge | Members |
 |---|---|---|
-| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `asks`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl` |
-| Takes arguments, only reads | <span class="member method">method</span> | `prices` and every analysis method |
+| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `asks`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl`; the twenty-one contract properties on [Derivatives](../python-api/derivatives.md), from `days_to_expiry` to `notional_value` |
+| Takes arguments, only reads | <span class="member method">method</span> | `prices`, `implied_volatility`, `greeks` and every analysis method |
 | Finds instruments | <span class="member function">classmethod</span> | `search`, `expiries`, `contracts`, `strikes`, `chain` |
 | Sends orders | <span class="member writes">places orders</span> | `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the 32 price wrappers, `add_to_position`, `reduce_position`, `liquidate_position`, `liquidate_all_positions`, `add_to_holdings`, `reduce_holdings`, `liquidate_holdings` |
 

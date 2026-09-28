@@ -12,7 +12,7 @@ The table below lists the four kinds of call. Every one of them reads UBI's inst
 | <span class="member function">classmethod</span> | [`strikes`](#strikes) | The strike prices listed for one underlying and one expiry, as a list of floats |
 | <span class="member function">classmethod</span> | [`chain`](#chain) | Every option for one underlying and one expiry, as a DataFrame |
 
-Which class has which call depends on the class's shape. The table below shows the split across all twenty-seven classes.
+Which class has which call depends on the class's shape. `search` is written on each cash and index class. The other four are defined once, `expiries` and `contracts` on the [`Futures`](instruments.md#the-derivative-base-classes) base class and `expiries`, `strikes` and `chain` on `Option`, and every futures and option class inherits them and names its own segment in a `SEGMENT` class attribute. The table below shows the split across all twenty-seven classes.
 
 | Classes | `search` | `expiries` | `contracts` | `strikes` | `chain` |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -21,6 +21,9 @@ Which class has which call depends on the class's shape. The table below shows t
 | `EquityOption`, `EquityIndexOption`, `FixedIncomeOption`, `FixedIncomeIndexOption`, `CommodityOption`, `CommodityIndexOption`, `CurrencyOption`, `CurrencyIndexOption` | | :material-check: | | :material-check: | :material-check: |
 
 The strings these calls accept are exchanges such as `nse` and `mcx`, and dates as `datetime.date` or `YYYY-MM-DD`; [Vocabulary](vocabulary.md) lists them all.
+
+!!! note "Call them on a family class"
+    The base classes `Futures`, `Option`, `IndexFutures` and `IndexOption` name no segment, so calling `instruments.Futures.expiries(...)` raises [`FuturesError`](errors.md#futureserror), and the option calls raise [`OptionError`](errors.md#optionerror). Call them on a family class such as `EquityFutures` or `CommodityIndexOption`.
 
 ## Why two different UBI routes
 
@@ -390,4 +393,4 @@ A discovery row is only an identity. To quote or trade it, pass its identity fie
 For an option, take the row from `chain` and pass its `exchange`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type` to the option class. [Instruments](instruments.md#named-by-underlying-expiry-strike-and-option-type) records the check that proved a row and a constructed object always share the same `instrument_id`.
 
 ??? note "Under the hood"
-    `search` sends `exchange`, `segment`, `q` and `limit` to [Search](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#search). The other four send `exchange` and `segment` to [Master](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#master), then keep the rows whose `underlying_symbol` equals the upper-cased underlying, whose expiry matches when one was given, and whose expiry is today or later in India time unless `include_expired` is `True`. The mechanism lives in protected class methods on `Instrument`, and each named class supplies its own segment.
+    `search` sends `exchange`, `segment`, `q` and `limit` to [Search](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#search). The other four send `exchange` and `segment` to [Master](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#master), then keep the rows whose `underlying_symbol` equals the upper-cased underlying, whose expiry matches when one was given, and whose expiry is today or later in India time unless `include_expired` is `True`. The mechanism lives in protected class methods on `Instrument`. The public calls are defined on the `Futures` and `Option` base classes, which pass `cls.SEGMENT`, so each named class supplies its own segment by declaring it.

@@ -15,44 +15,53 @@ Every family module follows the same pattern. The table below shows what each ex
 | `funds.py` | 2 | UBI has no futures or option segment on a fund or a trust | `ExchangeTradedFund`, `InvestmentTrust` | A trust has no candles |
 | `mutual_funds.py` | 1 | One segment, subscribed to rather than traded | `MutualFund` | No quote, so orders need a limit price |
 
-The class diagram below shows the six-class shape of a full family, using the equity family. Each class inherits directly from `TradeableInstrument` or `NonTradeableInstrument`, the index class is the only one on `NonTradeableInstrument`, and each raises its own error.
+The class diagram below shows the six-class shape of a full family, using the equity family. The cash class inherits `TradeableInstrument` and the index class `NonTradeableInstrument` directly, the four derivative classes inherit the derivative bases in `instruments.py`, and each class raises its own error. A derivative class writes no discovery method of its own; it names its segment in `SEGMENT` and inherits the calls.
 
 ```mermaid
 classDiagram
     direction LR
     class TradeableInstrument
     class NonTradeableInstrument
+    class Futures {
+        expiries()
+        contracts()
+    }
+    class Option {
+        expiries()
+        strikes()
+        chain()
+    }
+    class IndexFutures
+    class IndexOption
     class Equity {
         search()
         holdings members
     }
     class EquityFutures {
-        expiries()
-        contracts()
+        SEGMENT
     }
     class EquityOption {
-        expiries()
-        strikes()
-        chain()
+        SEGMENT
     }
     class EquityIndex {
         search()
     }
     class EquityIndexFutures {
-        expiries()
-        contracts()
+        SEGMENT
     }
     class EquityIndexOption {
-        expiries()
-        strikes()
-        chain()
+        SEGMENT
     }
     TradeableInstrument <|-- Equity
-    TradeableInstrument <|-- EquityFutures
-    TradeableInstrument <|-- EquityOption
+    TradeableInstrument <|-- Futures
+    TradeableInstrument <|-- Option
+    Futures <|-- IndexFutures
+    Option <|-- IndexOption
+    Futures <|-- EquityFutures
+    Option <|-- EquityOption
     NonTradeableInstrument <|-- EquityIndex
-    TradeableInstrument <|-- EquityIndexFutures
-    TradeableInstrument <|-- EquityIndexOption
+    IndexFutures <|-- EquityIndexFutures
+    IndexOption <|-- EquityIndexOption
 ```
 
 ## The checklist
@@ -63,11 +72,11 @@ The steps below are in the order they are best done. Each one names the file it 
 2. **Decide the number of classes from UBI, not from what is populated.** Write one class for every segment UBI's vocabulary has for the family, even one no broker fills today; an empty segment fails cleanly on its own. Write fewer only when the segments do not exist at all, as with funds.
 3. **Create the module by copying `equities.py`.** Copy it to `src/tradingmachine/assets/<family>.py` and rename, rather than factoring anything out of it into a shared base. The working modules are never touched when a new one is added. Rewrite the module docstring, including its "Typical usage example", for the new family.
 4. **Declare the segment constants.** Put one bare segment name per class at module level, such as `EQUITY_FUTURES_SEGMENT = "equity_futures"`. These are values this project chooses and reuses, so constants are right here even though UBI's vocabulary is otherwise passed as plain strings.
-5. **Write one class per segment.** Inherit directly from `instruments.TradeableInstrument`, or from `instruments.NonTradeableInstrument` for an index. Do not add an intermediate `Futures`, `Option` or `ListedSecurity` base.
+5. **Write one class per segment.** The cash class inherits `instruments.TradeableInstrument` and the index class `instruments.NonTradeableInstrument`. The four derivative classes inherit `instruments.Futures`, `instruments.Option`, `instruments.IndexFutures` and `instruments.IndexOption`, and each declares `SEGMENT` as its segment constant on the first line of its body. Add the family's four derivative segments to `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT` in `src/tradingmachine/assets/instruments.py`, mapping each to its cash or index segment, or `Derivative` will refuse the contracts with `DerivativeError`. Do not add a family-level base or a `ListedSecurity` base.
 6. **Make the constructor take exactly the identity fields.** A security or an index takes `exchange` and `symbol`, a future adds `underlying_symbol` and `expiry_date` in place of `symbol`, and an option adds `strike_price` and `option_type` as well. Every identity argument is required with no default, and the only optional argument is `unified_broker_interface`. There is no `instrument_id` argument, so there is exactly one way to name a contract.
 7. **Re-raise UBI's not-found as the class's own error, and check the segment.** Wrap `super().__init__` in `try`, catch `exceptions.InstrumentError`, and raise the class's own error `from error` with a self-contained message. After it, compare `self.segment` with `f"{self.exchange}_{SEGMENT}"`, the whole prefixed name UBI returns.
 8. **Add the error classes.** Add one class per new family class to `src/tradingmachine/assets/exceptions.py`, named `<ClassName>Error`, each a flat sibling directly under `InstrumentError`. Do not root the family's errors in the cash class's error, because an index future is not a kind of the cash instrument.
-9. **Add the discovery class methods.** A cash or index class gets `search`, calling `cls._search_catalogue`. A futures class gets `expiries` and `contracts`, calling `cls._expiry_dates` and `cls._contracts_for`. An option class gets `expiries`, `strikes` and `chain`. Each passes its own segment constant, so a caller never types a segment string.
+9. **Add the discovery class methods.** A cash or index class gets `search`, calling `cls._search_catalogue` with its own segment constant. The futures and option classes need nothing here: `expiries`, `contracts`, `strikes` and `chain` are inherited from `Futures` and `Option`, which read `SEGMENT`, so a caller still never types a segment string.
 10. **Add holdings members only where UBI can report a holding.** If the cash segment is in `CASH_SEGMENTS`, copy the six holdings members from `Equity` into the cash class: the `holdings`, `holdings_value` and `holdings_pnl` properties and the `add_to_holdings`, `reduce_holdings` and `liquidate_holdings` methods, with the `cnc` product fixed. Give every holdable class all six, even when one of them is awkward for the family, and say so in its docstring rather than leaving it out. Never put holdings on a derivative or an index class.
 11. **Add no local validation.** Do not reject an exchange UBI has no rows for, round a price, or check a lot. UBI's not-found already raises the class's own error, and its order validation is the single source of truth.
 12. **Write complete docstrings.** Every class, method and property has a Google-style docstring with `Args:`, `Returns:` and `Raises:`, giving each type. A member that raises nothing says `Raises:` followed by `Nothing.`. No explanatory comments go into the source; the reasoning goes into the note in step 14.
@@ -85,8 +94,10 @@ The block below is one futures class written the way the checklist asks, for an 
 EXAMPLE_FUTURES_SEGMENT = "example_futures"
 
 
-class ExampleFutures(instruments.TradeableInstrument):
+class ExampleFutures(instruments.Futures):
     """One futures contract on an example underlying."""
+
+    SEGMENT = EXAMPLE_FUTURES_SEGMENT
 
     def __init__(
         self,
@@ -125,7 +136,7 @@ class ExampleFutures(instruments.TradeableInstrument):
             )
 ```
 
-The matching error class in `src/tradingmachine/assets/exceptions.py` is a class line and a one-line docstring, placed beside the others and worded the same way:
+The class inherits `expiries`, `contracts` and every contract member from `Futures`, so the constructor is all it writes. The matching error class in `src/tradingmachine/assets/exceptions.py` is a class line and a one-line docstring, placed beside the others and worded the same way:
 
 ```python
 class ExampleFuturesError(InstrumentError):

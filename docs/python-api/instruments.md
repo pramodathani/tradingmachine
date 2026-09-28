@@ -2,7 +2,7 @@
 
 An instrument is one thing you can look up at UBI, such as a share, an index, a futures contract or an option, held as a Python object. You build it once by naming it, it looks itself up in UBI with one request, and from then on it carries its identity, its lot size and tick size, and every member described on the other pages of this tab.
 
-The table below lists what this page covers. The twenty-seven named classes are the ones you normally use; the three base classes underneath them are documented at the end.
+The table below lists what this page covers. The twenty-seven named classes are the ones you normally use; the eight base classes underneath them are documented at the end.
 
 | Kind | Member | Description |
 |---|---|---|
@@ -14,12 +14,13 @@ The table below lists what this page covers. The twenty-seven named classes are 
 | <span class="member class">class</span> | [`Instrument`](#instrument) | The base of every instrument, which quotes and analyses but cannot trade |
 | <span class="member class">class</span> | [`TradeableInstrument`](#tradeableinstrument) | An instrument that can be traded, which is anything except an index |
 | <span class="member class">class</span> | [`NonTradeableInstrument`](#nontradeableinstrument) | An index, which is followed rather than traded |
+| <span class="member class">class</span> | [`Derivative`, `Futures`, `Option`, `IndexFutures`, `IndexOption`](#the-derivative-base-classes) | The bases every futures and option class inherits, whose members are on [Derivatives](derivatives.md) |
 
 The strings these constructors accept, such as `nse`, `CE` and the segment names, are listed on [Vocabulary](vocabulary.md).
 
 ## The twenty-seven classes
 
-Each class stands for one of UBI's segments, so the kind of contract is the class you pick rather than a segment string you type. The diagram below shows how the classes are built: every one of them inherits from `Instrument` through one of two middle classes, and only the four index classes are non-tradeable.
+Each class stands for one of UBI's segments, so the kind of contract is the class you pick rather than a segment string you type. The diagram below shows how the classes are built: every one of them inherits from `Instrument` through one of two middle classes, only the four index classes are non-tradeable, and the sixteen futures and option classes inherit a derivative base in between.
 
 ```mermaid
 flowchart TB
@@ -30,8 +31,15 @@ flowchart TB
     I --> N
     T --> C1["Equity, FixedIncome,<br/>Commodity, Currency"]
     T --> C2["ExchangeTradedFund,<br/>InvestmentTrust, MutualFund"]
-    T --> F["eight futures classes"]
-    T --> O["eight option classes"]
+    T --> D["Derivative<br/>expiry, underlying"]
+    D --> FB["Futures<br/>basis"]
+    D --> OB["Option<br/>moneyness, greeks"]
+    FB --> IF["IndexFutures"]
+    OB --> IO["IndexOption"]
+    FB --> F["four futures classes"]
+    IF --> F2["four index futures classes"]
+    OB --> O["four option classes"]
+    IO --> O2["four index option classes"]
     N --> X["EquityIndex, FixedIncomeIndex,<br/>CommodityIndex, CurrencyIndex"]
 ```
 
@@ -40,29 +48,29 @@ The table below lists every class with its module, the segment it fixes, and the
 | Class | Module | Segment | Base | Named by |
 |---|---|---|---|---|
 | `Equity` | `equities` | `equities` | Tradeable | `exchange`, `symbol` |
-| `EquityFutures` | `equities` | `equity_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `EquityOption` | `equities` | `equity_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `EquityFutures` | `equities` | `equity_futures` | `Futures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `EquityOption` | `equities` | `equity_options` | `Option` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `EquityIndex` | `equities` | `equity_indices` | Non-tradeable | `exchange`, `symbol` |
-| `EquityIndexFutures` | `equities` | `equity_index_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `EquityIndexOption` | `equities` | `equity_index_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `EquityIndexFutures` | `equities` | `equity_index_futures` | `IndexFutures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `EquityIndexOption` | `equities` | `equity_index_options` | `IndexOption` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `FixedIncome` | `fixed_income` | `fixed_income` | Tradeable | `exchange`, `symbol` |
-| `FixedIncomeFutures` | `fixed_income` | `fixed_income_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `FixedIncomeOption` | `fixed_income` | `fixed_income_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `FixedIncomeFutures` | `fixed_income` | `fixed_income_futures` | `Futures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `FixedIncomeOption` | `fixed_income` | `fixed_income_options` | `Option` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `FixedIncomeIndex` | `fixed_income` | `fixed_income_indices` | Non-tradeable | `exchange`, `symbol` |
-| `FixedIncomeIndexFutures` | `fixed_income` | `fixed_income_index_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `FixedIncomeIndexOption` | `fixed_income` | `fixed_income_index_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `FixedIncomeIndexFutures` | `fixed_income` | `fixed_income_index_futures` | `IndexFutures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `FixedIncomeIndexOption` | `fixed_income` | `fixed_income_index_options` | `IndexOption` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `Commodity` | `commodities` | `commodities` | Tradeable | `exchange`, `symbol` |
-| `CommodityFutures` | `commodities` | `commodity_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CommodityOption` | `commodities` | `commodity_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `CommodityFutures` | `commodities` | `commodity_futures` | `Futures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CommodityOption` | `commodities` | `commodity_options` | `Option` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `CommodityIndex` | `commodities` | `commodity_indices` | Non-tradeable | `exchange`, `symbol` |
-| `CommodityIndexFutures` | `commodities` | `commodity_index_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CommodityIndexOption` | `commodities` | `commodity_index_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `CommodityIndexFutures` | `commodities` | `commodity_index_futures` | `IndexFutures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CommodityIndexOption` | `commodities` | `commodity_index_options` | `IndexOption` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `Currency` | `currencies` | `currencies` | Tradeable | `exchange`, `symbol` |
-| `CurrencyFutures` | `currencies` | `currency_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CurrencyOption` | `currencies` | `currency_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `CurrencyFutures` | `currencies` | `currency_futures` | `Futures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CurrencyOption` | `currencies` | `currency_options` | `Option` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `CurrencyIndex` | `currencies` | `currency_indices` | Non-tradeable | `exchange`, `symbol` |
-| `CurrencyIndexFutures` | `currencies` | `currency_index_futures` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CurrencyIndexOption` | `currencies` | `currency_index_options` | Tradeable | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `CurrencyIndexFutures` | `currencies` | `currency_index_futures` | `IndexFutures` | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CurrencyIndexOption` | `currencies` | `currency_index_options` | `IndexOption` | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `ExchangeTradedFund` | `funds` | `exchange_traded_funds` | Tradeable | `exchange`, `symbol` |
 | `InvestmentTrust` | `funds` | `investment_trusts` | Tradeable | `exchange`, `symbol` |
 | `MutualFund` | `mutual_funds` | `mutual_funds` | Tradeable | `exchange`, `symbol` |
@@ -419,6 +427,52 @@ The constructor returns an `Instrument` with the attributes above.
 | [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument matching the lookup |
 | [`BadRequestError`](errors.md#badrequesterror) | The lookup is incomplete or malformed |
 
+## The derivative base classes
+
+<div class="endpoint" markdown><span class="member class">class</span> `Derivative(...)`, `Futures(...)`, `Option(...)`, `IndexFutures(...)`, `IndexOption(...)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
+
+These five classes sit between `TradeableInstrument` and the sixteen futures and option classes, and hold what every contract of their kind shares. Their members are documented on [Derivatives](derivatives.md), and the discovery class methods they define are on [Finding instruments](discovery.md). Each takes the same arguments as `Instrument`, including `instrument_id`, and checks what UBI returned. The table below lists what each one accepts.
+
+| Class | Base | Accepts |
+|---|---|---|
+| `Derivative` | `TradeableInstrument` | A future or an option with an expiry date, in one of the sixteen derivative segments |
+| `Futures` | `Derivative` | A futures contract, on anything including an index |
+| `Option` | `Derivative` | An option with a strike price and an option type, on anything including an index |
+| `IndexFutures` | `Futures` | A futures contract in an index futures segment |
+| `IndexOption` | `Option` | An option in an index options segment |
+
+You normally build a family class such as `EquityOption`. Building a base class directly is useful when you hold an `instrument_id`, from an order or a position row for example, and want the contract's members without knowing its family. The example below builds one from the id of a NIFTY future; its output was captured from a local UBI on 2026-09-28.
+
+=== "Python"
+
+    ```python
+    from tradingmachine.assets import equities, instruments
+
+    nifty_future = equities.EquityIndexFutures("nse", "NIFTY", "2026-09-29")
+    contract = instruments.Futures(instrument_id=nifty_future.instrument_id)
+    print(repr(contract))
+    print(contract == nifty_future)
+    print(type(contract.underlying).__name__)
+    ```
+
+=== "Output"
+
+    ```text
+    Futures(exchange='nse', segment='nse_equity_index_futures', underlying_symbol='NIFTY', expiry_date='2026-09-29')
+    True
+    NonTradeableInstrument
+    ```
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| [`DerivativeError`](errors.md#derivativeerror) | The instrument is not a future or an option, has no expiry date, or is in a segment with no known underlying segment |
+| [`FuturesError`](errors.md#futureserror), [`OptionError`](errors.md#optionerror) | The contract is the other kind, or an option lacks a strike price or option type |
+| [`IndexFuturesError`](errors.md#indexfutureserror), [`IndexOptionError`](errors.md#indexoptionerror) | The contract is not written on an index |
+| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument matching the lookup |
+| [`BadRequestError`](errors.md#badrequesterror) | The lookup is incomplete or malformed |
+
 ## Lookup errors at a glance
 
 The table below gathers every way building an instrument can fail, in the order the checks happen.
@@ -431,6 +485,7 @@ The table below gathers every way building an instrument can fail, in the order 
 | 4. UBI reads the parameters | An unknown exchange or segment, or a missing identity field | [`BadRequestError`](errors.md#badrequesterror) |
 | 5. UBI looks the instrument up | Nothing matches on the latest mapping date | The class's own error, such as [`EquityError`](errors.md#equityerror), or [`InstrumentError`](errors.md#instrumenterror) for the base classes |
 | 6. The tradeable check | The index-ness disagrees with the base class | [`TradeableInstrumentError`](errors.md#tradeableinstrumenterror) or [`NonTradeableInstrumentError`](errors.md#nontradeableinstrumenterror) |
+| 7. The derivative checks | A derivative base class is given the wrong kind of contract | [`DerivativeError`](errors.md#derivativeerror), then the error of the class itself |
 
 ??? note "Under the hood"
     The request is `GET /api/instruments/details` with `instrument_id` alone, or with every lookup argument that is not `None`. UBI decides which identity fields a segment's shape needs and answers 400 when some are missing, so this library keeps no segment table of its own. See [Details](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#details) on the UBI site for the route, and `.claude/notes/src/tradingmachine/assets/instruments.py.md` for the reasoning behind the lookup.

@@ -14,8 +14,9 @@ The table below lists every record on this page with its main benefit and its ma
 | [Plain strings rather than enums](#plain-strings-rather-than-enums) | No second list of allowed values to keep in step | A typo is caught by UBI, not by your editor |
 | [Row lists become DataFrames](#row-lists-become-dataframes) | Orders, trades and candles filter and sort directly | Callers need pandas, and "no rows" is None rather than an empty frame |
 | [Order types are built in UBI, not here](#order-types-are-built-in-ubi-not-here) | One implementation of each order type | Every order depends on UBI's order engine running, and a plain limit order is held there rather than sent |
-| [One self-contained class per case](#one-self-contained-class-per-case) | Each class can be read, fixed and changed alone | The same code is repeated across classes |
-| [A derivative does not hold its underlying](#a-derivative-does-not-hold-its-underlying) | No extra request per contract and no fragile join | The caller builds the underlying when it wants one |
+| [One self-contained class per case](#one-self-contained-class-per-case) | Each class can be read, fixed and changed alone | The same code is repeated across classes, except where the derivative bases hold it once |
+| [A derivative does not store its underlying](#a-derivative-does-not-store-its-underlying) | No extra request per contract and no stale join | Every read of `underlying` is a new lookup |
+| [Greeks are computed here, with Black-Scholes](#greeks-are-computed-here-with-black-scholes) | Implied volatility and greeks without a UBI route | A slightly different model from UBI's engine |
 | [Discovery reads the master rather than search](#discovery-reads-the-master-rather-than-search) | Live contracts are always found | A whole segment is downloaded on each call |
 | [`inherited_members: false` in the docs](#inherited_members-false-in-the-docs) | A 13 MB site that builds in seconds | Class reference pages do not repeat inherited methods |
 
@@ -113,33 +114,48 @@ flowchart LR
 
 **The problem.** The six classes of an asset family differ only in a segment constant, a base class and an error class, and the 53 synthetic order types differ only in their settings. Each group could be one parameterised class, or a hierarchy of intermediate bases such as `Futures` and `Option`.
 
-**The choice.** Each case is its own class, written out in full. The family classes inherit directly from `TradeableInstrument` or `NonTradeableInstrument` with no intermediate base, and each asset-class module is copied from `equities.py` rather than sharing code with it, even the roughly 180 lines of holdings logic. Each synthetic order type is its own class in its own module, over a shallow `SyntheticOrder` base that holds only what is truly identical: storing the template, building the `synthetic` object and sending it.
+**The choice.** Each case is its own class, written out in full, with a shallow base only where the mechanism is genuinely identical. Each asset-class module is copied from `equities.py` rather than sharing code with it, even the roughly 180 lines of holdings logic, and each synthetic order type is its own class in its own module over a shallow `SyntheticOrder` base that holds only storing the template, building the `synthetic` object and sending it.
+
+The derivative classes are the one place where a middle layer was added. Until 2026-09-28 every family class inherited `TradeableInstrument` or `NonTradeableInstrument` directly. On that day the user asked for `Derivative`, `Futures`, `Option`, `IndexFutures` and `IndexOption`, which hold what every contract shares, and the sixteen futures and option classes now inherit them. Each family class still keeps its own constructor, error class and docstrings, and declares its segment in `SEGMENT`.
 
 ```mermaid
 flowchart TB
-    T["TradeableInstrument"] --> A["EquityFutures"]
-    T --> B["CommodityFutures"]
-    T --> C["CurrencyFutures"]
-    X["There is no shared Futures base class.<br/>Each futures class stands alone."]
+    T["TradeableInstrument"] --> D["Derivative<br/>expiry, underlying"]
+    D --> F["Futures<br/>basis, expiries, contracts"]
+    F --> A["EquityFutures<br/>SEGMENT, constructor, error"]
+    F --> B["CommodityFutures<br/>SEGMENT, constructor, error"]
+    F --> C["CurrencyFutures<br/>SEGMENT, constructor, error"]
 ```
 
-**Why.** A reader can open one file and see everything one kind of contract does, and a change to one class cannot break another. The user prefers some duplication over a shared abstraction that every case has to be read through.
+**Why.** A reader can open one file and see everything one kind of contract does, and a change to one class cannot break another. The user prefers some duplication over a shared abstraction that every case has to be read through. The derivative bases pass the same test from the other side: the sixteen classes had byte-identical copies of `expiries`, `contracts`, `strikes` and `chain`, and every contract member, such as days to expiry or the basis, is the same calculation in every family.
 
-**The cost.** The same code is repeated, so a fix to the holdings logic has to be made in five classes. Errors are flat siblings under `InstrumentError`, so there is no single `except` for "anything in the equity family"; catch the contract's own error, or `InstrumentError` for any instrument problem.
+**The cost.** The same code is repeated, so a fix to the holdings logic has to be made in five classes. Errors are flat siblings under `InstrumentError`, so there is no single `except` for "anything in the equity family"; catch the contract's own error, or `InstrumentError` for any instrument problem. For the derivative classes the cost runs the other way: the discovery calls and contract members are read on the base classes, not in the family file.
 
-**In the code.** The six family modules in `src/tradingmachine/assets/`, `src/tradingmachine/assets/exceptions.py`, and `src/tradingmachine/orders/`. The mechanism that is truly identical, such as the discovery helpers, sits on `Instrument` as protected class methods.
+**In the code.** The six family modules in `src/tradingmachine/assets/`, the five derivative bases at the end of `src/tradingmachine/assets/instruments.py`, `src/tradingmachine/assets/exceptions.py`, and `src/tradingmachine/orders/`. The mechanism that is truly identical, such as the discovery helpers, sits on `Instrument` as protected class methods.
 
-## A derivative does not hold its underlying
+## A derivative does not store its underlying
 
 **The problem.** A future or option is written on a share or an index, and it would be convenient for `option.underlying` to return that object.
 
-**The choice.** No futures or option class builds or holds an object for its underlying, and there is no `underlying` attribute. The user asked for one at first and then reversed the decision on 2026-09-20. A derivative carries only its `underlying_symbol` string.
+**The choice.** No futures or option class stores an object for its underlying. On 2026-09-20 the user removed a stored `underlying` attribute. On 2026-09-28 the user allowed two members on `Derivative` that reach the underlying without storing it: `underlying`, a property that builds a `TradeableInstrument`, or a `NonTradeableInstrument` for an index, on every read, and `underlying_price`, which reads the underlying's last price in one request by exchange, segment and symbol.
 
-**Why.** Building the underlying would add one request per contract, doubling the cost of building an option chain. More importantly, UBI has no reliable join: there is no foreign key and no `underlying_instrument_id`, only the `underlying_symbol` string matching a cash or index instrument's `symbol`. That holds for shares, rests on an alias table for NSE indices such as `NIFTY` and `BANKNIFTY`, and is not guaranteed for every index.
+**Why.** Storing the underlying would add one request per contract, doubling the cost of building an option chain. More importantly, UBI has no reliable join: there is no foreign key and no `underlying_instrument_id`, only the `underlying_symbol` string matching a cash or index instrument's `symbol`. That holds for shares, rests on an alias table for NSE indices such as `NIFTY` and `BANKNIFTY`, and is not guaranteed for every index. Looking it up on demand costs nothing until it is asked for, and a failed match surfaces as an `InstrumentError` at the moment of asking.
 
-**The cost.** A caller that wants the underlying builds it itself, for example `equities.EquityIndex("nse", option.underlying_symbol)`, and decides what to do when it does not exist.
+**The cost.** Every read of `underlying` sends a lookup, so a caller binds it to a variable. It is never a family class such as `Equity`, because the base classes cannot import the family modules. And UBI quotes the underlying of equity contracts only, so `underlying_price` and everything built on it raise `ServiceUnavailableError` for fixed income, commodity and currency contracts.
 
-**In the code.** The module docstring of `src/tradingmachine/assets/equities.py`, and the same pattern in every other family module.
+**In the code.** `Derivative.underlying`, `Derivative.underlying_price` and `Derivative.underlying_segment` in `src/tradingmachine/assets/instruments.py`. [Derivatives](../python-api/derivatives.md) documents them.
+
+## Greeks are computed here, with Black-Scholes
+
+**The problem.** An option trader wants implied volatility and the greeks, and UBI has no route for either.
+
+**The choice.** `Option.implied_volatility` and `Option.greeks` work them out locally, with the Black-Scholes model in `src/tradingmachine/assets/option_pricing.py`, from the option's and the underlying's last prices. The user chose this on 2026-09-28.
+
+**Why.** This is analysis, like the technical indicators, rather than order behaviour, so it does not cut across the rule that order types belong in UBI. The maths needs only Python's `math` module.
+
+**The cost.** UBI's own order engine uses Black-76 on the forward for its volatility orders, so the two can differ slightly for an index option. The model assumes a European option without dividends, expiry at 15:30 India time, and a risk-free rate of 0.065 unless the caller gives one.
+
+**In the code.** `src/tradingmachine/assets/option_pricing.py` and the `Option` class in `src/tradingmachine/assets/instruments.py`.
 
 ## Discovery reads the master rather than search
 
@@ -179,7 +195,7 @@ The chart below shows how much of each segment the master had to stream on 2026-
 
 **The cost.** Each discovery call downloads its whole segment again, with no cache. The calls return a DataFrame of identities rather than instrument objects, because a 214-contract chain as objects would mean 214 lookups; the caller builds the few contracts it wants.
 
-**In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_contracts_for`, `_expiry_dates` and `_identity_frame` on `Instrument` in `src/tradingmachine/assets/instruments.py`, and the public class methods on each family class. [Finding instruments](../python-api/discovery.md) documents the public calls.
+**In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_contracts_for`, `_expiry_dates` and `_identity_frame` on `Instrument` in `src/tradingmachine/assets/instruments.py`, `search` on each cash and index class, and the other four on the `Futures` and `Option` base classes. [Finding instruments](../python-api/discovery.md) documents the public calls.
 
 ## `inherited_members: false` in the docs
 
@@ -197,5 +213,7 @@ The table below shows the measurements taken on 2026-09-20 on the same content w
 **Why.** A 24 MB HTML page cannot be used in a browser, and a 112-second build makes every edit slow to check. Nothing is lost except the repetition. The sibling site can afford `true` because its classes have shallow inheritance.
 
 **The cost.** A reader on a family class's reference page follows a link to the analysis modules to see the inherited methods. The hand-written [Analysis](../analysis/index.md) tab covers them by topic instead.
+
+Since 2026-09-28 the four asset family pages make one narrow exception. Their futures and option classes inherit `expiries`, `contracts`, `strikes` and `chain` from the derivative bases, and `scripts/gen_ref_pages.py` gives those pages an `inherited_members` list naming exactly those four, so the calls still show on each family class. The site measured 22 MB afterwards, against 21 MB for `main` built the same day.
 
 **In the code.** The `mkdocstrings` options in `mkdocs.yml`, with the reasoning in `.claude/notes/mkdocs.yml.md`. [Writing these docs](../project/writing-docs.md#why-inherited_members-is-false) has more.

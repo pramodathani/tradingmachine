@@ -1,6 +1,6 @@
 # Errors
 
-The library raises two separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.unified_broker_interface.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`.
+The library raises two separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.unified_broker_interface.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, a share used as a futures contract, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`.
 
 The two families do not share a base class, so `except UnifiedBrokerInterfaceError` never catches an `EquityError`, and the other way round. Where one causes the other, the instrument error is raised `from` the UBI error, so the original stays in the traceback as `__cause__`.
 
@@ -12,6 +12,7 @@ The table below lists every class on this page.
 | <span class="member class">class</span> | [Twelve status classes](#the-ubi-client-errors) | One per HTTP status UBI returns, plus a catch-all and one for no answer at all |
 | <span class="member class">class</span> | [`InstrumentError`](#instrumenterror) | The base of every problem with an instrument |
 | <span class="member class">class</span> | [Four behaviour errors](#the-instrument-errors) | Tradeable, non-tradeable, position and holding |
+| <span class="member class">class</span> | [Five derivative errors](#the-derivative-errors) | A contract of the wrong kind given to one of the derivative base classes |
 | <span class="member class">class</span> | [Twenty-seven family errors](#the-family-errors) | One per named instrument class, raised when UBI has no such instrument |
 
 ## The two hierarchies
@@ -41,7 +42,7 @@ classDiagram
     }
 ```
 
-The class diagram below shows the instrument errors. They are all direct subclasses of `InstrumentError`, which is also a plain `Exception`; the twenty-seven family errors are grouped by family here to keep the diagram readable, and each is listed by name further down.
+The class diagram below shows the instrument errors. They are all direct subclasses of `InstrumentError`, which is also a plain `Exception`; the twenty-seven family errors and the five derivative errors are grouped here to keep the diagram readable, and each is listed by name further down.
 
 ```mermaid
 classDiagram
@@ -51,6 +52,7 @@ classDiagram
     InstrumentError <|-- NonTradeableInstrumentError
     InstrumentError <|-- PositionError
     InstrumentError <|-- HoldingError
+    InstrumentError <|-- DerivativeErrors
     InstrumentError <|-- EquityFamilyErrors
     InstrumentError <|-- FixedIncomeFamilyErrors
     InstrumentError <|-- CommodityFamilyErrors
@@ -88,6 +90,13 @@ classDiagram
         CurrencyIndexFuturesError
         CurrencyIndexOptionError
     }
+    class DerivativeErrors {
+        DerivativeError
+        FuturesError
+        OptionError
+        IndexFuturesError
+        IndexOptionError
+    }
     class FundErrors {
         ExchangeTradedFundError
         InvestmentTrustError
@@ -95,7 +104,7 @@ classDiagram
     }
 ```
 
-The five grouping boxes in that diagram are not classes; each family error inherits from `InstrumentError` directly.
+The six grouping boxes in that diagram are not classes; each family error and each derivative error inherits from `InstrumentError` directly.
 
 ## Which status becomes which exception
 
@@ -132,6 +141,7 @@ flowchart LR
     C -- "PositionError" --> C2["Name the product, or check<br/>net_positions"]
     C -- "HoldingError" --> C3["Check holdings and the<br/>pledged quantity"]
     C -- "Tradeable or NonTradeable" --> C4["Use the other class"]
+    C -- "a derivative error" --> C5["Use the base class<br/>for that kind of contract"]
     B -- "UnifiedBrokerInterfaceError" --> D{"Which one?"}
     D -- "BadRequestError" --> D1["Fix the call, the<br/>message names the field"]
     D -- "OrderOutcomeUnknownError" --> D2["Read orders before<br/>sending anything again"]
@@ -239,7 +249,7 @@ The example below catches one subclass and reads all three. It is built from the
 
 ## The instrument errors
 
-These classes live in `tradingmachine.assets.exceptions`. Catch `InstrumentError` to handle every one of them, including all twenty-seven family errors.
+These classes live in `tradingmachine.assets.exceptions`. Catch `InstrumentError` to handle every one of them, including the five derivative errors and all twenty-seven family errors.
 
 ### InstrumentError
 
@@ -267,6 +277,20 @@ For `reduce_position` and `liquidate_position`, a named product that is not held
 ### HoldingError
 
 `HoldingError` means a holding cannot be changed as asked. The [holdings](holdings.md) methods on `Equity`, `FixedIncome`, `ExchangeTradedFund`, `InvestmentTrust` and `MutualFund` raise it when the instrument is not held, when a sale is larger than the units free to sell, and when the whole holding is pledged as collateral.
+
+## The derivative errors
+
+These five are raised by the derivative base classes in `tradingmachine.assets.instruments`, documented on [Derivatives](derivatives.md). A family class such as `EquityFutures` never raises them in practice, because it names its own segment and UBI resolves that segment to exactly one kind of contract; they fire when a base class is built directly, typically from an `instrument_id` of unknown kind. Like every other instrument error they are direct subclasses of `InstrumentError`, so `FuturesError` does not inherit from `DerivativeError`.
+
+The table below lists what each one means.
+
+| Error | Raised when |
+|---|---|
+| <a id="derivativeerror"></a>`DerivativeError` | Any derivative base class is given something that is neither a future nor an option, a contract with no expiry date, or one in a segment with no known underlying segment. It is checked first, so a share given to `Futures` raises this rather than `FuturesError`. |
+| <a id="futureserror"></a>`FuturesError` | `Futures` or `IndexFutures` is given an option, or `expiries` or `contracts` is called on one of those two bare classes rather than on a family class |
+| <a id="optionerror"></a>`OptionError` | `Option` or `IndexOption` is given a future or an option with no strike price or option type, or `expiries`, `strikes` or `chain` is called on one of those two bare classes |
+| <a id="indexfutureserror"></a>`IndexFuturesError` | `IndexFutures` is given a futures contract whose segment is not an index futures segment, such as a share future |
+| <a id="indexoptionerror"></a>`IndexOptionError` | `IndexOption` is given an option whose segment is not an index options segment, such as a share option |
 
 ## The family errors
 

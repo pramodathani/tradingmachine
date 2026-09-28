@@ -123,6 +123,13 @@ flowchart LR
 
 The same classification has two further effects. The quantity is sent in plain units rather than lots, although rate futures are traded in lots, and UBI's session window for these contracts closes at 16:00 although they trade until 17:00. The library does not work around any of this, because the fix belongs in UBI. Rate indices themselves are missing from UBI's list of tradeable segments, which agrees with `FixedIncomeIndex` being built on `NonTradeableInstrument`.
 
+## The contract members
+
+The four derivative classes inherit the [derivative members](../python-api/derivatives.md), such as `days_to_expiry`, `expiry_kind` and `contract_value`, and those work here. The members that need the underlying's price do not, because no broker that serves quotes carries a bond or a rate index.
+
+!!! warning "The underlying has no quote"
+    `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money` and `moneyness_percent` raise [`ServiceUnavailableError`](../python-api/errors.md#serviceunavailableerror) on every fixed income contract, as a live check on 2026-09-28 confirmed for the 633GS2035 future. To price an option, pass a figure of your own as `underlying_price` to `implied_volatility` or `greeks`.
+
 ## Errors
 
 The table below lists what each constructor raises. Each error is a subclass of `InstrumentError` and carries UBI's own message as its `__cause__`.
