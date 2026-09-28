@@ -17,11 +17,16 @@ Typical usage example:
   matches = mutual_funds.MutualFund.search(exchange="nse", term="ABSL")
 """
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 
 from tradingmachine.assets import exceptions
 from tradingmachine.assets import instruments
 from tradingmachine.unified_broker_interface import client
+
+if TYPE_CHECKING:
+    from tradingmachine.asset_baskets import asset_basket
 
 HOLDINGS_PATH = "/api/portfolio/holdings"
 
@@ -69,6 +74,23 @@ class MutualFund(instruments.TradeableInstrument):
             raise exceptions.MutualFundError(
                 f"An instrument outside the {MUTUAL_FUNDS_SEGMENT} segment is not a MutualFund: {self!r}"
             )
+
+    @property
+    def constituents(self) -> "asset_basket.AssetBasket | None":
+        """The stored basket of what the scheme holds, a tradingmachine.asset_baskets.mutual_fund_constituents.MutualFundConstituents, or None when none is stored for today, read from MongoDB and UBI on every access.
+
+        This is the scheme's own portfolio, which is different from `holdings`, the units of the scheme this account holds. UBI has no price for a mutual fund, so this is the only way to measure one: the scheme's own `sharpe_ratio` and the other performance methods return None, while the basket's work. UBI stores no fund holdings, so a basket exists only when one was saved with this scheme as its linked instrument.
+
+        Raises:
+            BasketMemberError: UBI could not find one or more of the stored members.
+            pymongo.errors.PyMongoError: MongoDB could not be reached.
+        """
+        from tradingmachine.asset_baskets import basket_store
+
+        store = basket_store.BasketStore(
+            unified_broker_interface=self._unified_broker_interface,
+        )
+        return store.load_for_instrument(self)
 
     @property
     def holdings(self) -> dict | None:

@@ -4,6 +4,8 @@
 
 `Derivative` sits under `TradeableInstrument` and holds what every futures or option contract shares: its expiry, its underlying, which is looked up on every read and never stored, its open interest range and the value of one lot. `Futures` adds the basis over the underlying, `Option` adds moneyness, intrinsic and time value, implied volatility and greeks, and both own the discovery class methods that the family classes such as `tradingmachine.assets.equities.EquityFutures` inherit by naming their segment in `SEGMENT`. `IndexFutures` and `IndexOption` narrow the two to contracts on an index.
 
+Every index class, through `NonTradeableInstrument`, has a `constituents` property that returns the stored basket of the index's members from `tradingmachine.asset_baskets`, while the index's own price stays here.
+
 Every call goes straight to UBI's REST API, which caches on its own side.
 
 Typical usage example:
@@ -23,6 +25,8 @@ Typical usage example:
   days_left = contract.days_to_expiry
   sensitivities = contract.greeks()
 """
+
+from typing import TYPE_CHECKING
 
 import datetime
 import decimal
@@ -48,6 +52,9 @@ from tradingmachine.assets.analysis import volatility_indicators
 from tradingmachine.assets.analysis import volume_indicators
 from tradingmachine.unified_broker_interface import client
 from tradingmachine.unified_broker_interface import exceptions as ubi_exceptions
+
+if TYPE_CHECKING:
+    from tradingmachine.asset_baskets import asset_basket
 
 INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
@@ -3441,6 +3448,23 @@ class NonTradeableInstrument(Instrument):
             raise exceptions.NonTradeableInstrumentError(
                 f"Only an index is a NonTradeableInstrument, and this can be traded: {self!r}"
             )
+
+    @property
+    def constituents(self) -> "asset_basket.AssetBasket | None":
+        """The stored basket of the index's members, usually a tradingmachine.asset_baskets.index.Index, or None when none is stored for today, read from MongoDB and UBI on every access.
+
+        The index's own price stays on this object; the basket describes what the index holds, and every analysis and performance method works on it too. UBI stores no constituents, so a basket exists only when one was saved with this index as its linked instrument, for instance by tradingmachine.asset_baskets.basket_csv_importer.BasketCsvImporter.
+
+        Raises:
+            BasketMemberError: UBI could not find one or more of the stored members.
+            pymongo.errors.PyMongoError: MongoDB could not be reached.
+        """
+        from tradingmachine.asset_baskets import basket_store
+
+        store = basket_store.BasketStore(
+            unified_broker_interface=self._unified_broker_interface,
+        )
+        return store.load_for_instrument(self)
 
 
 class Derivative(TradeableInstrument):

@@ -739,3 +739,17 @@ The user ran a script that, for each of the four equity derivative classes, plac
 A read afterwards found one cancelled order in each contract, and no open order, open parent or position. Nothing filled.
 
 Three brokers refused a first attempt, each for a reason outside this library. Stoxkart answered `invalid algo_id`, which points at UBI's Stoxkart order setup. Dhan answered that the account needed Rs. 4204.84 more for the RELIANCE option. INDmoney refused the NIFTY future's price as outside 22450.70 to 23367.00, a band of about two per cent that it checks even on an after-market order, while Kotak took the same price. Every modify answered with `status_before_modify` empty, although every one took effect; a broker modify answered with it on 2026-09-20, so the engine's path may not pass it back.
+
+## Asset baskets, added on 2026-09-28
+
+Three things changed here for the new `tradingmachine.asset_baskets` package.
+
+`Instrument` inherits `PerformanceMeasures`, the fourteenth analysis class, so every instrument has `sharpe_ratio`, `maximum_drawdown`, `tracking_error` and the rest.
+
+`Instrument`, `TradeableInstrument` and `NonTradeableInstrument` take an optional `details` dict as their last argument. When it is given, the constructor copies the attributes from it through the new `_apply_details` method instead of calling `_fetch_details`. A basket of 500 instruments is resolved with one `POST /api/instruments/details`, and each entry of that answer becomes an instrument without a second request. The derivative and family constructors do not take `details`; the basket builds members as the two base classes, which is all it needs.
+
+`NonTradeableInstrument` has a `constituents` property, which returns the basket stored with this index as its linked instrument. The user chose on 2026-09-28 to link an instrument to its basket rather than merge the two into one class, because a merged class could not say whether `prices` meant the official price or the price rebuilt from the members.
+
+### Why `constituents` imports the store inside the property
+
+`constituents` imports `tradingmachine.asset_baskets.basket_store` inside its body rather than at the top of the file. The basket modules import this module, and this module importing the store at the top made a real cycle: importing `tradingmachine.asset_baskets.asset_basket` first started this module, which started the store, which imported `exchange_traded_fund_constituents`, which needed `AssetBasket` before `asset_basket.py` had defined it, and the import failed with `partially initialized module`. Importing at call time breaks the cycle in the simplest visible way. The return annotation comes from an `if TYPE_CHECKING:` import, which the style guide allows for imports needed only by type checkers. Every module of both packages was imported first in a fresh interpreter to check the fix.

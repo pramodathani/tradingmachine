@@ -70,3 +70,7 @@ The errors fired as they do everywhere else, each with the original `InstrumentE
 ## Limit orders are sent at once, since 2026-09-27
 
 Since 2026-09-27 UBI's order engine holds a plain `day` limit order until a live quote shows the other side of the book reaching its price, and it never acts on a stale quote. No broker that serves quotes carries this segment, so a held order here would wait all day and never be sent. The holdings methods therefore call `buy_at_limit_price` and `sell_at_limit_price` with `hold=False`, which asks UBI for its `simple` type and sends the order to a broker at once, as it was sent before the change. The general reasoning is in the note on `src/tradingmachine/assets/instruments.py`.
+
+## `constituents`, added on 2026-09-28
+
+`MutualFund.constituents` returns the stored `MutualFundConstituents` basket of what the scheme holds. UBI has no price for a mutual fund, so the scheme's own `sharpe_ratio` and every other performance measure return None, and the basket is the only way to measure a scheme; the docstring says so. It imports the basket store inside the property, for the reason given in `instruments.py.md`. `MutualFund.prices` deliberately does not fall back to the constituents, because a price rebuilt from the holdings would be passed off as the real net asset value while leaving out cash, fees and anything in `unmapped_weight`.
