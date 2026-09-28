@@ -125,10 +125,10 @@ The same classification has two further effects. The quantity is sent in plain u
 
 ## The contract members
 
-The four derivative classes inherit the [derivative members](../python-api/derivatives.md), such as `days_to_expiry`, `expiry_kind` and `contract_value`, and those work here. The members that need the underlying's price do not, because no broker that serves quotes carries a bond or a rate index.
+The four derivative classes inherit the [derivative members](../python-api/derivatives.md), such as `days_to_expiry`, `expiry_kind` and `contract_value`, and those work here. The members that need the underlying's price work on the options and not on the futures, because no broker that serves quotes carries a bond or a rate index.
 
-!!! warning "The underlying has no quote"
-    `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money` and `moneyness_percent` raise [`ServiceUnavailableError`](../python-api/errors.md#serviceunavailableerror) on every fixed income contract, as a live check on 2026-09-28 confirmed for the 633GS2035 future. To price an option, build it with an `underlying` that has a quote, such as the rate future of the same month, or pass a figure of your own as `underlying_price` to `implied_volatility` or `greeks`.
+!!! warning "Futures have no underlying, options use a future"
+    `underlying_price`, `basis`, `basis_percent` and `cost_of_carry` raise [`UnderlyingError`](../python-api/errors.md#underlyingerror) on every fixed income future, because no broker quotes a bond or a rate index and a future has no default underlying. An option needs nothing: it finds the rate future on the same underlying that expires first on or after it and prices with Black-76. On 2026-09-28 the 633GS2035 96.75 call for 29 October found the future of the same day at 96.83 and gave an implied volatility of 0.068.
 
 ## Errors
 

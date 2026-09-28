@@ -15,8 +15,8 @@ The table below lists every record on this page with its main benefit and its ma
 | [Row lists become DataFrames](#row-lists-become-dataframes) | Orders, trades and candles filter and sort directly | Callers need pandas, and "no rows" is None rather than an empty frame |
 | [Order types are built in UBI, not here](#order-types-are-built-in-ubi-not-here) | One implementation of each order type | Every order depends on UBI's order engine running, and a plain limit order is held there rather than sent |
 | [One self-contained class per case](#one-self-contained-class-per-case) | Each class can be read, fixed and changed alone | The same code is repeated across classes, except where the derivative bases hold it once |
-| [A derivative is given its underlying](#a-derivative-is-given-its-underlying) | A reliable link that no symbol match can break | The caller builds the underlying first |
-| [Greeks are computed here, with Black-Scholes](#greeks-are-computed-here-with-black-scholes) | Implied volatility and greeks without a UBI route | A slightly different model from UBI's engine |
+| [A derivative is given its underlying, or finds it in a fixed order](#a-derivative-is-given-its-underlying-or-finds-it-in-a-fixed-order) | Nearly every contract has a priced underlying with no extra argument | Only a given object is free; the rest are looked up on every read |
+| [Greeks are computed here, with Black-76 or Black-Scholes](#greeks-are-computed-here-with-black-76-or-black-scholes) | Implied volatility and greeks without a UBI route | A slightly different model from UBI's engine |
 | [Discovery reads the master rather than search](#discovery-reads-the-master-rather-than-search) | Live contracts are always found | A whole segment is downloaded on each call |
 | [`inherited_members: false` in the docs](#inherited_members-false-in-the-docs) | A 13 MB site that builds in seconds | Class reference pages do not repeat inherited methods |
 
@@ -133,27 +133,27 @@ flowchart TB
 
 **In the code.** The six family modules in `src/tradingmachine/assets/`, the five derivative bases at the end of `src/tradingmachine/assets/instruments.py`, `src/tradingmachine/assets/exceptions.py`, and `src/tradingmachine/orders/`. The mechanism that is truly identical, such as the discovery helpers, sits on `Instrument` as protected class methods.
 
-## A derivative is given its underlying
+## A derivative is given its underlying, or finds it in a fixed order
 
-**The problem.** A future or option is written on a share or an index, and it would be convenient for `option.underlying` to return that object.
+**The problem.** A future or option is written on something, and most of its useful figures, such as the basis and the greeks, need that thing's price. UBI has no reliable join: only the `underlying_symbol` string matching an instrument's `symbol`, and not every underlying carries it. And for commodities and currencies the thing matched by name is a reference record with no price.
 
-**The choice.** Every futures and option constructor takes an optional `underlying`, any instrument object, which the contract keeps and uses for `underlying` and `underlying_price`. Without one, those two fall back to looking the underlying up by `underlying_symbol` on every read. The contract never builds and stores an underlying of its own accord. The history runs in three steps: on 2026-09-20 the user removed a stored underlying the library built itself; earlier on 2026-09-28 the lookup by symbol was added; later that day the user asked for the underlying to be given at construction, because the lookup by name cannot be relied on.
+**The choice.** A contract tries four ways in order. An object given as `underlying=` when it is built wins. Then UBI's `underlying_instrument_id`, resolved in UBI from the brokers' own records of each contract's underlying. Then the family's default: an equity's share or index by symbol, and for an option on a commodity, a currency pair or a bond the future on the same underlying that expires first on or after it; a future outside equities has no default. Last, `UnderlyingError` says plainly that nothing was found. Only a given object is stored. The user asked for the given object, then for the whole order, on 2026-09-28.
 
-**Why.** UBI has no reliable join: there is no foreign key and no `underlying_instrument_id`, only the `underlying_symbol` string matching an instrument's `symbol`, and not every underlying in UBI's master carries that symbol. The caller knows which instrument it means, so it says so. A given object also keeps its class, so an `Equity` keeps its holdings members, and it can be something other than the cash instrument, such as the future a commodity option is priced off, which is what makes `greeks()` work for commodity and currency options. Building one automatically and storing it was rejected on 2026-09-20 because it doubled the cost of building an option chain, and a caller-given object costs nothing extra.
+**Why.** A check of UBI's database that day counted the 198,122 live derivatives. Names found 96.1 per cent of underlyings, the brokers' codes fixed the two real mismatches, `NIFTYFPI` and `SENSEX50`, and 98.9 per cent of options had a future to be priced off. Each way covers what the one before it misses, and the order puts the most certain first. Renaming the two mismatched indices in UBI was considered and rejected, because a new name gives an index a new `instrument_id` and strands its price history.
 
-**The cost.** The caller builds the underlying before the contract. Nothing checks that the object given matches the contract's `underlying_symbol`, because the names are exactly what cannot be trusted, so a wrong object gives wrong figures silently. Without one, every read of `underlying` sends a lookup, the result is never a family class, and UBI quotes the underlying of equity contracts only, so `underlying_price` and everything built on it raise `ServiceUnavailableError` for fixed income, commodity and currency contracts.
+**The cost.** Nothing checks a given object against `underlying_symbol`, so a wrong one gives wrong figures silently. Only a given object is free; the others send a request or two on every read. And UBI's link reaches this library only once UBI serves it.
 
-**In the code.** `Derivative.underlying`, `Derivative.underlying_price` and `Derivative.underlying_segment` in `src/tradingmachine/assets/instruments.py`. [Derivatives](../python-api/derivatives.md) documents them.
+**In the code.** `Derivative._look_up_underlying`, `Derivative._nearest_future` and `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT` in `src/tradingmachine/assets/instruments.py`. [Derivatives](../python-api/derivatives.md#how-a-contract-finds-its-underlying) documents the order.
 
-## Greeks are computed here, with Black-Scholes
+## Greeks are computed here, with Black-76 or Black-Scholes
 
 **The problem.** An option trader wants implied volatility and the greeks, and UBI has no route for either.
 
-**The choice.** `Option.implied_volatility` and `Option.greeks` work them out locally, with the Black-Scholes model in `src/tradingmachine/assets/option_pricing.py`, from the option's and the underlying's last prices. The user chose this on 2026-09-28.
+**The choice.** `Option.implied_volatility` and `Option.greeks` work them out locally, in `src/tradingmachine/assets/option_pricing.py`, from the option's and the underlying's last prices. The user chose this on 2026-09-28. An option priced off a future uses Black-76, and any other uses Black-Scholes; the user asked for Black-76 later that day, once options on commodities, currencies and bonds started defaulting to a future.
 
 **Why.** This is analysis, like the technical indicators, rather than order behaviour, so it does not cut across the rule that order types belong in UBI. The maths needs only Python's `math` module.
 
-**The cost.** UBI's own order engine uses Black-76 on the forward for its volatility orders, so the two can differ slightly for an index option. The model assumes a European option without dividends, expiry at 15:30 India time, and a risk-free rate of 0.065 unless the caller gives one.
+**The cost.** An equity option is still priced with Black-Scholes on the spot, while UBI's engine uses Black-76 on the forward, so the two can differ slightly for an index option. Both models assume a European option without dividends, expiry at 15:30 India time, and a risk-free rate of 0.065 unless the caller gives one.
 
 **In the code.** `src/tradingmachine/assets/option_pricing.py` and the `Option` class in `src/tradingmachine/assets/instruments.py`.
 

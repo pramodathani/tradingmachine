@@ -12,7 +12,7 @@ The table below lists every class on this page.
 | <span class="member class">class</span> | [Twelve status classes](#the-ubi-client-errors) | One per HTTP status UBI returns, plus a catch-all and one for no answer at all |
 | <span class="member class">class</span> | [`InstrumentError`](#instrumenterror) | The base of every problem with an instrument |
 | <span class="member class">class</span> | [Four behaviour errors](#the-instrument-errors) | Tradeable, non-tradeable, position and holding |
-| <span class="member class">class</span> | [Five derivative errors](#the-derivative-errors) | A contract of the wrong kind given to one of the derivative base classes |
+| <span class="member class">class</span> | [Six derivative errors](#the-derivative-errors) | A contract of the wrong kind given to a derivative base class, or one whose underlying cannot be found |
 | <span class="member class">class</span> | [Twenty-seven family errors](#the-family-errors) | One per named instrument class, raised when UBI has no such instrument |
 
 ## The two hierarchies
@@ -96,6 +96,7 @@ classDiagram
         OptionError
         IndexFuturesError
         IndexOptionError
+        UnderlyingError
     }
     class FundErrors {
         ExchangeTradedFundError
@@ -142,6 +143,7 @@ flowchart LR
     C -- "HoldingError" --> C3["Check holdings and the<br/>pledged quantity"]
     C -- "Tradeable or NonTradeable" --> C4["Use the other class"]
     C -- "a derivative error" --> C5["Use the base class<br/>for that kind of contract"]
+    C -- "UnderlyingError" --> C6["Give the underlying<br/>when building the contract"]
     B -- "UnifiedBrokerInterfaceError" --> D{"Which one?"}
     D -- "BadRequestError" --> D1["Fix the call, the<br/>message names the field"]
     D -- "OrderOutcomeUnknownError" --> D2["Read orders before<br/>sending anything again"]
@@ -280,7 +282,7 @@ For `reduce_position` and `liquidate_position`, a named product that is not held
 
 ## The derivative errors
 
-These five are raised by the derivative base classes in `tradingmachine.assets.instruments`, documented on [Derivatives](derivatives.md). A family class such as `EquityFutures` never raises them in practice, because it names its own segment and UBI resolves that segment to exactly one kind of contract; they fire when a base class is built directly, typically from an `instrument_id` of unknown kind. Like every other instrument error they are direct subclasses of `InstrumentError`, so `FuturesError` does not inherit from `DerivativeError`.
+These six are raised by the derivative base classes in `tradingmachine.assets.instruments`, documented on [Derivatives](derivatives.md). A family class such as `EquityFutures` never raises the first five in practice, because it names its own segment and UBI resolves that segment to exactly one kind of contract; they fire when a base class is built directly, typically from an `instrument_id` of unknown kind. Like every other instrument error they are direct subclasses of `InstrumentError`, so `FuturesError` does not inherit from `DerivativeError`.
 
 The table below lists what each one means.
 
@@ -291,6 +293,7 @@ The table below lists what each one means.
 | <a id="optionerror"></a>`OptionError` | `Option` or `IndexOption` is given a future or an option with no strike price or option type, or `expiries`, `strikes` or `chain` is called on one of those two bare classes |
 | <a id="indexfutureserror"></a>`IndexFuturesError` | `IndexFutures` is given a futures contract whose segment is not an index futures segment, such as a share future |
 | <a id="indexoptionerror"></a>`IndexOptionError` | `IndexOption` is given an option whose segment is not an index options segment, such as a share option |
+| <a id="underlyingerror"></a>`UnderlyingError` | A contract's underlying cannot be found: none was given, UBI links it to none, and its family's default finds none. Every future outside equities raises it from `underlying`, `underlying_price` and the basis members unless given an underlying, and so does an index option whose index UBI stores under another name, such as `NIFTYFPI`, until UBI carries the link. [Derivatives](derivatives.md#how-a-contract-finds-its-underlying) gives the order a contract tries. |
 
 ## The family errors
 

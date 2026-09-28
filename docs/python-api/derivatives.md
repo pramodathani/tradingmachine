@@ -103,33 +103,50 @@ The equity classes stand for all sixteen. The table below shows which base each 
 
 You normally build a family class. The base classes can be built directly too, by `instrument_id` or by exchange, segment and identity fields, which is useful when you hold an id from an order or position row and do not know its family. Each checks what it was given and raises its own error if the contract is the wrong kind, as [Errors](errors.md#derivativeerror) lists.
 
-## Which contracts have an underlying price
+## How a contract finds its underlying
 
-Many of the members on this page need the underlying's last price, which [`underlying_price`](#underlying_price) reads from UBI. A live check on 2026-09-28 found that UBI quotes the underlying of equity contracts only. The table below shows what that means for each family. The contract column records the futures checked that day, NIFTY and RELIANCE, MCX GOLD, nse and bse USDINR and nse 633GS2035, and sixteen MCX calls near the money on GOLD, CRUDEOIL, SILVER and NATURALGAS.
+Many of the members on this page need the underlying: its price for the basis, the moneyness and the greeks, and the object itself for `underlying`. A contract finds it in the order below, and the first way that applies wins.
 
-| Family | Underlying has a quote | Contract has a quote | Members that need the underlying price |
-|---|:---:|:---:|---|
-| Equities | :material-check: | :material-check: | Work |
-| Currencies, nse | :material-close: | :material-check: | Raise `ServiceUnavailableError` unless the contract is given its future as `underlying` |
-| Currencies, bse | :material-close: | :material-close: | Raise `ServiceUnavailableError` |
-| Commodities | :material-close: | Futures, and most options; not GOLD options | Raise `ServiceUnavailableError` unless an option is given its future as `underlying` |
-| Fixed income | :material-close: | :material-check: | Raise `ServiceUnavailableError`; pass `underlying_price` to the two pricing methods |
+| Order | Way | When it applies |
+|---|---|---|
+| 1 | The object you gave, as `underlying=` when building the contract | Always, when you gave one |
+| 2 | UBI's `underlying_instrument_id` | When UBI's instrument details carry it, resolved from the brokers' own records |
+| 3 | The family's default | Otherwise, as the next table shows |
+| 4 | [`UnderlyingError`](errors.md#underlyingerror) | When the way chosen finds nothing |
 
-The way round a missing quote is to build the contract with an `underlying` that does have one. An option on a commodity or a currency pair is, in practice, priced off the future of its own month, so give it that future:
+The default differs by family, because UBI has prices for some underlyings and not others. A check of UBI's database on 2026-09-28 found that the underlying of an equity contract is almost always found by its name, that the underlying of a commodity or currency contract is a reference record with no price, and that 98.9 per cent of options have a future on the same underlying expiring on or after them.
 
-```python
-from tradingmachine.assets import commodities
+| Contract | Default underlying | Priced with |
+|---|---|---|
+| Equity future or option, on a share or an index | The share or index with the same symbol | Black-Scholes |
+| Option on a commodity, a currency pair or a bond | The future on the same underlying that expires first on or after the option | Black-76 |
+| Future on a commodity, a currency pair or a bond | None, so the basis members raise `UnderlyingError` unless you give one | |
 
-crude_future = commodities.CommodityFutures("mcx", "CRUDEOIL", "2026-10-19")
-crude_call = commodities.CommodityOption("mcx", "CRUDEOIL", "2026-10-15", 9100, "CE", underlying=crude_future)
-print(crude_call.underlying_price)
-print(round(crude_call.implied_volatility(), 4))
-```
+The future is taken on or after the option's expiry, not in the same month, because that is what an option settles into: an MCX GOLD option expiring on 30 October is priced off the December future, since the October one expired on 5 October. The example below finds a bond option's underlying with nothing given. Its output was captured from a local UBI at 18:50 IST on 2026-09-28.
 
-On the evening of 2026-09-28, while MCX was still trading, that printed `9125.0` and `0.5883`, where the same option without an `underlying` raised `ServiceUnavailableError`. The figures move with the market, since MCX trades until late evening. An nse USDINR option given its future worked the same way. Black-Scholes treats a future as though it were the spot price, so it counts the cost of carry a second time; for an option a few weeks from expiry the error is small, but it grows with time to expiry.
+=== "Python"
 
-!!! warning "A missing quote is an error, not None"
-    When no broker that serves quotes carries the underlying, UBI answers HTTP 503, which the library raises as [`ServiceUnavailableError`](errors.md#serviceunavailableerror). `basis`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `implied_volatility` and `greeks` all raise it in the families marked above. The members that need no quote, such as `days_to_expiry`, `expiry_kind`, `next_expiry` and `notional_value`, work everywhere.
+    ```python
+    from tradingmachine.assets import fixed_income
+
+    bond_call = fixed_income.FixedIncomeOption("nse", "633GS2035", "2026-10-29", 96.75, "CE")
+    print(repr(bond_call.underlying))
+    print(bond_call.underlying_price)
+    print(bond_call.greeks()["model"], round(bond_call.implied_volatility(), 4))
+    ```
+
+=== "Output"
+
+    ```text
+    Futures(exchange='nse', segment='nse_fixed_income_futures', underlying_symbol='633GS2035', expiry_date='2026-10-29')
+    96.83
+    black_76 0.068
+    ```
+
+Two kinds of contract still find nothing. Until UBI carries its link, an index whose derivatives use a different name from the index, such as `NIFTYFPI`, whose index UBI stores as "Nifty FPI 150", raises `UnderlyingError`; give the index yourself. And the bse `USDINR-CNV` and `USDINR-STD` options have no future at all.
+
+!!! warning "An option still needs a price of its own"
+    The default underlying makes the pricing members work, but `implied_volatility` and `greeks` also need the option's own last price. Some contracts have none: on 2026-09-28 no broker that serves quotes carried the MCX GOLD options or any bse currency contract, and those raise [`ServiceUnavailableError`](errors.md#serviceunavailableerror).
 
 ## Every contract
 
@@ -238,14 +255,16 @@ A `datetime.date`, or `None` when this contract is the last one listed.
 
 <div class="endpoint" markdown><span class="member property">property</span> `underlying`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-This property gives the instrument the contract is written on. There are two ways it gets one, and the first is the reliable one.
+This property gives the instrument the contract is written on, found in the [order above](#how-a-contract-finds-its-underlying). What comes back depends on how it was found.
 
-| How the contract was built | What `underlying` returns | Requests per read |
+| How it was found | What `underlying` returns | Requests per read |
 |---|---|---|
-| With `underlying=` an object, such as `EquityOption(..., underlying=reliance)` | That same object, of whatever class it is, such as `Equity` | None |
-| Without one | A new `NonTradeableInstrument` for an index or `TradeableInstrument` otherwise, looked up by `underlying_symbol` | One |
+| You gave it, such as `EquityOption(..., underlying=reliance)` | That same object, of whatever class it is, such as `Equity` | None |
+| UBI's link | A `TradeableInstrument`, or a `NonTradeableInstrument` for an index | One or two |
+| An equity's default, by symbol | A `TradeableInstrument`, or a `NonTradeableInstrument` for an index | One |
+| An option's default future | A `Futures` | Two |
 
-Giving the underlying is recommended because UBI links a contract to its underlying only by the underlying symbol matching an instrument's own symbol, with no key joining them, and not every underlying in UBI's instrument list carries the same symbol. For shares the lookup holds. For indices it rests on an alias table in UBI that covers `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY` and `NIFTYNXT50`, so an index outside it may not resolve, and then the lookup raises `InstrumentError`. A given underlying also keeps its own class, so an `Equity` keeps its holdings members, and it can be any instrument, such as the future an option is priced off.
+Only a given object is kept; the others are looked up again on every read, so bind the result to a variable to use it more than once. Giving it is still worth doing when you have it: it costs nothing, it keeps its own class, so an `Equity` keeps its holdings members, and it cannot be defeated by a name mismatch.
 
 === "Python"
 
@@ -273,14 +292,14 @@ The underlying, as an `Instrument`: the given object, or a `TradeableInstrument`
 
 | Exception | When |
 |---|---|
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
+| [`UnderlyingError`](errors.md#underlyingerror) | No underlying was given, UBI gives no link, and the family's default finds none |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
 ### underlying_price
 
 <div class="endpoint" markdown><span class="member property">property</span> `underlying_price`<span class="route"><span class="method get">GET</span> `/api/instruments/ltp`</span></div>
 
-This property reads the underlying's last traded price. With an `underlying` given, it is that object's `last_price`. Without one, it is one request naming the underlying by exchange, segment and symbol rather than building it. It is the cheap way to get the one figure most members on this page need, and on 2026-09-28 it equalled `underlying.last_price` exactly. See [Which contracts have an underlying price](#which-contracts-have-an-underlying-price) for the families where it raises.
+This property reads the last traded price of the instrument [`underlying`](#underlying) finds, as cheaply as that way allows: a given object's own `last_price`, one request by id for UBI's link, one request by exchange, segment and symbol for an equity's default, and the future's lookup and price for an option's default future. It is the cheap way to get the one figure most members on this page need, and on 2026-09-28 it equalled `underlying.last_price` exactly. See [Which contracts have an underlying price](#how-a-contract-finds-its-underlying) for the families where it raises.
 
 #### Returns
 
@@ -290,8 +309,8 @@ A `float`, or `None` when UBI has no last price.
 
 | Exception | When |
 |---|---|
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
-| [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | No broker that serves quotes carries the underlying |
+| [`UnderlyingError`](errors.md#underlyingerror) | The underlying cannot be found |
+| [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | UBI has no recent quote for the underlying |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
 ### open_interest_day_high
@@ -384,7 +403,7 @@ A `float` in the underlying's price units, or `None` when either last price is u
 
 | Exception | When |
 |---|---|
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
+| [`UnderlyingError`](errors.md#underlyingerror) | The underlying cannot be found |
 | [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | No broker that serves quotes carries the future or its underlying |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
@@ -490,8 +509,8 @@ A `float` per unit of the underlying, or `None` when the underlying's last price
 
 | Exception | When |
 |---|---|
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
-| [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | No broker that serves quotes carries the underlying |
+| [`UnderlyingError`](errors.md#underlyingerror) | The underlying cannot be found |
+| [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | UBI has no recent quote for the underlying |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
 ### time_value
@@ -583,7 +602,7 @@ Nothing.
 
 ## Implied volatility and greeks
 
-The two methods in this section price the option with the Black-Scholes model, from `tradingmachine.assets.option_pricing`. UBI has no route for either, so the library works them out from the option's and the underlying's last prices, in the same way it works out the technical indicators from candles. The example below prices the same NIFTY call. Its output was captured from a local UBI at 17:30 IST on 2026-09-28, and the last line asks what the call would be worth at 18 per cent volatility.
+The two methods in this section price the option with a model from `tradingmachine.assets.option_pricing`: Black-76 when the option is priced off a future, and Black-Scholes otherwise. UBI has no route for either, so the library works them out from the option's and the underlying's last prices, in the same way it works out the technical indicators from candles. The example below prices the same NIFTY call. Its output was captured from a local UBI at 18:50 IST on 2026-09-28, after the equity close, and the last line asks what the call would be worth at 18 per cent volatility.
 
 === "Python"
 
@@ -592,38 +611,41 @@ The two methods in this section price the option with the Black-Scholes model, f
 
     option = equities.EquityIndexOption("nse", "NIFTY", "2026-10-06", 22800, "CE")
     print(round(option.implied_volatility(), 4))
-    for name, value in option.greeks().items():
-        print(f"{name:10} {value:.5f}")
+    greeks = option.greeks()
+    print(greeks["model"])
+    for name in ["volatility", "price", "delta", "gamma", "theta", "vega", "rho"]:
+        print(f"{name:10} {greeks[name]:.5f}")
     print(round(option.greeks(volatility=0.18)["price"], 2))
     ```
 
 === "Output"
 
     ```text
-    0.1475
-    volatility 0.14754
+    0.1482
+    black_scholes
+    volatility 0.14818
     price      203.70000
-    delta      0.51431
-    gamma      0.00081
-    theta      -14.51149
-    vega       13.37808
-    rho        2.49792
-    247.13
+    delta      0.51412
+    gamma      0.00080
+    theta      -14.61175
+    vega       13.32858
+    rho        2.47843
+    246.12
     ```
 
 The table below lists the conventions the two methods follow. Each is a choice worth knowing before comparing these figures with a broker's option chain.
 
 | Convention | Value |
 |---|---|
-| Model | Black-Scholes for a European option, with no dividends |
+| Model | Black-76 on the future's price when the option is priced off a future, which is the default for options on commodities, currencies and bonds and the case whenever the underlying you give is a future; Black-Scholes on the spot price otherwise. Both treat the option as European, with no dividends. `greeks()` names the model it used under `model`. |
 | Time to expiry | From now until 15:30 India time on the expiry date, over a 365-day year |
 | Risk-free rate | 0.065 by default, an approximation of India's 91-day treasury bill yield; pass your own |
 | Theta | Per calendar day |
 | Vega | Per one percentage point of volatility |
 | Rho | Per one percentage point of the rate |
 
-!!! note "UBI's engine uses a slightly different model"
-    UBI's order engine prices options with Black-76 on the forward price, for its `volatility` and `attached_hedge` synthetic orders. For a share option with no dividend before expiry the two models agree. For an index option they differ slightly, so a small gap between `implied_volatility()` and the volatility UBI's engine reports is expected rather than a fault.
+!!! note "Why two models"
+    A future's price already includes the cost of holding the underlying until expiry. Black-Scholes, given a future's price, adds that cost again; Black-76 takes the forward price as it is and only discounts, and it is the model UBI's order engine uses, so the two agree whenever an option is priced off a future. Under Black-76, delta and gamma are measured against the future's price, and rho holds that price still, so it is small and negative for calls and puts alike.
 
 !!! note "After 15:30 on expiry day"
     From 15:30 India time on the expiry date both methods return `None`, because there is no time left to price, while `expired` stays `False` until the next day. MCX commodity options trade into the evening, so 15:30 is only an approximation for them.
@@ -632,9 +654,9 @@ The table below lists the conventions the two methods follow. Each is a choice w
 
 <div class="endpoint" markdown><span class="member method">method</span> `implied_volatility(risk_free_rate=0.065, underlying_price=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/ltp` ×2</span></div>
 
-This method finds the volatility at which the model's price equals the option's last price. The underlying's price is read from UBI unless you give one. Giving one prices an option whose underlying has no quote, such as a commodity option priced off the future of the same month, or asks what the volatility would be at another underlying price. The option still needs a last price of its own.
+This method finds the volatility at which the model's price equals the option's last price. The underlying's price is read from UBI unless you give one; a figure you give is taken as the same kind of price, spot or future, as the underlying it stands in for, which is how to ask what the volatility would be at another underlying price. The option still needs a last price of its own.
 
-On 2026-09-28 the MCX CRUDEOIL 9250 call for 2026-10-15, priced off the October future at 9250.0, gave an implied volatility of 0.5916. Use the future of the option's own month: the NATURALGAS November calls priced off the October future came out at twice the October calls' volatility.
+On 2026-09-28 the MCX CRUDEOIL 9100 call for 2026-10-15, with no underlying given, found the future expiring on 2026-10-19 and gave an implied volatility of 0.6092 under Black-76.
 
 #### Parameters
 
@@ -652,7 +674,7 @@ A `float` annual volatility, such as 0.1475 for 14.75 per cent. It is `None` whe
 | Exception | When |
 |---|---|
 | `ValueError` | `underlying_price` is given and is not above zero |
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
+| [`UnderlyingError`](errors.md#underlyingerror) | The underlying cannot be found |
 | [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | No broker that serves quotes carries the option, or the underlying when no price is given |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
@@ -684,14 +706,14 @@ The table below says what each greek measures.
 
 #### Returns
 
-A `dict` with the seven keys above, each a `float`, or `None` when a price needed is unknown, when the option is at or past 15:30 on its expiry date, or when no implied volatility can be found.
+A `dict` with `model`, the `str` `black_76` or `black_scholes`, and the seven keys above, each a `float`, or `None` when a price needed is unknown, when the option is at or past 15:30 on its expiry date, or when no implied volatility can be found.
 
 #### Raises
 
 | Exception | When |
 |---|---|
 | `ValueError` | `underlying_price` or `volatility` is given and is not above zero |
-| [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument in the underlying segment whose symbol matches |
+| [`UnderlyingError`](errors.md#underlyingerror) | The underlying cannot be found |
 | [`ServiceUnavailableError`](errors.md#serviceunavailableerror) | No broker that serves quotes carries the option, or the underlying when no price is given |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 

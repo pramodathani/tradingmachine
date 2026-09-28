@@ -149,7 +149,7 @@ src/tradingmachine/assets/
 ├── currencies.py          the six currency classes
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
-├── exceptions.py          InstrumentError and its thirty-six subclasses
+├── exceptions.py          InstrumentError and its thirty-seven subclasses
 └── analysis/              thirteen classes of candle analysis that Instrument inherits
 
 src/tradingmachine/orders/

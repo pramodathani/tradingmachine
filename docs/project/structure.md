@@ -43,7 +43,7 @@ tradingmachine/
     │   ├── currencies.py          6 currency classes
     │   ├── funds.py               ExchangeTradedFund, InvestmentTrust
     │   ├── mutual_funds.py        MutualFund
-    │   ├── exceptions.py          InstrumentError and its 36 subclasses
+    │   ├── exceptions.py          InstrumentError and its 37 subclasses
     │   └── analysis/
     │       ├── price_analysis.py  PriceAnalysis, the shared base
     │       └── 13 modules         one analysis class each, inherited by Instrument
