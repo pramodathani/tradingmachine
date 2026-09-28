@@ -386,6 +386,7 @@ class EquityFutures(instruments.Futures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's equity futures segment and keeps its details.
@@ -394,9 +395,11 @@ class EquityFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the share the contract is written on, such as `RELIANCE`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             EquityFuturesError: UBI has no such contract, or the instrument it returned is not in the equity futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -406,6 +409,7 @@ class EquityFutures(instruments.Futures):
                 segment=EQUITY_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -430,6 +434,7 @@ class EquityOption(instruments.Option):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's equity options segment and keeps its details.
@@ -440,9 +445,11 @@ class EquityOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in rupees.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             EquityOptionError: UBI has no such option, or the instrument it returned is not in the equity options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -454,6 +461,7 @@ class EquityOption(instruments.Option):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -546,6 +554,7 @@ class EquityIndexFutures(instruments.IndexFutures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's equity index futures segment and keeps its details.
@@ -554,9 +563,11 @@ class EquityIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `NIFTY`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             EquityIndexFuturesError: UBI has no such contract, or the instrument it returned is not in the equity index futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -566,6 +577,7 @@ class EquityIndexFutures(instruments.IndexFutures):
                 segment=EQUITY_INDEX_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -590,6 +602,7 @@ class EquityIndexOption(instruments.IndexOption):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's equity index options segment and keeps its details.
@@ -600,9 +613,11 @@ class EquityIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in index points.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             EquityIndexOptionError: UBI has no such option, or the instrument it returned is not in the equity index options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -614,6 +629,7 @@ class EquityIndexOption(instruments.IndexOption):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:

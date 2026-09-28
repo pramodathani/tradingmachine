@@ -399,6 +399,7 @@ class FixedIncomeFutures(instruments.Futures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's fixed income futures segment and keeps its details.
@@ -407,9 +408,11 @@ class FixedIncomeFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str rate code of the bond the contract is written on, such as `633GS2035`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeFuturesError: UBI has no such contract, or the instrument it returned is not in the fixed income futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -419,6 +422,7 @@ class FixedIncomeFutures(instruments.Futures):
                 segment=FIXED_INCOME_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -443,6 +447,7 @@ class FixedIncomeOption(instruments.Option):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's fixed income options segment and keeps its details.
@@ -453,9 +458,11 @@ class FixedIncomeOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted as a bond price rather than in rupees.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeOptionError: UBI has no such option, or the instrument it returned is not in the fixed income options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -467,6 +474,7 @@ class FixedIncomeOption(instruments.Option):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -559,6 +567,7 @@ class FixedIncomeIndexFutures(instruments.IndexFutures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's fixed income index futures segment and keeps its details.
@@ -567,9 +576,11 @@ class FixedIncomeIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `ONMIBOR`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeIndexFuturesError: UBI has no such contract, or the instrument it returned is not in the fixed income index futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -579,6 +590,7 @@ class FixedIncomeIndexFutures(instruments.IndexFutures):
                 segment=FIXED_INCOME_INDEX_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -603,6 +615,7 @@ class FixedIncomeIndexOption(instruments.IndexOption):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's fixed income index options segment and keeps its details.
@@ -615,9 +628,11 @@ class FixedIncomeIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeIndexOptionError: UBI has no such option, which is true of every option today, or the instrument it returned is not in the fixed income index options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -629,6 +644,7 @@ class FixedIncomeIndexOption(instruments.IndexOption):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:

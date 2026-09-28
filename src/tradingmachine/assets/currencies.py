@@ -138,6 +138,7 @@ class CurrencyFutures(instruments.Futures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's currency futures segment and keeps its details.
@@ -148,9 +149,11 @@ class CurrencyFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, `nse` or `bse`.
             underlying_symbol: The str symbol of the pair the contract is written on, such as `USDINR`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as the Currency it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             CurrencyFuturesError: UBI has no such contract, or the instrument it returned is not in the currency futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -160,6 +163,7 @@ class CurrencyFutures(instruments.Futures):
                 segment=CURRENCY_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -184,6 +188,7 @@ class CurrencyOption(instruments.Option):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's currency options segment and keeps its details.
@@ -196,9 +201,11 @@ class CurrencyOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted in the pair's own rate units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as the CurrencyFutures of the same expiry, since a Currency has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             CurrencyOptionError: UBI has no such option, or the instrument it returned is not in the currency options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -210,6 +217,7 @@ class CurrencyOption(instruments.Option):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -302,6 +310,7 @@ class CurrencyIndexFutures(instruments.IndexFutures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's currency index futures segment and keeps its details.
@@ -312,9 +321,11 @@ class CurrencyIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, `nse` or `bse`.
             underlying_symbol: The str symbol of the index the contract is written on.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as the CurrencyIndex it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             CurrencyIndexFuturesError: UBI has no such contract, which is true of every one today, or the instrument it returned is not in the currency index futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -324,6 +335,7 @@ class CurrencyIndexFutures(instruments.IndexFutures):
                 segment=CURRENCY_INDEX_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -348,6 +360,7 @@ class CurrencyIndexOption(instruments.IndexOption):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's currency index options segment and keeps its details.
@@ -360,9 +373,11 @@ class CurrencyIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as the CurrencyFutures of the same expiry, since a Currency has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             CurrencyIndexOptionError: UBI has no such option, which is true of every one today, or the instrument it returned is not in the currency index options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -374,6 +389,7 @@ class CurrencyIndexOption(instruments.IndexOption):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:

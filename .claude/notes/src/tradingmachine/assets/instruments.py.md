@@ -652,3 +652,38 @@ Every refusal raised the intended error:
 
 A second read-only script checked the other families. MCX GOLD, nse and bse USDINR, and the nse 633GS2035 futures all built and reported `expiry_kind` monthly, and all raised `ServiceUnavailableError` from `underlying_price` and `basis`. The bse USDINR future had no quote of its own either, and neither did the MCX GOLD 147200 CE for 2026-10-30, so `greeks` could not price it even with the future's price of 147150.0 supplied. A third script then tried sixteen MCX calls near the money and found most of them quoted: CRUDEOIL, NATURALGAS and some SILVER calls priced normally off their futures, while every GOLD call and two SILVER strikes had no quote.
 
+## The underlying can be given, since later on 2026-09-28
+
+The same evening the user asked that a derivative object can be given its underlying as an object when it is created. The reason the user gave is the one this note already records: the underlying cannot be found reliably by name, because not every underlying instrument in UBI's master carries the same symbol as the contract's `underlying_symbol`.
+
+So every constructor, the five bases and the sixteen family classes, takes an optional `underlying` after the identity fields and before `unified_broker_interface`. Nothing in the repository or the docs passed `unified_broker_interface` by position, so the new position broke nothing. The contract keeps the object in `_given_underlying`, and:
+
+| Member | With an underlying given | Without one |
+|---|---|---|
+| `underlying` | The given object, of its own class, with no request | A new `TradeableInstrument` or `NonTradeableInstrument` looked up by symbol on every read |
+| `underlying_price` | The given object's `last_price` | One `/api/instruments/ltp` request by exchange, segment and symbol |
+| `underlying_segment` | The given object's segment | The contract's segment through `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT` |
+
+Three choices were made without asking, each the smallest that fits the request:
+
+- **The lookup stays as the fallback.** It still works for shares and the aliased indices, and removing it would break every caller who does not pass an underlying.
+- **The object is not checked against `underlying_symbol`.** The names are exactly what cannot be trusted, and a given future legitimately has no `symbol` at all. Only its type is checked, raising `TypeError` for anything that is not an `Instrument`, before any request is sent.
+- **Any instrument is accepted,** including a future. That is what makes the pricing members work for commodity and nse currency options, whose cash underlying has no quote: give the option the future of its own month. The table lookup is skipped when an underlying is given, so a contract in a segment outside the sixteen can now be built too, as long as its underlying is given.
+
+Black-Scholes treats a given future as though it were the spot price, so the carry cost is counted a second time. The error is small for an option a few weeks from expiry and grows with time; Black-76, which UBI's engine uses, is the exact model for an option on a future.
+
+### Checked on 2026-09-28
+
+Offline, against fake clients, eleven checks passed: the given object comes back as the very same object, its segment becomes `underlying_segment`, its own `last_price` is read and the option sends no lookup by symbol, `greeks()` works off a given future, `IndexFutures` returns a given index, a string raises `TypeError`, and an `uncategorised` future is refused without an underlying and accepted with one.
+
+Live, reading only:
+
+| Contract | Given underlying | `underlying_price` | Implied volatility |
+|---|---|---|---|
+| RELIANCE 1200 CE 2026-10-27 | `Equity` RELIANCE | 1197.6 | 0.2488 |
+| NIFTY 22800 CE 2026-10-06 | `EquityIndex` NIFTY | 22780.25 | 0.1478 |
+| CRUDEOIL 9100 CE 2026-10-15 | `CommodityFutures` CRUDEOIL 2026-10-19 | 9121.0 | 0.5901 |
+| USDINR 96.875 CE 2026-10-01 | `CurrencyFutures` USDINR 2026-10-01 | 96.845 | 0.3163 |
+
+The same CRUDEOIL option built without an underlying got `mcx_commodities` as its segment and raised `ServiceUnavailableError` from `underlying_price`, as before. The USDINR volatility of 0.32 is high for that pair; the option had three days left and was priced from after-hours quotes, so it says more about the quote than the model.
+
