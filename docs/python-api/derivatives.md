@@ -11,7 +11,7 @@ None of these members places an order. The table below lists them.
 | <span class="member property">property</span> | [`expired`](#expired) | Whether the expiry date has passed. |
 | <span class="member property">property</span> | [`expiry_kind`](#expiry_kind) | Whether the contract is the month's last expiry or a weekly one. |
 | <span class="member property">property</span> | [`next_expiry`](#next_expiry) | The next expiry after this one, where a position rolls to. |
-| <span class="member property">property</span> | [`underlying`](#underlying) | The underlying instrument, built afresh on every read. |
+| <span class="member property">property</span> | [`underlying`](#underlying) | The underlying instrument: the one given when the contract was built, or one looked up by symbol. |
 | <span class="member property">property</span> | [`underlying_price`](#underlying_price) | The underlying's last traded price. |
 | <span class="member property">property</span> | [`open_interest_day_high`](#open_interest_day_high) | The highest open interest reached today. |
 | <span class="member property">property</span> | [`open_interest_day_low`](#open_interest_day_low) | The lowest open interest reached today. |
@@ -110,10 +110,23 @@ Many of the members on this page need the underlying's last price, which [`under
 | Family | Underlying has a quote | Contract has a quote | Members that need the underlying price |
 |---|:---:|:---:|---|
 | Equities | :material-check: | :material-check: | Work |
-| Currencies, nse | :material-close: | :material-check: | Raise `ServiceUnavailableError`; pass `underlying_price` to the two pricing methods |
+| Currencies, nse | :material-close: | :material-check: | Raise `ServiceUnavailableError` unless the contract is given its future as `underlying` |
 | Currencies, bse | :material-close: | :material-close: | Raise `ServiceUnavailableError` |
-| Commodities | :material-close: | Futures, and most options; not GOLD options | Raise `ServiceUnavailableError`; pass `underlying_price` to the two pricing methods |
+| Commodities | :material-close: | Futures, and most options; not GOLD options | Raise `ServiceUnavailableError` unless an option is given its future as `underlying` |
 | Fixed income | :material-close: | :material-check: | Raise `ServiceUnavailableError`; pass `underlying_price` to the two pricing methods |
+
+The way round a missing quote is to build the contract with an `underlying` that does have one. An option on a commodity or a currency pair is, in practice, priced off the future of its own month, so give it that future:
+
+```python
+from tradingmachine.assets import commodities
+
+crude_future = commodities.CommodityFutures("mcx", "CRUDEOIL", "2026-10-19")
+crude_call = commodities.CommodityOption("mcx", "CRUDEOIL", "2026-10-15", 9100, "CE", underlying=crude_future)
+print(crude_call.underlying_price)
+print(round(crude_call.implied_volatility(), 4))
+```
+
+On the evening of 2026-09-28, while MCX was still trading, that printed `9125.0` and `0.5883`, where the same option without an `underlying` raised `ServiceUnavailableError`. The figures move with the market, since MCX trades until late evening. An nse USDINR option given its future worked the same way. Black-Scholes treats a future as though it were the spot price, so it counts the cost of carry a second time; for an option a few weeks from expiry the error is small, but it grows with time to expiry.
 
 !!! warning "A missing quote is an error, not None"
     When no broker that serves quotes carries the underlying, UBI answers HTTP 503, which the library raises as [`ServiceUnavailableError`](errors.md#serviceunavailableerror). `basis`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `implied_volatility` and `greeks` all raise it in the families marked above. The members that need no quote, such as `days_to_expiry`, `expiry_kind`, `next_expiry` and `notional_value`, work everywhere.
@@ -153,7 +166,7 @@ The members in this section are on `Derivative`, so every futures and option cla
 
 <div class="endpoint" markdown>attribute `underlying_segment`</div>
 
-This attribute is the exchange-prefixed segment of the underlying, such as `nse_equities` for a share future or `nse_equity_indices` for an index option. It is set when the contract is built and never changes. It is worked out from the contract's own segment through a fixed table, because the rule is not a simple rename: `equity_futures` maps to `equities`, but `fixed_income_futures` maps to `fixed_income`.
+This attribute is the exchange-prefixed segment of the underlying, such as `nse_equities` for a share future or `nse_equity_indices` for an index option. It is set when the contract is built and never changes. With an `underlying` given, it is that object's own segment, such as `mcx_commodity_futures` for an option given its future. Without one, it is worked out from the contract's own segment through a fixed table, because the rule is not a simple rename: `equity_futures` maps to `equities`, but `fixed_income_futures` maps to `fixed_income`.
 
 It is a `str`.
 
@@ -225,15 +238,36 @@ A `datetime.date`, or `None` when this contract is the last one listed.
 
 <div class="endpoint" markdown><span class="member property">property</span> `underlying`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-This property builds the instrument the contract is written on and returns it. It is never stored, so every read sends a new lookup; bind it to a variable to use it more than once.
+This property gives the instrument the contract is written on. There are two ways it gets one, and the first is the reliable one.
 
-It returns a `NonTradeableInstrument` when the underlying is an index and a `TradeableInstrument` otherwise, never a family class such as `Equity`. That is because the base classes cannot import the family modules. If you need the family class, for its holdings members for example, build it yourself from `underlying_segment` and `underlying_symbol`.
+| How the contract was built | What `underlying` returns | Requests per read |
+|---|---|---|
+| With `underlying=` an object, such as `EquityOption(..., underlying=reliance)` | That same object, of whatever class it is, such as `Equity` | None |
+| Without one | A new `NonTradeableInstrument` for an index or `TradeableInstrument` otherwise, looked up by `underlying_symbol` | One |
 
-UBI links a contract to its underlying only by the underlying symbol matching an instrument's own symbol, with no key joining them. For shares that always holds. For indices it rests on an alias table in UBI that covers `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY` and `NIFTYNXT50`, so an index outside it may not resolve, and then this property raises `InstrumentError`.
+Giving the underlying is recommended because UBI links a contract to its underlying only by the underlying symbol matching an instrument's own symbol, with no key joining them, and not every underlying in UBI's instrument list carries the same symbol. For shares the lookup holds. For indices it rests on an alias table in UBI that covers `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY` and `NIFTYNXT50`, so an index outside it may not resolve, and then the lookup raises `InstrumentError`. A given underlying also keeps its own class, so an `Equity` keeps its holdings members, and it can be any instrument, such as the future an option is priced off.
+
+=== "Python"
+
+    ```python
+    from tradingmachine.assets import equities
+
+    reliance = equities.Equity("nse", "RELIANCE")
+    call = equities.EquityOption("nse", "RELIANCE", "2026-10-27", 1200, "CE", underlying=reliance)
+    print(repr(call.underlying))
+    print(call.underlying is reliance)
+    ```
+
+=== "Output"
+
+    ```text
+    Equity(exchange='nse', segment='nse_equities', symbol='RELIANCE')
+    True
+    ```
 
 #### Returns
 
-The underlying, as a `TradeableInstrument` or a `NonTradeableInstrument`.
+The underlying, as an `Instrument`: the given object, or a `TradeableInstrument` or `NonTradeableInstrument` from the lookup.
 
 #### Raises
 
@@ -246,7 +280,7 @@ The underlying, as a `TradeableInstrument` or a `NonTradeableInstrument`.
 
 <div class="endpoint" markdown><span class="member property">property</span> `underlying_price`<span class="route"><span class="method get">GET</span> `/api/instruments/ltp`</span></div>
 
-This property reads the underlying's last traded price in one request, naming the underlying by exchange, segment and symbol rather than building it. It is the cheap way to get the one figure most members on this page need, and on 2026-09-28 it equalled `underlying.last_price` exactly. See [Which contracts have an underlying price](#which-contracts-have-an-underlying-price) for the families where it raises.
+This property reads the underlying's last traded price. With an `underlying` given, it is that object's `last_price`. Without one, it is one request naming the underlying by exchange, segment and symbol rather than building it. It is the cheap way to get the one figure most members on this page need, and on 2026-09-28 it equalled `underlying.last_price` exactly. See [Which contracts have an underlying price](#which-contracts-have-an-underlying-price) for the families where it raises.
 
 #### Returns
 

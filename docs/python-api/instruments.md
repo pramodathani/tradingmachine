@@ -128,9 +128,9 @@ The constructor returns the instrument object, with the [attributes below](#the-
 
 ### Named by underlying and expiry
 
-<div class="endpoint" markdown><span class="member class">class</span> `EquityFutures(exchange, underlying_symbol, expiry_date, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
+<div class="endpoint" markdown><span class="member class">class</span> `EquityFutures(exchange, underlying_symbol, expiry_date, underlying=None, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-The eight futures classes name a contract by its exchange, the symbol of what it is written on, and the day it expires: `EquityFutures`, `EquityIndexFutures`, `FixedIncomeFutures`, `FixedIncomeIndexFutures`, `CommodityFutures`, `CommodityIndexFutures`, `CurrencyFutures` and `CurrencyIndexFutures`. A futures contract does not hold an object for its underlying, because UBI links the two only by the symbol strings matching; build the underlying yourself when you want it.
+The eight futures classes name a contract by its exchange, the symbol of what it is written on, and the day it expires: `EquityFutures`, `EquityIndexFutures`, `FixedIncomeFutures`, `FixedIncomeIndexFutures`, `CommodityFutures`, `CommodityIndexFutures`, `CurrencyFutures` and `CurrencyIndexFutures`. Pass the underlying's own object as `underlying` to give the contract its underlying reliably, because UBI links the two only by the symbol strings matching and not every underlying carries the contract's `underlying_symbol`.
 
 #### Parameters
 
@@ -139,6 +139,7 @@ The eight futures classes name a contract by its exchange, the symbol of what it
 | `exchange` | `str` | Yes | | The exchange, such as `nse` or `mcx` |
 | `underlying_symbol` | `str` | Yes | | The symbol of the underlying, such as `RELIANCE`, `NIFTY` or `GOLD` |
 | `expiry_date` | `datetime.date` or `str` | Yes | | The expiry, as a date or a `YYYY-MM-DD` string. [`expiries`](discovery.md#expiries) lists the valid ones. |
+| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` looks the underlying up by `underlying_symbol` when it is asked for. |
 | `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client to send requests through, or `None` for the shared one |
 
 #### Example
@@ -178,7 +179,7 @@ The constructor returns the contract object, with the [attributes below](#the-at
 
 ### Named by underlying, expiry, strike and option type
 
-<div class="endpoint" markdown><span class="member class">class</span> `EquityIndexOption(exchange, underlying_symbol, expiry_date, strike_price, option_type, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
+<div class="endpoint" markdown><span class="member class">class</span> `EquityIndexOption(exchange, underlying_symbol, expiry_date, strike_price, option_type, underlying=None, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
 The eight option classes add a strike price and an option type to the futures arguments: `EquityOption`, `EquityIndexOption`, `FixedIncomeOption`, `FixedIncomeIndexOption`, `CommodityOption`, `CommodityIndexOption`, `CurrencyOption` and `CurrencyIndexOption`. The usual way to get the four identity values right is to read them off a row of [`chain`](discovery.md#chain) rather than typing them.
 
@@ -191,6 +192,7 @@ The eight option classes add a strike price and an option type to the futures ar
 | `expiry_date` | `datetime.date` or `str` | Yes | | The expiry, as a date or a `YYYY-MM-DD` string |
 | `strike_price` | `float` | Yes | | The strike price in rupees, such as `25000` |
 | `option_type` | `str` | Yes | | `CE` for a call or `PE` for a put |
+| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` looks the underlying up by `underlying_symbol` when it is asked for. |
 | `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client to send requests through, or `None` for the shared one |
 
 #### Example

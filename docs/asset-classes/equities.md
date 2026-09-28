@@ -260,7 +260,7 @@ Once built, a contract reports what it is as a contract: its days to expiry, whe
 
 ## Why a derivative does not hold its underlying
 
-A RELIANCE option does not store a RELIANCE `Equity` object. Its [`underlying`](../python-api/derivatives.md#underlying) property builds the underlying afresh each time it is read, as a `TradeableInstrument` or, for an index, a `NonTradeableInstrument`, and its [`underlying_price`](../python-api/derivatives.md#underlying_price) reads the underlying's last price in one request. Nothing is stored, for two reasons. The first is cost: storing the underlying would send one more lookup per contract, doubling the cost of building anything from a chain. The second reason is that UBI gives no reliable way to make the link. It has no key joining a derivative to its underlying. The two are matched only by the derivative's `underlying_symbol` string being equal to a share's or an index's `symbol`.
+A RELIANCE option does not find its RELIANCE `Equity` by itself. Give it one when you build it, as `EquityOption("nse", "RELIANCE", "2026-10-27", 1200, "CE", underlying=reliance)`, and its [`underlying`](../python-api/derivatives.md#underlying) returns that very object and its [`underlying_price`](../python-api/derivatives.md#underlying_price) reads that object's last price. Without one, both fall back to a lookup by symbol on every read, which returns a plain `TradeableInstrument` or, for an index, a `NonTradeableInstrument`. Giving it is the reliable way, because UBI gives no reliable way to make the link. It has no key joining a derivative to its underlying. The two are matched only by the derivative's `underlying_symbol` string being equal to a share's or an index's `symbol`.
 
 The flowchart below shows how that string match works for a share and for an index, and where it can fail.
 
@@ -272,7 +272,7 @@ flowchart LR
     Q["An index missing<br/>from the alias table"] -.->|"may not match"| X["no EquityIndex found"]
 ```
 
-For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match, and then `underlying` and `underlying_price` raise `InstrumentError` at the moment they are read. The live check on 2026-09-28 resolved both RELIANCE and NIFTY.
+For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match, and then the lookup raises `InstrumentError` at the moment it is read, which is why passing the `EquityIndex` yourself is safer. The live check on 2026-09-28 resolved both RELIANCE and NIFTY either way.
 
 ## Errors
 
