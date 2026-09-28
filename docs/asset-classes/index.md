@@ -8,11 +8,11 @@ The classes look alike, but what works on each one does not. UBI has live quotes
 
 Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. The sixteen futures and option classes reach it through a layer of [derivative base classes](../python-api/derivatives.md), `Futures`, `Option`, `IndexFutures` and `IndexOption` on a shared `Derivative`, which add the expiry, underlying, basis and greeks members and the discovery class methods. An index inherits `NonTradeableInstrument`, which adds nothing and refuses anything that is not an index. Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the thirteen analysis classes described in [Analysis](../analysis/index.md).
 
-The animated diagram below shows the six family modules feeding their classes up into the two base classes and then into `Instrument`. It leaves out the derivative layer to stay readable; [The instrument model](../architecture/instrument-model.md#the-27-family-classes) draws it.
+The animated diagram below shows the six family modules feeding their classes up through the derivative base classes and the two tradeable and non-tradeable classes into `Instrument`. [The instrument model](../architecture/instrument-model.md#the-27-family-classes) shows every class by name.
 
 <figure class="diagram">
 --8<-- "docs/assets/diagrams/families.svg"
-<figcaption>Orange dots follow the tradeable classes up through TradeableInstrument, and blue dots follow the four index classes up through NonTradeableInstrument. The orange dots entering Instrument from the right are the thirteen analysis classes it inherits.</figcaption>
+<figcaption>Orange dots follow the cash classes and the funds straight up to TradeableInstrument, green dots follow the sixteen futures and option classes up through the derivative base classes, and blue dots follow the four index classes up to NonTradeableInstrument. The orange dots entering Instrument from the right are the thirteen analysis classes it inherits.</figcaption>
 </figure>
 
 The funds module has only two classes and the mutual funds module only one, because UBI carries no futures or options on a fund, a trust or a mutual fund. The four families with derivatives each have six classes, following the same pattern: a cash instrument, its futures and its options, and an index, its futures and its options. [The instrument model](../architecture/instrument-model.md) explains the base classes in more depth.
