@@ -7,11 +7,11 @@ It is a copy of `src/tradingmachine/assets/commodities.py`, which is a copy of t
 | Class | Base class | UBI segment | Shape | Instruments in UBI |
 |---|---|---|---|---|
 | `Currency` | `TradeableInstrument` | `currencies` | security | nse 7, bse 15 |
-| `CurrencyFutures` | `TradeableInstrument` | `currency_futures` | future | nse 261, bse 879 |
-| `CurrencyOption` | `TradeableInstrument` | `currency_options` | option | nse 23,527, bse 104,769 |
+| `CurrencyFutures` | `Futures` | `currency_futures` | future | nse 261, bse 879 |
+| `CurrencyOption` | `Option` | `currency_options` | option | nse 23,527, bse 104,769 |
 | `CurrencyIndex` | `NonTradeableInstrument` | `currency_indices` | security | **none** |
-| `CurrencyIndexFutures` | `TradeableInstrument` | `currency_index_futures` | future | **none** |
-| `CurrencyIndexOption` | `TradeableInstrument` | `currency_index_options` | option | **none** |
+| `CurrencyIndexFutures` | `IndexFutures` | `currency_index_futures` | future | **none** |
+| `CurrencyIndexOption` | `IndexOption` | `currency_index_options` | option | **none** |
 
 Currencies trade on the `nse` and the `bse` only. UBI carries seven pairs on the nse, `EURINR`, `EURUSD`, `GBPINR`, `GBPUSD`, `JPYINR`, `USDINR` and `USDJPY`, and the bse adds over-the-counter variants such as `USDINROTC` and `USDINROTCD`. Symbols are the readable pair names, and a derivative's `underlying_symbol` matches its underlying's `symbol`.
 
@@ -100,3 +100,15 @@ Every error fired with the original `InstrumentError` as its `__cause__` and was
 | an index futures contract, any arguments | `CurrencyIndexFuturesError` |
 | an index option, any arguments | `CurrencyIndexOptionError` |
 | a futures contract with no `expiry_date` | `TypeError`, before any request |
+
+## The derivative bases, since 2026-09-28
+
+On 2026-09-28 the four derivative classes in this module moved onto the derivative bases in `src/tradingmachine/assets/instruments.py`, at the user's request: `CurrencyFutures` onto `Futures`, `CurrencyOption` onto `Option`, `CurrencyIndexFutures` onto `IndexFutures` and `CurrencyIndexOption` onto `IndexOption`. The full reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "The derivative bases".
+
+Each class kept its constructor, its error class and its docstrings, and gained one line, `SEGMENT = <the module's segment constant>`. Its own copies of `expiries`, `contracts`, `strikes` and `chain` were deleted, because they were identical in all sixteen derivative classes apart from the segment, and the bases now define each of them once, reading `cls.SEGMENT`. The calls and their signatures are unchanged for a caller. Nothing specific to the family was lost with them: the strike units live in each constructor's `strike_price` description, and the classes on empty segments say so in their class docstrings.
+
+The constructors still wrap `super().__init__` and re-raise `InstrumentError` as the class's own error. That wrap now also covers the bases' shape and segment checks, which could in principle relabel a `FuturesError` as "UBI has no such contract". It cannot happen, because the constructor passes its own segment constant and UBI resolves that segment to exactly one shape, the same argument that already covered the segment check below it.
+
+The derivative members that need the underlying's price, `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `implied_volatility` and `greeks`, raise `ServiceUnavailableError` in this family. A live check on 2026-09-28 found no quote for the underlying of any currency contract, because no broker that serves quotes carries the currency pair itself. The members that need no quote, such as `days_to_expiry`, `expiry_kind`, `next_expiry` and `contract_value`, work normally.
+
+An nse currency option can still be priced by passing the future's last price as `underlying_price`, since the nse derivatives are quoted. A bse contract cannot, because it has no quote of its own.
