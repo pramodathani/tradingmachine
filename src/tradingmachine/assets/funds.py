@@ -19,11 +19,16 @@ Typical usage example:
   level = trust.last_price
 """
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 
 from tradingmachine.assets import exceptions
 from tradingmachine.assets import instruments
 from tradingmachine.unified_broker_interface import client
+
+if TYPE_CHECKING:
+    from tradingmachine.asset_baskets import asset_basket
 
 HOLDINGS_PATH = "/api/portfolio/holdings"
 
@@ -71,6 +76,23 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
             raise exceptions.ExchangeTradedFundError(
                 f"An instrument outside the {EXCHANGE_TRADED_FUNDS_SEGMENT} segment is not an ExchangeTradedFund: {self!r}"
             )
+
+    @property
+    def constituents(self) -> "asset_basket.AssetBasket | None":
+        """The stored basket of what the fund holds, a tradingmachine.asset_baskets.exchange_traded_fund_constituents.ExchangeTradedFundConstituents, or None when none is stored for today, read from MongoDB and UBI on every access.
+
+        This is the fund's own portfolio, which is different from `holdings`, the units of the fund this account holds. UBI stores no fund holdings, so a basket exists only when one was saved with this fund as its linked instrument.
+
+        Raises:
+            BasketMemberError: UBI could not find one or more of the stored members.
+            pymongo.errors.PyMongoError: MongoDB could not be reached.
+        """
+        from tradingmachine.asset_baskets import basket_store
+
+        store = basket_store.BasketStore(
+            unified_broker_interface=self._unified_broker_interface,
+        )
+        return store.load_for_instrument(self)
 
     @property
     def holdings(self) -> dict | None:

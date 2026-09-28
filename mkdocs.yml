@@ -164,6 +164,7 @@ nav:
       - Holdings: python-api/holdings.md
       - Synthetic orders: python-api/synthetic-orders.md
       - The account: python-api/account.md
+      - Asset baskets: python-api/asset-baskets.md
       - The UBI client: python-api/client.md
       - Vocabulary: python-api/vocabulary.md
       - Errors: python-api/errors.md
@@ -181,6 +182,7 @@ nav:
       - Candlestick patterns: analysis/patterns.md
       - Statistics and transforms: analysis/statistics.md
       - Signals and backtests: analysis/signals-and-backtests.md
+      - Performance measures: analysis/performance.md
   - Architecture:
       - architecture/index.md
       - The instrument model: architecture/instrument-model.md

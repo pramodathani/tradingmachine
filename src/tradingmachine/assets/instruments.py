@@ -4,6 +4,8 @@
 
 `Derivative` sits under `TradeableInstrument` and holds what every futures or option contract shares: its expiry, its underlying, which is looked up on every read and never stored, its open interest range and the value of one lot. `Futures` adds the basis over the underlying, `Option` adds moneyness, intrinsic and time value, implied volatility and greeks, and both own the discovery class methods that the family classes such as `tradingmachine.assets.equities.EquityFutures` inherit by naming their segment in `SEGMENT`. `IndexFutures` and `IndexOption` narrow the two to contracts on an index.
 
+Every index class, through `NonTradeableInstrument`, has a `constituents` property that returns the stored basket of the index's members from `tradingmachine.asset_baskets`, while the index's own price stays here.
+
 Every call goes straight to UBI's REST API, which caches on its own side.
 
 Typical usage example:
@@ -24,6 +26,8 @@ Typical usage example:
   sensitivities = contract.greeks()
 """
 
+from typing import TYPE_CHECKING
+
 import datetime
 import decimal
 import zoneinfo
@@ -38,6 +42,7 @@ from tradingmachine.assets.analysis import math_operators
 from tradingmachine.assets.analysis import math_transforms
 from tradingmachine.assets.analysis import momentum_indicators
 from tradingmachine.assets.analysis import overlap_studies
+from tradingmachine.assets.analysis import performance_measures
 from tradingmachine.assets.analysis import price_statistics
 from tradingmachine.assets.analysis import price_transforms
 from tradingmachine.assets.analysis import signals
@@ -47,6 +52,9 @@ from tradingmachine.assets.analysis import volatility_indicators
 from tradingmachine.assets.analysis import volume_indicators
 from tradingmachine.unified_broker_interface import client
 from tradingmachine.unified_broker_interface import exceptions as ubi_exceptions
+
+if TYPE_CHECKING:
+    from tradingmachine.asset_baskets import asset_basket
 
 INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
@@ -170,6 +178,7 @@ class Instrument(
     candlestick_patterns.CandlestickPatterns,
     signals.Signals,
     strategy_backtests.StrategyBacktests,
+    performance_measures.PerformanceMeasures,
 ):
     """One instrument in UBI's unified instrument universe.
 
@@ -205,6 +214,7 @@ class Instrument(
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and keeps its details.
 
@@ -220,6 +230,7 @@ class Instrument(
             strike_price: The float strike price of an option, or None.
             option_type: The str option type of an option, `CE` or `PE`, or None.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             InstrumentError: UBI has no instrument matching the lookup.
@@ -239,7 +250,23 @@ class Instrument(
             "strike_price": strike_price,
             "option_type": option_type,
         }
-        details = self._fetch_details(lookup)
+        if details is None:
+            details = self._fetch_details(lookup)
+        self._apply_details(details)
+
+    def _apply_details(self, details: dict) -> None:
+        """Copies the instrument's identity, lot size and tick size from UBI's details.
+
+        Args:
+            details: The dict UBI returns from `/api/instruments/details` for this instrument.
+
+        Returns:
+            None.
+
+        Raises:
+            KeyError: details lacks a field every UBI details answer carries, such as `instrument_id`.
+            ValueError: A date in details is not a valid ISO date.
+        """
         self.instrument_id = details["instrument_id"]
         self.exchange = details["exchange"]
         self.segment = details["segment"]
@@ -728,6 +755,7 @@ class TradeableInstrument(Instrument):
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and checks that it is not an index.
 
@@ -741,6 +769,7 @@ class TradeableInstrument(Instrument):
             strike_price: The float strike price of an option, or None.
             option_type: The str option type of an option, `CE` or `PE`, or None.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             TradeableInstrumentError: The instrument is an index.
@@ -758,6 +787,7 @@ class TradeableInstrument(Instrument):
             strike_price=strike_price,
             option_type=option_type,
             unified_broker_interface=unified_broker_interface,
+            details=details,
         )
         if self.segment.endswith(INDEX_SEGMENT_SUFFIX):
             raise exceptions.TradeableInstrumentError(
@@ -3380,6 +3410,7 @@ class NonTradeableInstrument(Instrument):
         strike_price: float | None = None,
         option_type: str | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+        details: dict | None = None,
     ):
         """Looks the instrument up in UBI and checks that it is an index.
 
@@ -3393,6 +3424,7 @@ class NonTradeableInstrument(Instrument):
             strike_price: A float strike price, or None, since an index has none.
             option_type: A str option type, or None, since an index has none.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+            details: The dict UBI returned for this instrument from `/api/instruments/details`, such as one entry of a list request, which is used instead of looking the instrument up again, or None to look it up from the other arguments.
 
         Raises:
             NonTradeableInstrumentError: The instrument is not an index, so it can be traded.
@@ -3410,11 +3442,29 @@ class NonTradeableInstrument(Instrument):
             strike_price=strike_price,
             option_type=option_type,
             unified_broker_interface=unified_broker_interface,
+            details=details,
         )
         if not self.segment.endswith(INDEX_SEGMENT_SUFFIX):
             raise exceptions.NonTradeableInstrumentError(
                 f"Only an index is a NonTradeableInstrument, and this can be traded: {self!r}"
             )
+
+    @property
+    def constituents(self) -> "asset_basket.AssetBasket | None":
+        """The stored basket of the index's members, usually a tradingmachine.asset_baskets.index.Index, or None when none is stored for today, read from MongoDB and UBI on every access.
+
+        The index's own price stays on this object; the basket describes what the index holds, and every analysis and performance method works on it too. UBI stores no constituents, so a basket exists only when one was saved with this index as its linked instrument, for instance by tradingmachine.asset_baskets.basket_csv_importer.BasketCsvImporter.
+
+        Raises:
+            BasketMemberError: UBI could not find one or more of the stored members.
+            pymongo.errors.PyMongoError: MongoDB could not be reached.
+        """
+        from tradingmachine.asset_baskets import basket_store
+
+        store = basket_store.BasketStore(
+            unified_broker_interface=self._unified_broker_interface,
+        )
+        return store.load_for_instrument(self)
 
 
 class Derivative(TradeableInstrument):

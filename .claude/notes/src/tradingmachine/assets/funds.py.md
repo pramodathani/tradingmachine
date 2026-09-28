@@ -79,3 +79,7 @@ Every error fired with the original `InstrumentError` as its `__cause__` and was
 | an unknown trust symbol | `InvestmentTrustError` |
 | a fund asked for as a trust | `InvestmentTrustError` |
 | a fund with no `symbol` argument | `TypeError`, before any request |
+
+## `constituents`, added on 2026-09-28
+
+`ExchangeTradedFund.constituents` returns the stored `ExchangeTradedFundConstituents` basket of what the fund holds, found by the fund's instrument id. It is named `constituents` because `holdings` already means the units of the fund this account holds. It imports the basket store inside the property to avoid the circular import described in `instruments.py.md`. `InvestmentTrust` has no such property, because a REIT or an InvIT holds property and infrastructure rather than listed instruments UBI can price.

@@ -57,3 +57,9 @@ mkdocstrings merges an `options:` mapping under a `:::` line over the global opt
 The inherited members render with the base classes' docstrings, which is why those are written for any family, saying "the class's segment" rather than naming one.
 
 The first build on 2026-09-28 confirmed it. `EquityIndexOption.expiries`, `strikes` and `chain`, `EquityIndexFutures.contracts`, `EquityFutures.expiries` and `EquityOption.chain` all rendered on the equities page, and `EquityIndexOption.relative_strength_index`, `EquityIndexOption.greeks` and `Equity.expiries` did not. The site measured 22 MB against 21 MB for `main` built the same way, and the equities page 404 KB against 380 KB.
+
+## A module named `index`, since 2026-09-28
+
+Adding `src/tradingmachine/asset_baskets/index.py` made `mkdocs build` spin forever at full CPU, with no warning. The builder writes a package's `__init__.py` to `index.md`, and wrote the module `index.py` to `index.md` in the same folder, so two navigation entries pointed at one page. `mkdocs-section-index` then looped in its `on_nav` hook, which a stack dump taken 40 seconds into the build showed. The builder now writes a module named `index` to `index_module.md`, keeping `index` as its title in the navigation. The module kept its natural name, because the problem was the page path and not the module.
+
+The cause was found by bisecting in a temporary worktree of `main`: `main` built in 11.5 seconds, `main` with this branch's `src` did not finish in 100 seconds, `main`'s `assets` with the new package still hung, and a build without `watchlist.py` still hung, which ruled out a name clash in that file.

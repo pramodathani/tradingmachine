@@ -70,3 +70,7 @@ MkDocs logs `Doc file 'index.md' contains an unrecognized relative link 'referen
 ## Verified on 2026-09-20
 
 `mkdocs build --strict` completed with no warnings, producing 53 HTML pages, of which 26 are generated reference pages: fourteen for `tradingmachine.assets.analysis`, seven for the rest of `assets`, two for `ubi_client`, one for `tradingmachine.utilities.configuration`, plus the literate-nav summary and the section index. `ruff check` and `ruff format --check` pass on the two new Python files.
+
+## Asset baskets pages, added on 2026-09-28
+
+Two pages were added to the nav: `python-api/asset-baskets.md` under Python API, after The account, and `analysis/performance.md` under Analysis, after Signals and backtests. The new package's reference pages need no nav entry, because `scripts/gen_ref_pages.py` generates one per module.
