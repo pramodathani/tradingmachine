@@ -35,6 +35,11 @@ FAMILY_MODULES = (
 )
 
 
+INDEX_MODULE_NAME = "index"
+
+INDEX_MODULE_PAGE_NAME = "index_module.md"
+
+
 class ReferencePageBuilder:
     """A builder of one reference page per module in the project's packages.
 
@@ -76,6 +81,8 @@ class ReferencePageBuilder:
     def _build_page_for(self, path: pathlib.Path) -> None:
         """Writes the reference page for one module, unless the module is excluded.
 
+        A package's `__init__.py` becomes the package's `index.md`, so a module that is itself named `index`, such as `tradingmachine.asset_baskets.index`, is written to `index_module.md` instead, or the two pages would share one path.
+
         Args:
             path: The pathlib.Path of the module's source file.
 
@@ -96,6 +103,8 @@ class ReferencePageBuilder:
             documentation_path = documentation_path.with_name("index.md")
             if not path.read_text().strip():
                 return
+        elif parts[-1] == INDEX_MODULE_NAME:
+            documentation_path = documentation_path.with_name(INDEX_MODULE_PAGE_NAME)
         elif parts[-1].startswith("__"):
             return
         if not parts:
