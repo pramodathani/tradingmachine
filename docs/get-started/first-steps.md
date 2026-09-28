@@ -244,6 +244,14 @@ The cards below point at the pages that pick up from here.
 
     [:octicons-arrow-right-24: Finding instruments](../python-api/discovery.md)
 
+-   :material-calendar-clock:{ .lg .middle } **Derivatives**
+
+    ---
+
+    Days to expiry, the underlying's price, a future's basis, and an option's moneyness, implied volatility and greeks.
+
+    [:octicons-arrow-right-24: Derivatives](../python-api/derivatives.md)
+
 -   :material-cart-arrow-right:{ .lg .middle } **Orders**
 
     ---

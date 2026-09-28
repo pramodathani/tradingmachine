@@ -7,11 +7,11 @@ The module is a copy of `src/tradingmachine/assets/equities.py` rather than a ge
 | Class | Base class | UBI segment | Shape | Constructor takes |
 |---|---|---|---|---|
 | `FixedIncome` | `TradeableInstrument` | `fixed_income` | security | `exchange`, `symbol` |
-| `FixedIncomeFutures` | `TradeableInstrument` | `fixed_income_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `FixedIncomeOption` | `TradeableInstrument` | `fixed_income_options` | option | those three plus `strike_price`, `option_type` |
+| `FixedIncomeFutures` | `Futures` | `fixed_income_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `FixedIncomeOption` | `Option` | `fixed_income_options` | option | those three plus `strike_price`, `option_type` |
 | `FixedIncomeIndex` | `NonTradeableInstrument` | `fixed_income_indices` | security | `exchange`, `symbol` |
-| `FixedIncomeIndexFutures` | `TradeableInstrument` | `fixed_income_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `FixedIncomeIndexOption` | `TradeableInstrument` | `fixed_income_index_options` | option | those three plus `strike_price`, `option_type` |
+| `FixedIncomeIndexFutures` | `IndexFutures` | `fixed_income_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `FixedIncomeIndexOption` | `IndexOption` | `fixed_income_index_options` | option | those three plus `strike_price`, `option_type` |
 
 The segment names come from UBI's own `CANONICAL_SEGMENTS` in `stock_brokers/instruments/mapping/utilities/segments.py`. One is irregular: the cash segment is `fixed_income`, not pluralised, where the equity one is `equities`. It must not be tidied, because the string is baked into UBI's `CASH_SEGMENTS`, its Redis cache keys and the `segment` column of `unified.instruments` itself.
 
@@ -137,3 +137,17 @@ Eight orders were recorded and none was sent. No real order has ever gone throug
 ## Limit orders are sent at once, since 2026-09-27
 
 Since 2026-09-27 UBI's order engine holds a plain `day` limit order until a live quote shows the other side of the book reaching its price, and it never acts on a stale quote. No broker that serves quotes carries this segment, so a held order here would wait all day and never be sent. The holdings methods therefore call `buy_at_limit_price` and `sell_at_limit_price` with `hold=False`, which asks UBI for its `simple` type and sends the order to a broker at once, as it was sent before the change. The general reasoning is in the note on `src/tradingmachine/assets/instruments.py`.
+
+## The derivative bases, since 2026-09-28
+
+On 2026-09-28 the four derivative classes in this module moved onto the derivative bases in `src/tradingmachine/assets/instruments.py`, at the user's request: `FixedIncomeFutures` onto `Futures`, `FixedIncomeOption` onto `Option`, `FixedIncomeIndexFutures` onto `IndexFutures` and `FixedIncomeIndexOption` onto `IndexOption`. The full reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "The derivative bases".
+
+Each class kept its constructor, its error class and its docstrings, and gained one line, `SEGMENT = <the module's segment constant>`. Its own copies of `expiries`, `contracts`, `strikes` and `chain` were deleted, because they were identical in all sixteen derivative classes apart from the segment, and the bases now define each of them once, reading `cls.SEGMENT`. The calls and their signatures are unchanged for a caller. Nothing specific to the family was lost with them: the strike units live in each constructor's `strike_price` description, and the classes on empty segments say so in their class docstrings.
+
+The constructors still wrap `super().__init__` and re-raise `InstrumentError` as the class's own error. That wrap now also covers the bases' shape and segment checks, which could in principle relabel a `FuturesError` as "UBI has no such contract". It cannot happen, because the constructor passes its own segment constant and UBI resolves that segment to exactly one shape, the same argument that already covered the segment check below it.
+
+The derivative members that need the underlying's price, `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `implied_volatility` and `greeks`, raise `ServiceUnavailableError` in this family. A live check on 2026-09-28 found no quote for the underlying of any fixed income contract, because no broker that serves quotes carries the bond or rate itself. The members that need no quote, such as `days_to_expiry`, `expiry_kind`, `next_expiry` and `contract_value`, work normally.
+
+Later on 2026-09-28 the four derivative constructors gained an optional `underlying` argument, after the identity fields and before `unified_broker_interface`, which they pass to the base class. The user asked for it because the underlying cannot be found reliably by name; the reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md` under "The underlying can be given".
+
+On the evening of 2026-09-28 this family's option classes started finding their underlying as the future on the same underlying that expires first on or after the option, priced with Black-76, and its futures classes lost their default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. The reasoning and the live figures are in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "How a contract finds its underlying".

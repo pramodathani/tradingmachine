@@ -7,11 +7,11 @@ Each class exists so that the kind of contract is the class you pick rather than
 | Class | Base class | UBI segment | Shape | Constructor takes |
 |---|---|---|---|---|
 | `Equity` | `TradeableInstrument` | `equities` | security | `exchange`, `symbol` |
-| `EquityFutures` | `TradeableInstrument` | `equity_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `EquityOption` | `TradeableInstrument` | `equity_options` | option | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `EquityFutures` | `Futures` | `equity_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `EquityOption` | `Option` | `equity_options` | option | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 | `EquityIndex` | `NonTradeableInstrument` | `equity_indices` | security | `exchange`, `symbol` |
-| `EquityIndexFutures` | `TradeableInstrument` | `equity_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `EquityIndexOption` | `TradeableInstrument` | `equity_index_options` | option | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
+| `EquityIndexFutures` | `IndexFutures` | `equity_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `EquityIndexOption` | `IndexOption` | `equity_index_options` | option | `exchange`, `underlying_symbol`, `expiry_date`, `strike_price`, `option_type` |
 
 The segment names match UBI's own `CANONICAL_SEGMENTS` in `stock_brokers/instruments/mapping/utilities/segments.py`. `equity_indices` has shape `security` in UBI, like any cash instrument, and is non-tradeable only because its name ends in `_indices`, which is the rule `instruments.py` already applies.
 
@@ -19,7 +19,7 @@ The segment names match UBI's own `CANONICAL_SEGMENTS` in `stock_brokers/instrum
 
 | Topic | Old code | Now |
 |---|---|---|
-| Base classes | `ListedSecurity`, `Futures` and `Option`, which the current port does not have | `TradeableInstrument` and `NonTradeableInstrument` directly, as the user decided on 2026-09-20 |
+| Base classes | `ListedSecurity`, `Futures` and `Option` | `TradeableInstrument` and `NonTradeableInstrument` directly, as the user decided on 2026-09-20; since 2026-09-28 the four derivative classes inherit `Futures`, `Option`, `IndexFutures` and `IndexOption` from `instruments.py`, which the user asked for, while `Equity` and `EquityIndex` still inherit directly |
 | `id` argument | Every class accepted one, expanded by `expand_short_id` | Dropped; only the identity fields are accepted |
 | Identity arguments | All defaulted to `None` | All required, with no default |
 | Exception names | `EquityException` and five subclasses of it | `EquityError` and five siblings, all flat under `InstrumentError` |
@@ -205,3 +205,15 @@ The single-stock option calls cost about two seconds each, because each one down
 A row was taken from the middle of the RELIANCE chain, RELIANCE 2026-09-29 1270.0 PE, and an `EquityOption` was built from its four identity fields. UBI returned the instrument id `12278f86-2feb-54b0-875f-4c1311d550fc`, which is the same id the row carried, and the object came back with a lot size of 500 and a tick size of 0.05.
 
 That is the proof the whole feature rests on: discovery and construction agree on what an instrument is, so a row found by searching can be turned into a tradeable contract without guessing.
+
+## The derivative bases, since 2026-09-28
+
+On 2026-09-28 the four derivative classes in this module moved onto the derivative bases in `src/tradingmachine/assets/instruments.py`, at the user's request: `EquityFutures` onto `Futures`, `EquityOption` onto `Option`, `EquityIndexFutures` onto `IndexFutures` and `EquityIndexOption` onto `IndexOption`. The full reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "The derivative bases".
+
+Each class kept its constructor, its error class and its docstrings, and gained one line, `SEGMENT = <the module's segment constant>`. Its own copies of `expiries`, `contracts`, `strikes` and `chain` were deleted, because they were identical in all sixteen derivative classes apart from the segment, and the bases now define each of them once, reading `cls.SEGMENT`. The calls and their signatures are unchanged for a caller. Nothing specific to the family was lost with them: the strike units live in each constructor's `strike_price` description, and the classes on empty segments say so in their class docstrings.
+
+The constructors still wrap `super().__init__` and re-raise `InstrumentError` as the class's own error. That wrap now also covers the bases' shape and segment checks, which could in principle relabel a `FuturesError` as "UBI has no such contract". It cannot happen, because the constructor passes its own segment constant and UBI resolves that segment to exactly one shape, the same argument that already covered the segment check below it.
+
+The section "Why a derivative does not hold its underlying" above records the decision of 2026-09-20, and it still holds in the sense that nothing is stored. What changed on 2026-09-28 is that `Derivative` gained an `underlying` property that builds the underlying afresh on every read, and an `underlying_price` property that reads its last price by exchange, segment and symbol. Both use the symbol match that section describes and raise `InstrumentError` when it fails. The live check on 2026-09-28 resolved both NIFTY and RELIANCE, and `underlying_price` matched the underlying object's own `last_price` exactly.
+
+Later on 2026-09-28 the four derivative constructors gained an optional `underlying` argument, after the identity fields and before `unified_broker_interface`, which they pass to the base class. The user asked for it because the underlying cannot be found reliably by name; the reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md` under "The underlying can be given".

@@ -20,6 +20,20 @@ PACKAGES = ("tradingmachine",)
 
 EXCLUDED_PARTS = ("__pycache__",)
 
+INHERITED_DISCOVERY_MEMBERS = (
+    "expiries",
+    "contracts",
+    "strikes",
+    "chain",
+)
+
+FAMILY_MODULES = (
+    "tradingmachine.assets.equities",
+    "tradingmachine.assets.fixed_income",
+    "tradingmachine.assets.commodities",
+    "tradingmachine.assets.currencies",
+)
+
 
 class ReferencePageBuilder:
     """A builder of one reference page per module in the project's packages.
@@ -90,11 +104,36 @@ class ReferencePageBuilder:
         page_path = pathlib.Path("reference") / documentation_path
         with mkdocs_gen_files.open(page_path, "w") as page:
             dotted_path = ".".join(parts)
-            page.write(f"::: {dotted_path}\n")
+            page.write(self._directive_for(dotted_path))
         mkdocs_gen_files.set_edit_path(
             page_path,
             path.relative_to(self.root),
         )
+
+    def _directive_for(self, dotted_path: str) -> str:
+        """Builds the mkdocstrings directive that renders one module's page.
+
+        Most modules get the bare directive, so the global options in `mkdocs.yml` apply, including `inherited_members: false`. The four asset family modules also list the discovery class methods their futures and option classes inherit from `tradingmachine.assets.instruments.Futures` and `tradingmachine.assets.instruments.Option`, so those calls stay on each family class's page without letting in the 190 inherited analysis methods.
+
+        Args:
+            dotted_path: The str dotted import path of the module, such as `tradingmachine.assets.equities`.
+
+        Returns:
+            The str directive, ending in a newline.
+
+        Raises:
+            Nothing.
+        """
+        if dotted_path not in FAMILY_MODULES:
+            return f"::: {dotted_path}\n"
+        lines = [
+            f"::: {dotted_path}",
+            "    options:",
+            "      inherited_members:",
+        ]
+        for member in INHERITED_DISCOVERY_MEMBERS:
+            lines.append(f"        - {member}")
+        return "\n".join(lines) + "\n"
 
     def _write_navigation(self) -> None:
         """Writes the reference section's navigation to `reference/SUMMARY.md`.

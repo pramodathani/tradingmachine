@@ -35,3 +35,25 @@ The builder keeps two paths, and the difference matters. `root` is the repositor
 ## Adding a package
 
 `PACKAGES` holds the single entry `tradingmachine`, and everything under it appears in the reference on the next build. A second top-level package would be added there, but there is unlikely ever to be one, since the point of the `src/` layout is that the library claims exactly one importable name.
+
+## Inherited discovery calls on the family pages, since 2026-09-28
+
+On 2026-09-28 the discovery class methods `expiries`, `contracts`, `strikes` and `chain` moved from the sixteen family derivative classes onto `Futures` and `Option` in `src/tradingmachine/assets/instruments.py`. With the global `inherited_members: false`, they would then have vanished from the pages of `EquityOption` and its siblings, which is where a reader looks for them.
+
+`_directive_for` therefore writes a per-page option for the four family modules named in `FAMILY_MODULES`:
+
+```
+::: tradingmachine.assets.equities
+    options:
+      inherited_members:
+        - expiries
+        - contracts
+        - strikes
+        - chain
+```
+
+mkdocstrings merges an `options:` mapping under a `:::` line over the global options (`mkdocstrings/_internal/extension.py`), and mkdocstrings-python 1.16.12 accepts a list of names for `inherited_members`, keeping an inherited member only when its name is on the list (`mkdocstrings_handlers/python/_internal/config.py` and `_internal/rendering.py`). So the four names come through and the 190 analysis methods and the new derivative members do not. `Equity` and `EquityIndex` inherit none of the four, so they show nothing extra. Every other module keeps the bare one-line directive.
+
+The inherited members render with the base classes' docstrings, which is why those are written for any family, saying "the class's segment" rather than naming one.
+
+The first build on 2026-09-28 confirmed it. `EquityIndexOption.expiries`, `strikes` and `chain`, `EquityIndexFutures.contracts`, `EquityFutures.expiries` and `EquityOption.chain` all rendered on the equities page, and `EquityIndexOption.relative_strength_index`, `EquityIndexOption.greeks` and `Equity.expiries` did not. The site measured 22 MB against 21 MB for `main` built the same way, and the equities page 404 KB against 380 KB.

@@ -6,9 +6,9 @@ The classes look alike, but what works on each one does not. UBI has live quotes
 
 ## How the classes fit together
 
-Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. An index inherits `NonTradeableInstrument`, which adds nothing and refuses anything that is not an index. Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the thirteen analysis classes described in [Analysis](../analysis/index.md).
+Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. The sixteen futures and option classes reach it through a layer of [derivative base classes](../python-api/derivatives.md), `Futures`, `Option`, `IndexFutures` and `IndexOption` on a shared `Derivative`, which add the expiry, underlying, basis and greeks members and the discovery class methods. An index inherits `NonTradeableInstrument`, which adds nothing and refuses anything that is not an index. Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the thirteen analysis classes described in [Analysis](../analysis/index.md).
 
-The animated diagram below shows the six family modules feeding their classes up into the two base classes and then into `Instrument`.
+The animated diagram below shows the six family modules feeding their classes up into the two base classes and then into `Instrument`. It leaves out the derivative layer to stay readable; [The instrument model](../architecture/instrument-model.md#the-27-family-classes) draws it.
 
 <figure class="diagram">
 --8<-- "docs/assets/diagrams/families.svg"

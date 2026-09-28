@@ -157,6 +157,7 @@ nav:
       - Instruments: python-api/instruments.md
       - Market data: python-api/market-data.md
       - Finding instruments: python-api/discovery.md
+      - Derivatives: python-api/derivatives.md
       - Orders: python-api/orders.md
       - Price wrappers: python-api/price-wrappers.md
       - Positions: python-api/positions.md

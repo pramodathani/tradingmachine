@@ -7,11 +7,11 @@ It is a copy of `src/tradingmachine/assets/fixed_income.py`, which is itself a c
 | Class | Base class | UBI segment | Shape | Constructor takes |
 |---|---|---|---|---|
 | `Commodity` | `TradeableInstrument` | `commodities` | security | `exchange`, `symbol` |
-| `CommodityFutures` | `TradeableInstrument` | `commodity_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CommodityOption` | `TradeableInstrument` | `commodity_options` | option | those three plus `strike_price`, `option_type` |
+| `CommodityFutures` | `Futures` | `commodity_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CommodityOption` | `Option` | `commodity_options` | option | those three plus `strike_price`, `option_type` |
 | `CommodityIndex` | `NonTradeableInstrument` | `commodity_indices` | security | `exchange`, `symbol` |
-| `CommodityIndexFutures` | `TradeableInstrument` | `commodity_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
-| `CommodityIndexOption` | `TradeableInstrument` | `commodity_index_options` | option | those three plus `strike_price`, `option_type` |
+| `CommodityIndexFutures` | `IndexFutures` | `commodity_index_futures` | future | `exchange`, `underlying_symbol`, `expiry_date` |
+| `CommodityIndexOption` | `IndexOption` | `commodity_index_options` | option | those three plus `strike_price`, `option_type` |
 
 UBI carries commodities on three exchanges, `mcx`, `ncdex` and `nse`, and the indices and their derivatives on `mcx` and `ncdex` only. Symbols are readable tickers, `GOLD`, `CRUDEOIL`, `ALUMINIUM`, `MCXBULLDEX`, and a derivative's `underlying_symbol` matches its underlying's `symbol` exactly, so this family has none of fixed income's ISIN awkwardness.
 
@@ -122,3 +122,19 @@ Every error fired with the original `InstrumentError` as its `__cause__` and was
 | an index future with no such expiry | `CommodityIndexFuturesError` |
 | an index option at an impossible strike | `CommodityIndexOptionError` |
 | a futures contract with no `expiry_date` | `TypeError`, before any request |
+
+## The derivative bases, since 2026-09-28
+
+On 2026-09-28 the four derivative classes in this module moved onto the derivative bases in `src/tradingmachine/assets/instruments.py`, at the user's request: `CommodityFutures` onto `Futures`, `CommodityOption` onto `Option`, `CommodityIndexFutures` onto `IndexFutures` and `CommodityIndexOption` onto `IndexOption`. The full reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "The derivative bases".
+
+Each class kept its constructor, its error class and its docstrings, and gained one line, `SEGMENT = <the module's segment constant>`. Its own copies of `expiries`, `contracts`, `strikes` and `chain` were deleted, because they were identical in all sixteen derivative classes apart from the segment, and the bases now define each of them once, reading `cls.SEGMENT`. The calls and their signatures are unchanged for a caller. Nothing specific to the family was lost with them: the strike units live in each constructor's `strike_price` description, and the classes on empty segments say so in their class docstrings.
+
+The constructors still wrap `super().__init__` and re-raise `InstrumentError` as the class's own error. That wrap now also covers the bases' shape and segment checks, which could in principle relabel a `FuturesError` as "UBI has no such contract". It cannot happen, because the constructor passes its own segment constant and UBI resolves that segment to exactly one shape, the same argument that already covered the segment check below it.
+
+The derivative members that need the underlying's price, `underlying_price`, `basis`, `basis_percent`, `cost_of_carry`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `implied_volatility` and `greeks`, raise `ServiceUnavailableError` in this family. A live check on 2026-09-28 found no quote for the underlying of any commodity contract, because no broker that serves quotes carries the commodity itself. The members that need no quote, such as `days_to_expiry`, `expiry_kind`, `next_expiry` and `contract_value`, work normally.
+
+`implied_volatility` and `greeks` take an `underlying_price`, so an option can be priced off its future. A read-only check on 2026-09-28 tried the two calls nearest the money in the first two option expiries of four MCX underlyings, each priced off the nearest future. Every CRUDEOIL and NATURALGAS call was quoted and priced, such as CRUDEOIL 9250 CE for 2026-10-15 at an implied volatility of 0.5916, and so were the SILVER 227000 calls. No GOLD call was quoted, and neither were the SILVER 227250 calls: UBI answered that no broker that serves quotes carries them. The same run showed why the future must match the option's month: the NATURALGAS November calls, priced off the October future, came out at implied volatilities of 0.96 and 1.13, twice the October calls'.
+
+Later on 2026-09-28 the four derivative constructors gained an optional `underlying` argument, after the identity fields and before `unified_broker_interface`, which they pass to the base class. The user asked for it because the underlying cannot be found reliably by name; the reasoning is in `.claude/notes/src/tradingmachine/assets/instruments.py.md` under "The underlying can be given". For the option classes here, the useful underlying is the future of the option's own month, since the cash instrument has no quote.
+
+On the evening of 2026-09-28 this family's option classes started finding their underlying as the future on the same underlying that expires first on or after the option, priced with Black-76, and its futures classes lost their default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. The reasoning and the live figures are in `.claude/notes/src/tradingmachine/assets/instruments.py.md`, under "How a contract finds its underlying".

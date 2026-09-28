@@ -113,6 +113,13 @@ The table below shows the four contracts checked on 2026-09-20. The prices are t
 
 On that day the nse USDINR futures had weekly expiries, and `CurrencyFutures.contracts(exchange="nse")` returned 129 rows. The USDINR option chain for 2026-09-25 had 88 strikes over 176 rows, and a row from its middle, `USDINR 2026-09-25 95.625 CE`, rebuilt into a `CurrencyOption` with the same `instrument_id`.
 
+## The contract members
+
+The four derivative classes inherit the [derivative members](../python-api/derivatives.md), such as `days_to_expiry`, `expiry_kind` and `contract_value`, and those work here. The members that need the underlying's price work on the options and not on the futures, because a `Currency` has no quote on either exchange.
+
+!!! warning "Futures have no underlying, options use a future"
+    `underlying_price`, `basis`, `basis_percent` and `cost_of_carry` raise [`UnderlyingError`](../python-api/errors.md#underlyingerror) on every currency future, because a `Currency` has no quote and a future has no default underlying. An option needs nothing: it finds the future on the same pair that expires first on or after it and prices with Black-76. A bse contract has no quote of its own, so it cannot be priced, and the bse `USDINR-CNV` and `USDINR-STD` options have no future at all and raise `UnderlyingError`. `contract_value` rests on `lot_size`, which in this family is not the lot an order is measured against, so treat it as approximate.
+
 ## Errors
 
 The table below lists what the constructors raise in this family.

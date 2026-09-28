@@ -4,11 +4,11 @@ Each of the six classes fixes one of UBI's fixed income segments, so the kind of
 
 A bond is named by its ISIN rather than by a ticker, such as `IN000126C010`, because a one-off corporate bond or non-convertible debenture has no ticker that reconciles across brokers. The exception is a small set of interest rate underlyings on the nse, named by a rate code such as `633GS2035`, which are the instruments the futures and options are written on. Sovereign gold bonds live in this family too, rather than with commodities.
 
-`FixedIncomeIndex` is built on `instruments.NonTradeableInstrument`, because an index cannot be traded. The other five are built on `instruments.TradeableInstrument`, so they carry the order-book values as well. All six inherit every analysis class through `instruments.Instrument`.
+`FixedIncomeIndex` is built on `instruments.NonTradeableInstrument`, because an index cannot be traded, and `FixedIncome` on `instruments.TradeableInstrument`. The four derivative classes are built on the derivative bases, `FixedIncomeFutures` on `instruments.Futures`, `FixedIncomeOption` on `instruments.Option`, `FixedIncomeIndexFutures` on `instruments.IndexFutures` and `FixedIncomeIndexOption` on `instruments.IndexOption`, so they carry the order-book values, the expiry and underlying members, and the discovery class methods `expiries`, `contracts`, `strikes` and `chain`, which read the segment each class names in `SEGMENT`. All six inherit every analysis class through `instruments.Instrument`.
 
 Two limits of UBI's coverage are worth knowing before reaching for these classes, because they are not obvious and they are not faults in this module. No broker that serves quotes carries a cash bond or a rate index, so `quote`, `last_price`, `ohlc` and the order-book values raise `ServiceUnavailableError` for `FixedIncome` and `FixedIncomeIndex`, while the three derivative classes are quoted normally. And UBI stores no candles for any fixed income segment at all, so `prices` returns None everywhere here and the analysis methods have nothing to work on.
 
-A derivative does not hold an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols do match in this family.
+No broker quotes a bond or a rate index, so the two option classes find their underlying as the rate future on the same underlying that expires first on or after the option, and price with Black-76; the two futures classes have no default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. Any of them can be given its underlying when it is built, as in `tradingmachine.assets.equities`.
 
 Typical usage example:
 
@@ -389,14 +389,17 @@ class FixedIncome(instruments.TradeableInstrument):
         )
 
 
-class FixedIncomeFutures(instruments.TradeableInstrument):
+class FixedIncomeFutures(instruments.Futures):
     """One futures contract on a bond, such as 633GS2035 expiring in September."""
+
+    SEGMENT = FIXED_INCOME_FUTURES_SEGMENT
 
     def __init__(
         self,
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's fixed income futures segment and keeps its details.
@@ -405,9 +408,11 @@ class FixedIncomeFutures(instruments.TradeableInstrument):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str rate code of the bond the contract is written on, such as `633GS2035`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeFuturesError: UBI has no such contract, or the instrument it returned is not in the fixed income futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -417,6 +422,7 @@ class FixedIncomeFutures(instruments.TradeableInstrument):
                 segment=FIXED_INCOME_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -428,76 +434,11 @@ class FixedIncomeFutures(instruments.TradeableInstrument):
                 f"An instrument outside the {FIXED_INCOME_FUTURES_SEGMENT} segment is not a FixedIncomeFutures: {self!r}"
             )
 
-    @classmethod
-    def expiries(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[datetime.date]:
-        """Lists the expiries a bond's futures contracts are listed for.
 
-        A contract expiring today counts as live, because it can still be traded until the market closes.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str rate code of the bond, such as `633GS2035`.
-            include_expired: A bool that is True to include expiries that have already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of datetime.date, soonest first, which is empty when nothing is listed on this underlying.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._expiry_dates(
-            exchange,
-            FIXED_INCOME_FUTURES_SEGMENT,
-            underlying_symbol,
-            include_expired,
-            unified_broker_interface,
-        )
-
-    @classmethod
-    def contracts(
-        cls,
-        exchange: str,
-        underlying_symbol: str | None = None,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> pd.DataFrame | None:
-        """Lists the futures contracts on bonds that are listed.
-
-        The rows are identities rather than objects, because building an object looks each contract up in UBI and a long list would mean a request for every row. Build the ones you want from the rows.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str rate code of the bond to keep, such as `633GS2035`, or None to list every underlying.
-            include_expired: A bool that is True to include contracts whose expiry has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol` and `expiry_date`, sorted by expiry, or None when nothing matches.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._contracts_for(
-            exchange,
-            FIXED_INCOME_FUTURES_SEGMENT,
-            underlying_symbol,
-            None,
-            include_expired,
-            unified_broker_interface,
-        )
-
-
-class FixedIncomeOption(instruments.TradeableInstrument):
+class FixedIncomeOption(instruments.Option):
     """One option on a bond, such as a 633GS2035 call at a given strike and expiry."""
+
+    SEGMENT = FIXED_INCOME_OPTIONS_SEGMENT
 
     def __init__(
         self,
@@ -506,6 +447,7 @@ class FixedIncomeOption(instruments.TradeableInstrument):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's fixed income options segment and keeps its details.
@@ -516,9 +458,11 @@ class FixedIncomeOption(instruments.TradeableInstrument):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted as a bond price rather than in rupees.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as the rate future it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeOptionError: UBI has no such option, or the instrument it returned is not in the fixed income options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -530,6 +474,7 @@ class FixedIncomeOption(instruments.TradeableInstrument):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -540,113 +485,6 @@ class FixedIncomeOption(instruments.TradeableInstrument):
             raise exceptions.FixedIncomeOptionError(
                 f"An instrument outside the {FIXED_INCOME_OPTIONS_SEGMENT} segment is not a FixedIncomeOption: {self!r}"
             )
-
-    @classmethod
-    def expiries(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[datetime.date]:
-        """Lists the expiries a bond's options are listed for.
-
-        A contract expiring today counts as live, because it can still be traded until the market closes.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str rate code of the bond, such as `633GS2035`.
-            include_expired: A bool that is True to include expiries that have already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of datetime.date, soonest first, which is empty when nothing is listed on this underlying.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._expiry_dates(
-            exchange,
-            FIXED_INCOME_OPTIONS_SEGMENT,
-            underlying_symbol,
-            include_expired,
-            unified_broker_interface,
-        )
-
-    @classmethod
-    def strikes(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        expiry_date: datetime.date | str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[float]:
-        """Lists the strike prices listed on one bond for one expiry.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str rate code of the bond, such as `633GS2035`.
-            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
-            include_expired: A bool that is True to allow an expiry that has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of float strike prices quoted as bond prices, lowest first, which is empty when nothing is listed for that expiry.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            ValueError: expiry_date is a str that is not a valid ISO date.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        frame = cls.chain(
-            exchange,
-            underlying_symbol,
-            expiry_date,
-            include_expired,
-            unified_broker_interface,
-        )
-        if frame is None:
-            return []
-        return sorted(set(frame["strike_price"]))
-
-    @classmethod
-    def chain(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        expiry_date: datetime.date | str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> pd.DataFrame | None:
-        """Lists every option listed on one bond for one expiry.
-
-        The rows are identities rather than objects, because building an object looks each contract up in UBI and a chain of hundreds of contracts would mean hundreds of requests. Build the few you want from the rows.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str rate code of the bond, such as `633GS2035`.
-            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
-            include_expired: A bool that is True to allow an expiry that has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type`, sorted by strike price and then option type, or None when nothing matches.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            ValueError: expiry_date is a str that is not a valid ISO date.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._contracts_for(
-            exchange,
-            FIXED_INCOME_OPTIONS_SEGMENT,
-            underlying_symbol,
-            expiry_date,
-            include_expired,
-            unified_broker_interface,
-        )
 
 
 class FixedIncomeIndex(instruments.NonTradeableInstrument):
@@ -719,14 +557,17 @@ class FixedIncomeIndex(instruments.NonTradeableInstrument):
         )
 
 
-class FixedIncomeIndexFutures(instruments.TradeableInstrument):
+class FixedIncomeIndexFutures(instruments.IndexFutures):
     """One futures contract on a fixed income index, such as ONMIBOR expiring in September."""
+
+    SEGMENT = FIXED_INCOME_INDEX_FUTURES_SEGMENT
 
     def __init__(
         self,
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's fixed income index futures segment and keeps its details.
@@ -735,9 +576,11 @@ class FixedIncomeIndexFutures(instruments.TradeableInstrument):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `ONMIBOR`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeIndexFuturesError: UBI has no such contract, or the instrument it returned is not in the fixed income index futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -747,6 +590,7 @@ class FixedIncomeIndexFutures(instruments.TradeableInstrument):
                 segment=FIXED_INCOME_INDEX_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -758,76 +602,11 @@ class FixedIncomeIndexFutures(instruments.TradeableInstrument):
                 f"An instrument outside the {FIXED_INCOME_INDEX_FUTURES_SEGMENT} segment is not a FixedIncomeIndexFutures: {self!r}"
             )
 
-    @classmethod
-    def expiries(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[datetime.date]:
-        """Lists the expiries an index's futures contracts are listed for.
 
-        A contract expiring today counts as live, because it can still be traded until the market closes.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str symbol of the index, such as `ONMIBOR`.
-            include_expired: A bool that is True to include expiries that have already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of datetime.date, soonest first, which is empty when nothing is listed on this underlying.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._expiry_dates(
-            exchange,
-            FIXED_INCOME_INDEX_FUTURES_SEGMENT,
-            underlying_symbol,
-            include_expired,
-            unified_broker_interface,
-        )
-
-    @classmethod
-    def contracts(
-        cls,
-        exchange: str,
-        underlying_symbol: str | None = None,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> pd.DataFrame | None:
-        """Lists the futures contracts on fixed income indices that are listed.
-
-        The rows are identities rather than objects, because building an object looks each contract up in UBI and a long list would mean a request for every row. Build the ones you want from the rows.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str symbol of the index to keep, such as `ONMIBOR`, or None to list every underlying.
-            include_expired: A bool that is True to include contracts whose expiry has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol` and `expiry_date`, sorted by expiry, or None when nothing matches.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._contracts_for(
-            exchange,
-            FIXED_INCOME_INDEX_FUTURES_SEGMENT,
-            underlying_symbol,
-            None,
-            include_expired,
-            unified_broker_interface,
-        )
-
-
-class FixedIncomeIndexOption(instruments.TradeableInstrument):
+class FixedIncomeIndexOption(instruments.IndexOption):
     """One option on a fixed income index, which UBI carries none of yet."""
+
+    SEGMENT = FIXED_INCOME_INDEX_OPTIONS_SEGMENT
 
     def __init__(
         self,
@@ -836,6 +615,7 @@ class FixedIncomeIndexOption(instruments.TradeableInstrument):
         expiry_date: datetime.date | str,
         strike_price: float,
         option_type: str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the option up in UBI's fixed income index options segment and keeps its details.
@@ -848,9 +628,11 @@ class FixedIncomeIndexOption(instruments.TradeableInstrument):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
+            underlying: The Instrument the contract is written on, such as the rate future it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             FixedIncomeIndexOptionError: UBI has no such option, which is true of every option today, or the instrument it returned is not in the fixed income index options segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -862,6 +644,7 @@ class FixedIncomeIndexOption(instruments.TradeableInstrument):
                 expiry_date=expiry_date,
                 strike_price=strike_price,
                 option_type=option_type,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:
@@ -872,110 +655,3 @@ class FixedIncomeIndexOption(instruments.TradeableInstrument):
             raise exceptions.FixedIncomeIndexOptionError(
                 f"An instrument outside the {FIXED_INCOME_INDEX_OPTIONS_SEGMENT} segment is not a FixedIncomeIndexOption: {self!r}"
             )
-
-    @classmethod
-    def expiries(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[datetime.date]:
-        """Lists the expiries an index's options are listed for, which is nothing today.
-
-        A contract expiring today counts as live, because it can still be traded until the market closes.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str symbol of the index, such as `ONMIBOR`.
-            include_expired: A bool that is True to include expiries that have already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of datetime.date, soonest first, which is empty while UBI carries no option on a fixed income index.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._expiry_dates(
-            exchange,
-            FIXED_INCOME_INDEX_OPTIONS_SEGMENT,
-            underlying_symbol,
-            include_expired,
-            unified_broker_interface,
-        )
-
-    @classmethod
-    def strikes(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        expiry_date: datetime.date | str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> list[float]:
-        """Lists the strike prices listed on one index for one expiry, which is nothing today.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str symbol of the index, such as `ONMIBOR`.
-            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
-            include_expired: A bool that is True to allow an expiry that has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A list of float strike prices in the index's own units, lowest first, which is empty while UBI carries no option on a fixed income index.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            ValueError: expiry_date is a str that is not a valid ISO date.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        frame = cls.chain(
-            exchange,
-            underlying_symbol,
-            expiry_date,
-            include_expired,
-            unified_broker_interface,
-        )
-        if frame is None:
-            return []
-        return sorted(set(frame["strike_price"]))
-
-    @classmethod
-    def chain(
-        cls,
-        exchange: str,
-        underlying_symbol: str,
-        expiry_date: datetime.date | str,
-        include_expired: bool = False,
-        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
-    ) -> pd.DataFrame | None:
-        """Lists every option listed on one fixed income index for one expiry, which is none today.
-
-        The rows are identities rather than objects, because building an object looks each contract up in UBI and a long chain would mean a request for every row. Build the few you want from the rows.
-
-        Args:
-            exchange: The str exchange, such as `nse`.
-            underlying_symbol: The str symbol of the index, such as `ONMIBOR`.
-            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
-            include_expired: A bool that is True to allow an expiry that has already passed.
-            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
-
-        Returns:
-            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type`, or None, which is what it returns while UBI carries no option on a fixed income index.
-
-        Raises:
-            BadRequestError: The exchange is not one UBI knows.
-            ValueError: expiry_date is a str that is not a valid ISO date.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        return cls._contracts_for(
-            exchange,
-            FIXED_INCOME_INDEX_OPTIONS_SEGMENT,
-            underlying_symbol,
-            expiry_date,
-            include_expired,
-            unified_broker_interface,
-        )

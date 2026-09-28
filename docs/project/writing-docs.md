@@ -110,6 +110,8 @@ MkDocs imports the file because `mkdocs.yml` lists it under `hooks:`, and calls 
 
 A 24 MB HTML page is not usable in a browser, so the setting is off. The analysis methods are still documented once each, on the reference pages of the modules that define them, and each class page names its base classes. [Design choices](../architecture/design-choices.md#inherited_members-false-in-the-docs) records the decision.
 
+The four asset family pages are the one exception. `scripts/gen_ref_pages.py` gives them an `inherited_members` list naming `expiries`, `contracts`, `strikes` and `chain`, which the futures and option classes inherit from the derivative bases, so those four calls still show on each family class's page and nothing else inherited does.
+
 ## Adding a page
 
 A new narrative page takes two steps: create the Markdown file under `docs/`, and add it to `nav` in `mkdocs.yml`. A section's landing page is the `index.md` of its folder and is listed without a title, like `- project/index.md`. The API reference needs no nav entry, because it is generated.

@@ -15,7 +15,7 @@ The table below lists the six classes and what identifies one contract of each.
 
 ## How the six classes are built
 
-`EquityIndex` is built on `NonTradeableInstrument`, because an index is a number the exchange publishes rather than something you can buy. The other five are built on `TradeableInstrument`, so they carry the order book, the order methods, the price wrappers and the position members. Only `Equity` adds the holdings members. The class diagram below shows this, with the discovery class methods each class adds.
+`EquityIndex` is built on `NonTradeableInstrument`, because an index is a number the exchange publishes rather than something you can buy. The other five can be traded, so they carry the order book, the order methods, the price wrappers and the position members. `Equity` is built on `TradeableInstrument` directly and alone adds the holdings members. The four derivative classes are built on the [derivative base classes](../python-api/derivatives.md), which add the expiry, underlying, basis and greeks members and the discovery class methods, so each derivative class adds only its segment. The class diagram below shows this.
 
 ```mermaid
 classDiagram
@@ -41,31 +41,46 @@ classDiagram
     class EquityIndex {
         search()
     }
-    class EquityFutures {
+    class Derivative {
+        expiry and underlying members
+    }
+    class Futures {
+        basis members
         expiries()
         contracts()
+    }
+    class Option {
+        moneyness, greeks()
+        expiries()
+        strikes()
+        chain()
+    }
+    class IndexFutures
+    class IndexOption
+    class EquityFutures {
+        SEGMENT
     }
     class EquityIndexFutures {
-        expiries()
-        contracts()
+        SEGMENT
     }
     class EquityOption {
-        expiries()
-        strikes()
-        chain()
+        SEGMENT
     }
     class EquityIndexOption {
-        expiries()
-        strikes()
-        chain()
+        SEGMENT
     }
     TradeableInstrument --|> Instrument
     NonTradeableInstrument --|> Instrument
     Equity --|> TradeableInstrument
-    EquityFutures --|> TradeableInstrument
-    EquityOption --|> TradeableInstrument
-    EquityIndexFutures --|> TradeableInstrument
-    EquityIndexOption --|> TradeableInstrument
+    Derivative --|> TradeableInstrument
+    Futures --|> Derivative
+    Option --|> Derivative
+    IndexFutures --|> Futures
+    IndexOption --|> Option
+    EquityFutures --|> Futures
+    EquityOption --|> Option
+    EquityIndexFutures --|> IndexFutures
+    EquityIndexOption --|> IndexOption
     EquityIndex --|> NonTradeableInstrument
 ```
 
@@ -183,7 +198,7 @@ The same search on shares, `Equity.search("nse", "RELI", limit=5)`, returned fou
 
 ## Futures and options
 
-The four derivative classes are named by their underlying symbol, their expiry date and, for options, a strike and an option type. You rarely know those by heart, so each class offers discovery class methods that read UBI's full instrument list for its own segment and return what is live. [Finding instruments](../python-api/discovery.md) documents them; the table below says which class has which.
+The four derivative classes are named by their underlying symbol, their expiry date and, for options, a strike and an option type. You rarely know those by heart, so each class offers discovery class methods, inherited from `Futures` and `Option`, that read UBI's full instrument list for its own segment and return what is live. [Finding instruments](../python-api/discovery.md) documents them; the table below says which class has which.
 
 | Class | `expiries` | `contracts` | `strikes` | `chain` |
 |---|:-:|:-:|:-:|:-:|
@@ -241,9 +256,11 @@ The six contracts below were built and checked against UBI on 2026-09-20, which 
 
 An equity order is a securities-market order, so its quantity is a plain count of shares, and for a derivative it must be a whole number of the chosen broker's lot size. [Orders](../python-api/orders.md#place_order) explains the rest.
 
+Once built, a contract reports what it is as a contract: its days to expiry, whether it is a weekly or monthly expiry, its underlying's price, a future's basis over it, and an option's moneyness, implied volatility and greeks. Equities are the one family where all of these work, because UBI quotes shares and indices; [Derivatives](../python-api/derivatives.md) documents each member with output captured from NIFTY and RELIANCE contracts.
+
 ## Why a derivative does not hold its underlying
 
-It would be convenient if a RELIANCE option carried a RELIANCE `Equity` object, but it deliberately does not. The first reason is cost: building the underlying would send one more lookup per contract, doubling the cost of building anything from a chain. The second reason is that UBI gives no reliable way to make the link. It has no key joining a derivative to its underlying. The two are matched only by the derivative's `underlying_symbol` string being equal to a share's or an index's `symbol`.
+A RELIANCE option does not find its RELIANCE `Equity` by itself. Give it one when you build it, as `EquityOption("nse", "RELIANCE", "2026-10-27", 1200, "CE", underlying=reliance)`, and its [`underlying`](../python-api/derivatives.md#underlying) returns that very object and its [`underlying_price`](../python-api/derivatives.md#underlying_price) reads that object's last price. Without one, both fall back to a lookup by symbol on every read, which returns a plain `TradeableInstrument` or, for an index, a `NonTradeableInstrument`. Giving it is the reliable way, because UBI gives no reliable way to make the link. It has no key joining a derivative to its underlying. The two are matched only by the derivative's `underlying_symbol` string being equal to a share's or an index's `symbol`.
 
 The flowchart below shows how that string match works for a share and for an index, and where it can fail.
 
@@ -255,7 +272,7 @@ flowchart LR
     Q["An index missing<br/>from the alias table"] -.->|"may not match"| X["no EquityIndex found"]
 ```
 
-For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match, so a caller that wants the underlying builds it and decides what to do when it is not found.
+For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match, and then the lookup raises `InstrumentError` at the moment it is read, which is why passing the `EquityIndex` yourself is safer. The live check on 2026-09-28 resolved both RELIANCE and NIFTY either way.
 
 ## Errors
 

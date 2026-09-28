@@ -34,14 +34,16 @@ tradingmachine/
     ├── accounts/
     │   └── account.py             Account, whose flatten is UBI's account-wide kill switch
     ├── assets/
-    │   ├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument
+    │   ├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument,
+    │   │                          Derivative, Futures, Option, IndexFutures, IndexOption
+    │   ├── option_pricing.py      BlackScholes, the maths behind implied volatility and greeks
     │   ├── equities.py            6 equity-family classes
     │   ├── fixed_income.py        6 fixed income classes
     │   ├── commodities.py         6 commodity classes
     │   ├── currencies.py          6 currency classes
     │   ├── funds.py               ExchangeTradedFund, InvestmentTrust
     │   ├── mutual_funds.py        MutualFund
-    │   ├── exceptions.py          InstrumentError and its 31 subclasses
+    │   ├── exceptions.py          InstrumentError and its 37 subclasses
     │   └── analysis/
     │       ├── price_analysis.py  PriceAnalysis, the shared base
     │       └── 13 modules         one analysis class each, inherited by Instrument

@@ -20,7 +20,7 @@ The rule behind the first two badges is the library's own: anything that only re
 
 ## Where the members are
 
-The chart below counts the members documented on each page of this tab, which shows where the bulk of the library's surface is. The 32 price wrappers are the largest group, because each names one place a price can come from.
+The chart below counts the members documented on each page of this tab, which shows where the bulk of the library's surface is. The 32 price wrappers are the largest group, because each names one place a price can come from, and the 24 contract members on Derivatives come second, most of them on options.
 
 ```vegalite
 {
@@ -36,6 +36,7 @@ The chart below counts the members documented on each page of this tab, which sh
       {"page": "Positions", "members": 8},
       {"page": "The UBI client", "members": 8},
       {"page": "Holdings", "members": 6},
+      {"page": "Derivatives", "members": 24},
       {"page": "Finding instruments", "members": 5},
       {"page": "Instruments", "members": 1},
       {"page": "The account", "members": 3}
@@ -84,15 +85,44 @@ These members read candles, quotes and the order book. The first four work on ev
 
 ## Finding instruments
 
-These class methods find instruments rather than read one. `search` exists on `Equity` and `EquityIndex`, and the other four on the derivative classes, each supplying its own segment.
+These class methods find instruments rather than read one. `search` exists on the cash and index classes, and the other four are defined once on the `Futures` and `Option` base classes and inherited by every derivative class, each of which names its own segment.
 
 | Kind | Member | Description |
 |---|---|---|
-| <span class="member function">classmethod</span> | [`search`](discovery.md#search) | Finds listed instruments whose symbol contains a term, on `Equity` and `EquityIndex`. |
+| <span class="member function">classmethod</span> | [`search`](discovery.md#search) | Finds listed instruments whose symbol contains a term, on the cash and index classes. |
 | <span class="member function">classmethod</span> | [`expiries`](discovery.md#expiries) | Lists the expiry dates a derivative is listed for. |
 | <span class="member function">classmethod</span> | [`contracts`](discovery.md#contracts) | Lists the contracts on an underlying as a DataFrame of identities. |
 | <span class="member function">classmethod</span> | [`strikes`](discovery.md#strikes) | Lists the strike prices listed on one underlying for one expiry. |
 | <span class="member function">classmethod</span> | [`chain`](discovery.md#chain) | Lists every option listed on one underlying for one expiry. |
+
+## Derivatives
+
+These members report what a futures or option contract has and a share does not: its expiry, its underlying, its basis, and for an option its moneyness, implied volatility and greeks. They are defined on the derivative base classes and inherited by all sixteen futures and option classes, and none of them places an order. Those marked futures or options exist only on that kind of contract.
+
+| Kind | Member | Description |
+|---|---|---|
+| <span class="member property">property</span> | [`days_to_expiry`](derivatives.md#days_to_expiry) | The calendar days left until the contract expires. |
+| <span class="member property">property</span> | [`expired`](derivatives.md#expired) | Whether the expiry date has passed. |
+| <span class="member property">property</span> | [`expiry_kind`](derivatives.md#expiry_kind) | Whether the contract is the month's last expiry or a weekly one. |
+| <span class="member property">property</span> | [`next_expiry`](derivatives.md#next_expiry) | The next expiry after this one, where a position rolls to. |
+| <span class="member property">property</span> | [`underlying`](derivatives.md#underlying) | The underlying instrument, built afresh on every read. |
+| <span class="member property">property</span> | [`underlying_price`](derivatives.md#underlying_price) | The underlying's last traded price. |
+| <span class="member property">property</span> | [`open_interest_day_high`](derivatives.md#open_interest_day_high) | The highest open interest reached today. |
+| <span class="member property">property</span> | [`open_interest_day_low`](derivatives.md#open_interest_day_low) | The lowest open interest reached today. |
+| <span class="member property">property</span> | [`contract_value`](derivatives.md#contract_value) | What one lot is worth at the last price. |
+| <span class="member property">property</span> | [`basis`](derivatives.md#basis) | How far a future's price is above its underlying's. Futures only. |
+| <span class="member property">property</span> | [`basis_percent`](derivatives.md#basis_percent) | The basis as a percentage of the underlying's price. Futures only. |
+| <span class="member property">property</span> | [`cost_of_carry`](derivatives.md#cost_of_carry) | The basis as a yearly rate. Futures only. |
+| <span class="member property">property</span> | [`is_call`](derivatives.md#is_call), [`is_put`](derivatives.md#is_put) | Whether an option is a call or a put. Options only. |
+| <span class="member property">property</span> | [`intrinsic_value`](derivatives.md#intrinsic_value) | What the option would be worth if exercised now. Options only. |
+| <span class="member property">property</span> | [`time_value`](derivatives.md#time_value) | The part of the premium above the intrinsic value. Options only. |
+| <span class="member property">property</span> | [`in_the_money`](derivatives.md#in_the_money) | Whether the option has intrinsic value. Options only. |
+| <span class="member property">property</span> | [`moneyness_percent`](derivatives.md#moneyness_percent) | How far in or out of the money the option is, in per cent. Options only. |
+| <span class="member property">property</span> | [`breakeven_price`](derivatives.md#breakeven_price) | The underlying price at which a buyer breaks even at expiry. Options only. |
+| <span class="member property">property</span> | [`premium_per_lot`](derivatives.md#premium_per_lot) | What one lot costs to buy. Options only. |
+| <span class="member property">property</span> | [`notional_value`](derivatives.md#notional_value) | What one lot controls at the strike price. Options only. |
+| <span class="member method">method</span> | [`implied_volatility`](derivatives.md#implied_volatility) | The volatility the option's price implies. Options only. |
+| <span class="member method">method</span> | [`greeks`](derivatives.md#greeks) | The option's fair price, delta, gamma, theta, vega and rho. Options only. |
 
 ## Orders
 

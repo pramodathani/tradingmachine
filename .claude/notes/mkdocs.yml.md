@@ -32,6 +32,8 @@ A 24 MB HTML page is not usable in a browser, so the setting was turned off. The
 
 The sibling can afford `true` because its classes have shallow inheritance.
 
+Since 2026-09-28 the four asset family pages make one narrow exception. Their futures and option classes inherit the discovery class methods `expiries`, `contracts`, `strikes` and `chain` from `Futures` and `Option`, and `scripts/gen_ref_pages.py` gives those four pages an `inherited_members` list naming exactly those four, so they still show on each family class's page. The global setting stays `false`, and the reasoning is in `.claude/notes/scripts/gen_ref_pages.py.md`.
+
 ## Why `returns_named_value` is false
 
 Kept from the sibling, and needed for the same reason. Docstrings in both projects write `Returns:` followed by a type, such as `A pandas.DataFrame sorted by time ...`. Griffe's Google parser would otherwise read the leading words as a value's name, decide the return has no type, and warn. Under `--strict` that warning fails the build.
