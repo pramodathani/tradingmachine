@@ -2,6 +2,8 @@
 
 `Instrument` looks an instrument up in UBI once, keeps its identity, lot size and tick size, and fetches candles and live prices on demand. It inherits every analysis class in `tradingmachine.assets.analysis`, so indicators, candlestick patterns, statistics and backtests are methods on the instrument. `TradeableInstrument` adds the values that come from the order book, the methods that place, change and cancel orders, a family of short methods that name the price to trade at rather than working it out, and this instrument's own orders, trades and positions. It refuses indices, and `NonTradeableInstrument` accepts only indices.
 
+`Derivative` sits under `TradeableInstrument` and holds what every futures or option contract shares: its expiry, its underlying, which is looked up on every read and never stored, its open interest range and the value of one lot. `Futures` adds the basis over the underlying, `Option` adds moneyness, intrinsic and time value, implied volatility and greeks, and both own the discovery class methods that the family classes such as `tradingmachine.assets.equities.EquityFutures` inherit by naming their segment in `SEGMENT`. `IndexFutures` and `IndexOption` narrow the two to contracts on an index.
+
 Every call goes straight to UBI's REST API, which caches on its own side.
 
 Typical usage example:
@@ -16,6 +18,10 @@ Typical usage example:
 
   nifty = instruments.NonTradeableInstrument(exchange="nse", segment="equity_indices", symbol="NIFTY")
   level = nifty.last_price
+
+  contract = instruments.Option(instrument_id="1c39032e-270b-51e0-aa0b-fa0e1072928d")
+  days_left = contract.days_to_expiry
+  sensitivities = contract.greeks()
 """
 
 import datetime
@@ -25,6 +31,7 @@ import zoneinfo
 import pandas as pd
 
 from tradingmachine.assets import exceptions
+from tradingmachine.assets import option_pricing
 from tradingmachine.assets.analysis import candlestick_patterns
 from tradingmachine.assets.analysis import cycle_indicators
 from tradingmachine.assets.analysis import math_operators
@@ -45,7 +52,57 @@ INDIA_TIME_ZONE = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 INDEX_SEGMENT_SUFFIX = "_indices"
 
+INDEX_FUTURES_SEGMENT_SUFFIX = "_index_futures"
+
+INDEX_OPTIONS_SEGMENT_SUFFIX = "_index_options"
+
+FUTURE_SHAPE = "future"
+
+OPTION_SHAPE = "option"
+
+DERIVATIVE_SHAPES = [
+    FUTURE_SHAPE,
+    OPTION_SHAPE,
+]
+
+CALL_OPTION_TYPE = "CE"
+
+PUT_OPTION_TYPE = "PE"
+
+WEEKLY_EXPIRY_KIND = "weekly"
+
+MONTHLY_EXPIRY_KIND = "monthly"
+
+EXPIRY_TIME = datetime.time(15, 30)
+
+DAYS_PER_YEAR = 365
+
+SECONDS_PER_YEAR = DAYS_PER_YEAR * 24 * 60 * 60
+
+PERCENT = 100
+
+UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT = {
+    "equity_futures": "equities",
+    "equity_options": "equities",
+    "equity_index_futures": "equity_indices",
+    "equity_index_options": "equity_indices",
+    "fixed_income_futures": "fixed_income",
+    "fixed_income_options": "fixed_income",
+    "fixed_income_index_futures": "fixed_income_indices",
+    "fixed_income_index_options": "fixed_income_indices",
+    "commodity_futures": "commodities",
+    "commodity_options": "commodities",
+    "commodity_index_futures": "commodity_indices",
+    "commodity_index_options": "commodity_indices",
+    "currency_futures": "currencies",
+    "currency_options": "currencies",
+    "currency_index_futures": "currency_indices",
+    "currency_index_options": "currency_indices",
+}
+
 SEARCH_PATH = "/api/instruments/search"
+
+LAST_PRICE_PATH = "/api/instruments/ltp"
 
 MASTER_PATH = "/api/instruments/master"
 
@@ -3350,3 +3407,1064 @@ class NonTradeableInstrument(Instrument):
             raise exceptions.NonTradeableInstrumentError(
                 f"Only an index is a NonTradeableInstrument, and this can be traded: {self!r}"
             )
+
+
+class Derivative(TradeableInstrument):
+    """A futures or option contract, which expires on a set day and is written on an underlying instrument.
+
+    This is the shared base of `Futures` and `Option`, and it holds what is true of every contract: when it expires, what it is written on, how much of it is open, and what one lot of it is worth. It is rarely built directly; the family classes such as `tradingmachine.assets.equities.EquityFutures` inherit it.
+
+    The underlying is never stored. UBI links a contract to its underlying only by the underlying symbol matching a cash or index instrument's own symbol, with no key joining them, so `underlying` and `underlying_price` look it up again on every read and raise `InstrumentError` when the match fails.
+
+    Attributes:
+        SEGMENT: The str bare UBI segment a family class supplies, such as `equity_futures`, which the discovery class methods read; None on the base classes.
+        underlying_segment: The str exchange-prefixed segment of the underlying, such as `nse_equities` or `nse_equity_indices`.
+    """
+
+    SEGMENT = None
+
+    def __init__(
+        self,
+        instrument_id: str | None = None,
+        exchange: str | None = None,
+        segment: str | None = None,
+        symbol: str | None = None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        strike_price: float | None = None,
+        option_type: str | None = None,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ):
+        """Looks the contract up in UBI and checks that it is a future or an option.
+
+        Args:
+            instrument_id: The str UUID of the contract, or None to look it up by exchange, segment and identity fields.
+            exchange: The str exchange, such as `nse`, or None when instrument_id is given.
+            segment: The str segment, bare such as `equity_futures` or prefixed such as `nse_equity_futures`, or None when instrument_id is given.
+            symbol: The str symbol of a security, or None, since a contract has none.
+            underlying_symbol: The str symbol of the contract's underlying, such as `RELIANCE`, or None when instrument_id is given.
+            expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
+            strike_price: The float strike price of an option, or None for a future.
+            option_type: The str option type of an option, `CE` or `PE`, or None for a future.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+
+        Raises:
+            DerivativeError: The instrument is neither a future nor an option, has no expiry date, or is in a segment with no known underlying segment.
+            TradeableInstrumentError: The instrument is an index.
+            InstrumentError: UBI has no instrument matching the lookup.
+            BadRequestError: The lookup is incomplete or malformed.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        super().__init__(
+            instrument_id=instrument_id,
+            exchange=exchange,
+            segment=segment,
+            symbol=symbol,
+            underlying_symbol=underlying_symbol,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            option_type=option_type,
+            unified_broker_interface=unified_broker_interface,
+        )
+        if self.shape not in DERIVATIVE_SHAPES:
+            raise exceptions.DerivativeError(
+                f"Only a future or an option is a {type(self).__name__}, and this is a {self.shape}: {self!r}"
+            )
+        if self.expiry_date is None:
+            raise exceptions.DerivativeError(
+                f"A contract needs an expiry date, and UBI gave none: {self!r}"
+            )
+        bare_segment = self.segment.removeprefix(f"{self.exchange}_")
+        underlying_bare_segment = UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT.get(
+            bare_segment
+        )
+        if underlying_bare_segment is None:
+            raise exceptions.DerivativeError(
+                f"The {self.segment} segment has no known underlying segment: {self!r}"
+            )
+        self.underlying_segment = f"{self.exchange}_{underlying_bare_segment}"
+
+    @property
+    def days_to_expiry(self) -> int:
+        """The number of calendar days from today until the contract expires, counted in India time.
+
+        Returns:
+            The int number of days, which is 0 on the day of expiry and negative once the contract has expired.
+
+        Raises:
+            Nothing.
+        """
+        today = datetime.datetime.now(INDIA_TIME_ZONE).date()
+        return (self.expiry_date - today).days
+
+    @property
+    def expired(self) -> bool:
+        """Whether the contract's expiry date has passed, counted in India time.
+
+        A contract expiring today is not expired, because it can still be traded until the market closes. This matches the rule the discovery class methods use.
+
+        Returns:
+            A bool that is True once the expiry date is in the past.
+
+        Raises:
+            Nothing.
+        """
+        return self.days_to_expiry < 0
+
+    @property
+    def expiry_kind(self) -> str:
+        """Whether the contract is the month's last expiry for its underlying or one of the weekly expiries before it.
+
+        A contract is monthly when no later contract on the same underlying in the same segment expires in the same calendar month, and weekly otherwise. Quarterly and half-yearly contracts count as monthly, because each is the last of its month. Each read downloads the segment's whole instrument list from UBI, which takes about two seconds for single-stock options.
+
+        Returns:
+            The str `monthly` or `weekly`.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        expiry_dates = self._expiry_dates(
+            self.exchange,
+            self.segment,
+            self.underlying_symbol,
+            True,
+            self._unified_broker_interface,
+        )
+        for expiry_date in expiry_dates:
+            if expiry_date <= self.expiry_date:
+                continue
+            same_year = expiry_date.year == self.expiry_date.year
+            same_month = expiry_date.month == self.expiry_date.month
+            if same_year and same_month:
+                return WEEKLY_EXPIRY_KIND
+        return MONTHLY_EXPIRY_KIND
+
+    @property
+    def next_expiry(self) -> datetime.date | None:
+        """The first live expiry after this contract's on the same underlying in the same segment, which is where a position rolls to.
+
+        Each read downloads the segment's whole instrument list from UBI, which takes about two seconds for single-stock options.
+
+        Returns:
+            The datetime.date of the next expiry, or None when this is the last one listed.
+
+        Raises:
+            BadRequestError: The exchange or segment is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        expiry_dates = self._expiry_dates(
+            self.exchange,
+            self.segment,
+            self.underlying_symbol,
+            False,
+            self._unified_broker_interface,
+        )
+        for expiry_date in expiry_dates:
+            if expiry_date > self.expiry_date:
+                return expiry_date
+        return None
+
+    @property
+    def underlying(self) -> Instrument:
+        """The instrument the contract is written on, built afresh on every read and never stored.
+
+        It is a `NonTradeableInstrument` when the underlying is an index and a `TradeableInstrument` otherwise, never a family class such as `Equity`, because this module cannot import the family modules. A caller who needs the family class, for its holdings members for example, builds it from `underlying_segment` and `underlying_symbol`. Each read sends one lookup to UBI, so bind it to a local variable to use it more than once.
+
+        Returns:
+            The underlying as a TradeableInstrument or a NonTradeableInstrument.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if self.underlying_segment.endswith(INDEX_SEGMENT_SUFFIX):
+            return NonTradeableInstrument(
+                exchange=self.exchange,
+                segment=self.underlying_segment,
+                symbol=self.underlying_symbol,
+                unified_broker_interface=self._unified_broker_interface,
+            )
+        return TradeableInstrument(
+            exchange=self.exchange,
+            segment=self.underlying_segment,
+            symbol=self.underlying_symbol,
+            unified_broker_interface=self._unified_broker_interface,
+        )
+
+    @property
+    def underlying_price(self) -> float | None:
+        """The underlying's last traded price, read from UBI on every access by the underlying's exchange, segment and symbol.
+
+        It costs one request and builds no object. When this was checked on 2026-09-28 UBI quoted the underlying of equity contracts only: for fixed income, commodity and currency contracts it raises `ServiceUnavailableError`, because no broker that serves quotes carries the bond, rate, commodity or currency pair a contract is written on.
+
+        Returns:
+            The float last price of the underlying, or None when UBI has none.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the underlying and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        try:
+            response = self._unified_broker_interface.get(
+                LAST_PRICE_PATH,
+                params={
+                    "exchange": self.exchange,
+                    "segment": self.underlying_segment,
+                    "symbol": self.underlying_symbol,
+                },
+            )
+        except ubi_exceptions.NotFoundError as error:
+            raise exceptions.InstrumentError(
+                f"UBI has no {self.underlying_segment} instrument with the symbol {self.underlying_symbol}, so the underlying price of {self!r} cannot be read: {error.message}"
+            ) from error
+        return response["last_price"]
+
+    @property
+    def open_interest_day_high(self) -> int | None:
+        """The highest open interest reached today.
+
+        Returns:
+            The int open interest in underlying units, or None when the broker serving the quote does not report it.
+
+        Raises:
+            ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.quote["oi_day_high"]
+
+    @property
+    def open_interest_day_low(self) -> int | None:
+        """The lowest open interest reached today.
+
+        Returns:
+            The int open interest in underlying units, or None when the broker serving the quote does not report it.
+
+        Raises:
+            ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.quote["oi_day_low"]
+
+    @property
+    def contract_value(self) -> float | None:
+        """What one lot of the contract is worth at its last price, which is the last price times the lot size.
+
+        For a future this is the exposure one lot carries, and for an option it is the premium one lot costs. The lot size is the one UBI reports for the instrument, which for currency contracts is the plurality of the brokers' figures rather than the lot an order is measured against, so there it is approximate.
+
+        Returns:
+            The float value in rupees, or None when the last price or the lot size is unknown.
+
+        Raises:
+            ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        last_price = self.last_price
+        if last_price is None or self.lot_size is None:
+            return None
+        return last_price * self.lot_size
+
+
+class Futures(Derivative):
+    """A futures contract, an agreement to buy or sell the underlying at a set price on the expiry date.
+
+    It holds the members every futures contract shares, such as its basis over the underlying, and the discovery class methods `expiries` and `contracts`, which read the segment a family class names in `SEGMENT`. The family classes such as `tradingmachine.assets.equities.EquityFutures` inherit it; built directly, it accepts any futures contract, including one on an index.
+    """
+
+    def __init__(
+        self,
+        instrument_id: str | None = None,
+        exchange: str | None = None,
+        segment: str | None = None,
+        symbol: str | None = None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        strike_price: float | None = None,
+        option_type: str | None = None,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ):
+        """Looks the contract up in UBI and checks that it is a futures contract.
+
+        Args:
+            instrument_id: The str UUID of the contract, or None to look it up by exchange, segment and identity fields.
+            exchange: The str exchange, such as `nse`, or None when instrument_id is given.
+            segment: The str segment, bare such as `equity_futures` or prefixed such as `nse_equity_futures`, or None when instrument_id is given.
+            symbol: The str symbol of a security, or None, since a contract has none.
+            underlying_symbol: The str symbol of the contract's underlying, such as `RELIANCE`, or None when instrument_id is given.
+            expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
+            strike_price: A float strike price, or None, since a future has none.
+            option_type: A str option type, or None, since a future has none.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+
+        Raises:
+            FuturesError: The instrument is an option rather than a future.
+            DerivativeError: The instrument is not a contract at all, or has no expiry date.
+            TradeableInstrumentError: The instrument is an index.
+            InstrumentError: UBI has no instrument matching the lookup.
+            BadRequestError: The lookup is incomplete or malformed.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        super().__init__(
+            instrument_id=instrument_id,
+            exchange=exchange,
+            segment=segment,
+            symbol=symbol,
+            underlying_symbol=underlying_symbol,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            option_type=option_type,
+            unified_broker_interface=unified_broker_interface,
+        )
+        if self.shape != FUTURE_SHAPE:
+            raise exceptions.FuturesError(
+                f"Only a futures contract is a {type(self).__name__}, and this is an {self.shape}: {self!r}"
+            )
+
+    @classmethod
+    def expiries(
+        cls,
+        exchange: str,
+        underlying_symbol: str,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ) -> list[datetime.date]:
+        """Lists the expiries an underlying's futures contracts are listed for in the class's segment.
+
+        A contract expiring today counts as live, because it can still be traded until the market closes. Call it on a family class such as `EquityFutures`, which names its segment.
+
+        Args:
+            exchange: The str exchange, such as `nse` or `mcx`.
+            underlying_symbol: The str symbol of the underlying, such as `RELIANCE`, `NIFTY` or `GOLD`.
+            include_expired: A bool that is True to include expiries that have already passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A list of datetime.date, soonest first, which is empty when nothing is listed on this underlying.
+
+        Raises:
+            FuturesError: The class names no segment, which is true of `Futures` and `IndexFutures` themselves.
+            BadRequestError: The exchange is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if cls.SEGMENT is None:
+            raise exceptions.FuturesError(
+                f"{cls.__name__} names no segment, so call expiries on a family class such as EquityFutures"
+            )
+        return cls._expiry_dates(
+            exchange,
+            cls.SEGMENT,
+            underlying_symbol,
+            include_expired,
+            unified_broker_interface,
+        )
+
+    @classmethod
+    def contracts(
+        cls,
+        exchange: str,
+        underlying_symbol: str | None = None,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ) -> pd.DataFrame | None:
+        """Lists the futures contracts listed in the class's segment.
+
+        The rows are identities rather than objects, because building an object looks each contract up in UBI and a long list would mean a request for every row. Build the ones you want from the rows. Call it on a family class such as `EquityFutures`, which names its segment.
+
+        Args:
+            exchange: The str exchange, such as `nse` or `mcx`.
+            underlying_symbol: The str symbol of the underlying to keep, such as `RELIANCE`, or None to list every underlying.
+            include_expired: A bool that is True to include contracts whose expiry has already passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol` and `expiry_date`, sorted by expiry, or None when nothing matches.
+
+        Raises:
+            FuturesError: The class names no segment, which is true of `Futures` and `IndexFutures` themselves.
+            BadRequestError: The exchange is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if cls.SEGMENT is None:
+            raise exceptions.FuturesError(
+                f"{cls.__name__} names no segment, so call contracts on a family class such as EquityFutures"
+            )
+        return cls._contracts_for(
+            exchange,
+            cls.SEGMENT,
+            underlying_symbol,
+            None,
+            include_expired,
+            unified_broker_interface,
+        )
+
+    @property
+    def basis(self) -> float | None:
+        """How far the future's last price is above the underlying's, read from two quotes.
+
+        A positive basis, or premium, is usual, because holding the future instead of the underlying saves the cost of financing it until expiry. The two prices come from two requests and may be a moment apart.
+
+        Returns:
+            The float basis in the underlying's price units, or None when either last price is unknown.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        last_price = self.last_price
+        underlying_price = self.underlying_price
+        if last_price is None or underlying_price is None:
+            return None
+        return last_price - underlying_price
+
+    @property
+    def basis_percent(self) -> float | None:
+        """The basis as a percentage of the underlying's last price, read from two quotes.
+
+        Returns:
+            The float percentage, such as 0.4 for a future 0.4 per cent above its underlying, or None when either last price is unknown or the underlying's is zero.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        last_price = self.last_price
+        underlying_price = self.underlying_price
+        if last_price is None or underlying_price is None:
+            return None
+        if underlying_price == 0:
+            return None
+        return (last_price - underlying_price) / underlying_price * PERCENT
+
+    @property
+    def cost_of_carry(self) -> float | None:
+        """The basis annualised, which is the yearly rate of return the future's premium implies, read from two quotes.
+
+        It is the basis percentage scaled by the calendar days left, so a future 0.5 per cent above its underlying with 30 days to go carries about 6.1 per cent a year. It is compared with the risk-free rate to judge whether the future is dear or cheap. In the last few days before expiry the scaling magnifies small differences, so a basis of 0.15 per cent with one day left reads as 55 per cent a year and says little.
+
+        Returns:
+            The float annual percentage, or None when the contract expires today or has expired, or when either last price is unknown.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        days_to_expiry = self.days_to_expiry
+        if days_to_expiry <= 0:
+            return None
+        basis_percent = self.basis_percent
+        if basis_percent is None:
+            return None
+        return basis_percent * DAYS_PER_YEAR / days_to_expiry
+
+
+class Option(Derivative):
+    """An option contract, the right but not the obligation to buy the underlying at the strike price, for a call, or to sell it, for a put.
+
+    It holds the members every option shares: its moneyness against the underlying, its premium split into intrinsic and time value, and its implied volatility and greeks from `tradingmachine.assets.option_pricing.BlackScholes`. It also holds the discovery class methods `expiries`, `strikes` and `chain`, which read the segment a family class names in `SEGMENT`. The family classes such as `tradingmachine.assets.equities.EquityOption` inherit it; built directly, it accepts any option, including one on an index.
+
+    The pricing methods treat the option as European and without dividends, and take it to expire at 15:30 India time on its expiry date, which is what UBI's own order engine assumes. MCX commodity options trade until later in the evening, so for them 15:30 is an approximation.
+    """
+
+    def __init__(
+        self,
+        instrument_id: str | None = None,
+        exchange: str | None = None,
+        segment: str | None = None,
+        symbol: str | None = None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        strike_price: float | None = None,
+        option_type: str | None = None,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ):
+        """Looks the option up in UBI and checks that it is an option with a strike price and an option type.
+
+        Args:
+            instrument_id: The str UUID of the option, or None to look it up by exchange, segment and identity fields.
+            exchange: The str exchange, such as `nse`, or None when instrument_id is given.
+            segment: The str segment, bare such as `equity_options` or prefixed such as `nse_equity_options`, or None when instrument_id is given.
+            symbol: The str symbol of a security, or None, since an option has none.
+            underlying_symbol: The str symbol of the option's underlying, such as `RELIANCE`, or None when instrument_id is given.
+            expiry_date: The expiry of the option as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
+            strike_price: The float strike price of the option, or None when instrument_id is given.
+            option_type: The str option type, `CE` for a call or `PE` for a put, or None when instrument_id is given.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+
+        Raises:
+            OptionError: The instrument is a future rather than an option, or UBI gave it no strike price or option type.
+            DerivativeError: The instrument is not a contract at all, or has no expiry date.
+            TradeableInstrumentError: The instrument is an index.
+            InstrumentError: UBI has no instrument matching the lookup.
+            BadRequestError: The lookup is incomplete or malformed.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        super().__init__(
+            instrument_id=instrument_id,
+            exchange=exchange,
+            segment=segment,
+            symbol=symbol,
+            underlying_symbol=underlying_symbol,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            option_type=option_type,
+            unified_broker_interface=unified_broker_interface,
+        )
+        if self.shape != OPTION_SHAPE:
+            raise exceptions.OptionError(
+                f"Only an option is an {type(self).__name__}, and this is a {self.shape}: {self!r}"
+            )
+        if self.strike_price is None or self.option_type is None:
+            raise exceptions.OptionError(
+                f"An option needs a strike price and an option type, and UBI did not give both: {self!r}"
+            )
+
+    @classmethod
+    def expiries(
+        cls,
+        exchange: str,
+        underlying_symbol: str,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ) -> list[datetime.date]:
+        """Lists the expiries an underlying's options are listed for in the class's segment.
+
+        A contract expiring today counts as live, because it can still be traded until the market closes. Call it on a family class such as `EquityOption`, which names its segment.
+
+        Args:
+            exchange: The str exchange, such as `nse` or `mcx`.
+            underlying_symbol: The str symbol of the underlying, such as `RELIANCE`, `NIFTY` or `GOLD`.
+            include_expired: A bool that is True to include expiries that have already passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A list of datetime.date, soonest first, which is empty when nothing is listed on this underlying.
+
+        Raises:
+            OptionError: The class names no segment, which is true of `Option` and `IndexOption` themselves.
+            BadRequestError: The exchange is not one UBI knows.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if cls.SEGMENT is None:
+            raise exceptions.OptionError(
+                f"{cls.__name__} names no segment, so call expiries on a family class such as EquityOption"
+            )
+        return cls._expiry_dates(
+            exchange,
+            cls.SEGMENT,
+            underlying_symbol,
+            include_expired,
+            unified_broker_interface,
+        )
+
+    @classmethod
+    def strikes(
+        cls,
+        exchange: str,
+        underlying_symbol: str,
+        expiry_date: datetime.date | str,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ) -> list[float]:
+        """Lists the strike prices listed on one underlying for one expiry in the class's segment.
+
+        It builds the chain and takes its distinct strikes, so it costs the same as `chain`. Call it on a family class such as `EquityOption`, which names its segment.
+
+        Args:
+            exchange: The str exchange, such as `nse` or `mcx`.
+            underlying_symbol: The str symbol of the underlying, such as `RELIANCE` or `NIFTY`.
+            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
+            include_expired: A bool that is True to allow an expiry that has already passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A list of float strike prices in the underlying's price units, lowest first, which is empty when nothing is listed for that expiry.
+
+        Raises:
+            OptionError: The class names no segment, which is true of `Option` and `IndexOption` themselves.
+            BadRequestError: The exchange is not one UBI knows.
+            ValueError: expiry_date is a str that is not a valid ISO date.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = cls.chain(
+            exchange,
+            underlying_symbol,
+            expiry_date,
+            include_expired,
+            unified_broker_interface,
+        )
+        if frame is None:
+            return []
+        return sorted(set(frame["strike_price"]))
+
+    @classmethod
+    def chain(
+        cls,
+        exchange: str,
+        underlying_symbol: str,
+        expiry_date: datetime.date | str,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ) -> pd.DataFrame | None:
+        """Lists every option listed on one underlying for one expiry in the class's segment.
+
+        The rows are identities rather than objects, because building an object looks each contract up in UBI and a chain of hundreds of contracts would mean hundreds of requests. Build the few you want from the rows. Call it on a family class such as `EquityOption`, which names its segment.
+
+        Args:
+            exchange: The str exchange, such as `nse` or `mcx`.
+            underlying_symbol: The str symbol of the underlying, such as `RELIANCE` or `NIFTY`.
+            expiry_date: The expiry to list, as a datetime.date or a `YYYY-MM-DD` str.
+            include_expired: A bool that is True to allow an expiry that has already passed.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send the request through, or None to share one client among all instruments.
+
+        Returns:
+            A pandas.DataFrame with `instrument_id`, `exchange`, `segment`, `shape`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type`, sorted by strike price and then option type, or None when nothing matches.
+
+        Raises:
+            OptionError: The class names no segment, which is true of `Option` and `IndexOption` themselves.
+            BadRequestError: The exchange is not one UBI knows.
+            ValueError: expiry_date is a str that is not a valid ISO date.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if cls.SEGMENT is None:
+            raise exceptions.OptionError(
+                f"{cls.__name__} names no segment, so call chain on a family class such as EquityOption"
+            )
+        return cls._contracts_for(
+            exchange,
+            cls.SEGMENT,
+            underlying_symbol,
+            expiry_date,
+            include_expired,
+            unified_broker_interface,
+        )
+
+    @property
+    def is_call(self) -> bool:
+        """Whether the option is a call, the right to buy the underlying.
+
+        Returns:
+            A bool that is True when the option type is `CE`.
+
+        Raises:
+            Nothing.
+        """
+        return self.option_type == CALL_OPTION_TYPE
+
+    @property
+    def is_put(self) -> bool:
+        """Whether the option is a put, the right to sell the underlying.
+
+        Returns:
+            A bool that is True when the option type is `PE`.
+
+        Raises:
+            Nothing.
+        """
+        return self.option_type == PUT_OPTION_TYPE
+
+    @property
+    def intrinsic_value(self) -> float | None:
+        """What the option would be worth if exercised now, read from the underlying's last price.
+
+        For a call it is how far the underlying is above the strike, and for a put how far it is below, and it is never less than zero.
+
+        Returns:
+            The float intrinsic value per unit of the underlying, or None when the underlying's last price is unknown.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        underlying_price = self.underlying_price
+        if underlying_price is None:
+            return None
+        return self._intrinsic_value_at(underlying_price)
+
+    @property
+    def time_value(self) -> float | None:
+        """The part of the premium above the intrinsic value, which is what the time left until expiry is worth, read from two quotes.
+
+        Returns:
+            The float time value per unit of the underlying, or None when either last price is unknown.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the option or its underlying, which is the case for the underlying of every fixed income, commodity and currency option.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        last_price = self.last_price
+        intrinsic_value = self.intrinsic_value
+        if last_price is None or intrinsic_value is None:
+            return None
+        return last_price - intrinsic_value
+
+    @property
+    def in_the_money(self) -> bool | None:
+        """Whether the option has intrinsic value, read from the underlying's last price.
+
+        Returns:
+            A bool that is True when a call's strike is below the underlying or a put's is above it, or None when the underlying's last price is unknown.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        intrinsic_value = self.intrinsic_value
+        if intrinsic_value is None:
+            return None
+        return intrinsic_value > 0
+
+    @property
+    def moneyness_percent(self) -> float | None:
+        """How far the option is in or out of the money, as a percentage of the underlying's last price.
+
+        The sign says which: positive means in the money and negative means out of it, for a call and a put alike, so a call struck 2 per cent above the underlying reads about -2.
+
+        Returns:
+            The float signed percentage, or None when the underlying's last price is unknown or zero.
+
+        Raises:
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        underlying_price = self.underlying_price
+        if underlying_price is None or underlying_price == 0:
+            return None
+        distance = (underlying_price - self.strike_price) / underlying_price * PERCENT
+        if self.is_call:
+            return distance
+        return -distance
+
+    @property
+    def breakeven_price(self) -> float | None:
+        """The underlying price at expiry at which a buyer of the option at its last price neither gains nor loses.
+
+        Returns:
+            The float price, which is the strike plus the premium for a call and the strike less the premium for a put, or None when the option's last price is unknown.
+
+        Raises:
+            ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        last_price = self.last_price
+        if last_price is None:
+            return None
+        if self.is_call:
+            return self.strike_price + last_price
+        return self.strike_price - last_price
+
+    @property
+    def premium_per_lot(self) -> float | None:
+        """What buying one lot of the option costs at its last price, which is the last price times the lot size.
+
+        Returns:
+            The float premium in rupees, or None when the last price or the lot size is unknown.
+
+        Raises:
+            ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return self.contract_value
+
+    @property
+    def notional_value(self) -> float | None:
+        """The value of the underlying one lot controls at the strike price, which is the strike times the lot size.
+
+        Returns:
+            The float value in rupees, or None when the lot size is unknown.
+
+        Raises:
+            Nothing.
+        """
+        if self.lot_size is None:
+            return None
+        return self.strike_price * self.lot_size
+
+    def implied_volatility(
+        self,
+        risk_free_rate: float = option_pricing.DEFAULT_RISK_FREE_RATE,
+        underlying_price: float | None = None,
+    ) -> float | None:
+        """Finds the volatility at which the Black-Scholes model reproduces the option's last price.
+
+        The underlying's price is read from UBI unless one is given. Giving one prices an option whose underlying has no quote, such as a currency option priced off the future on the same pair, or asks what the volatility would be at another underlying price. The option still needs a last price of its own, which MCX commodity options did not have when this was checked on 2026-09-28.
+
+        Args:
+            risk_free_rate: The float annual risk-free interest rate, continuously compounded, such as 0.065 for 6.5 per cent.
+            underlying_price: The float price of the underlying to use, or None to read the underlying's last price from UBI.
+
+        Returns:
+            The float annual volatility, such as 0.12 for 12 per cent, or None when either price is unknown, when the option is at or past 15:30 India time on its expiry date, or when the premium is below the option's discounted intrinsic value.
+
+        Raises:
+            ValueError: underlying_price is given and is not above zero.
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        years_to_expiry = self._years_to_expiry()
+        if years_to_expiry <= 0:
+            return None
+        if underlying_price is None:
+            underlying_price = self.underlying_price
+        premium = self.last_price
+        if underlying_price is None or premium is None:
+            return None
+        return option_pricing.BlackScholes.implied_volatility(
+            premium,
+            underlying_price,
+            self.strike_price,
+            years_to_expiry,
+            risk_free_rate,
+            self.is_call,
+        )
+
+    def greeks(
+        self,
+        risk_free_rate: float = option_pricing.DEFAULT_RISK_FREE_RATE,
+        volatility: float | None = None,
+        underlying_price: float | None = None,
+    ) -> dict | None:
+        """Works out the option's fair price and greeks with the Black-Scholes model.
+
+        Without a volatility, the option's implied volatility is used, so the fair price equals the last price and the greeks describe the option as the market prices it. Theta is per calendar day, and vega and rho are per percentage point, which is how brokers' option chains show them.
+
+        Args:
+            risk_free_rate: The float annual risk-free interest rate, continuously compounded, such as 0.065 for 6.5 per cent.
+            volatility: The float annual volatility to use, such as 0.12 for 12 per cent, or None to use the option's implied volatility.
+            underlying_price: The float price of the underlying to use, or None to read the underlying's last price from UBI.
+
+        Returns:
+            A dict with `volatility`, `price`, `delta`, `gamma`, `theta`, `vega` and `rho`, each a float, or None when the prices needed are unknown, when the option is at or past 15:30 India time on its expiry date, or when no implied volatility can be found.
+
+        Raises:
+            ValueError: underlying_price or volatility is given and is not above zero.
+            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        years_to_expiry = self._years_to_expiry()
+        if years_to_expiry <= 0:
+            return None
+        if underlying_price is None:
+            underlying_price = self.underlying_price
+        if underlying_price is None:
+            return None
+        if volatility is None:
+            volatility = self.implied_volatility(
+                risk_free_rate=risk_free_rate,
+                underlying_price=underlying_price,
+            )
+        if volatility is None:
+            return None
+        model = option_pricing.BlackScholes(
+            underlying_price,
+            self.strike_price,
+            years_to_expiry,
+            risk_free_rate,
+            volatility,
+            self.is_call,
+        )
+        return {
+            "volatility": volatility,
+            "price": model.price,
+            "delta": model.delta,
+            "gamma": model.gamma,
+            "theta": model.theta,
+            "vega": model.vega,
+            "rho": model.rho,
+        }
+
+    def _intrinsic_value_at(self, underlying_price: float) -> float:
+        """Works out the option's intrinsic value at a given underlying price.
+
+        Args:
+            underlying_price: The float price of the underlying.
+
+        Returns:
+            The float intrinsic value, never less than zero.
+
+        Raises:
+            Nothing.
+        """
+        if self.is_call:
+            return max(underlying_price - self.strike_price, 0.0)
+        return max(self.strike_price - underlying_price, 0.0)
+
+    def _years_to_expiry(self) -> float:
+        """Works out the time from now until 15:30 India time on the expiry date, in years.
+
+        Returns:
+            The float number of years, which is zero or negative at or after that moment.
+
+        Raises:
+            Nothing.
+        """
+        expiry_moment = datetime.datetime.combine(
+            self.expiry_date,
+            EXPIRY_TIME,
+            INDIA_TIME_ZONE,
+        )
+        now = datetime.datetime.now(INDIA_TIME_ZONE)
+        return (expiry_moment - now).total_seconds() / SECONDS_PER_YEAR
+
+
+class IndexFutures(Futures):
+    """A futures contract on an index, which settles in cash because an index cannot be delivered.
+
+    It adds a guarantee to `Futures` rather than members: the contract is in an index futures segment, and its `underlying` is a `NonTradeableInstrument`. The family classes such as `tradingmachine.assets.equities.EquityIndexFutures` inherit it.
+    """
+
+    def __init__(
+        self,
+        instrument_id: str | None = None,
+        exchange: str | None = None,
+        segment: str | None = None,
+        symbol: str | None = None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        strike_price: float | None = None,
+        option_type: str | None = None,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ):
+        """Looks the contract up in UBI and checks that it is a futures contract on an index.
+
+        Args:
+            instrument_id: The str UUID of the contract, or None to look it up by exchange, segment and identity fields.
+            exchange: The str exchange, such as `nse`, or None when instrument_id is given.
+            segment: The str segment, bare such as `equity_index_futures` or prefixed such as `nse_equity_index_futures`, or None when instrument_id is given.
+            symbol: The str symbol of a security, or None, since a contract has none.
+            underlying_symbol: The str symbol of the index, such as `NIFTY`, or None when instrument_id is given.
+            expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
+            strike_price: A float strike price, or None, since a future has none.
+            option_type: A str option type, or None, since a future has none.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+
+        Raises:
+            IndexFuturesError: The contract is a future on something other than an index.
+            FuturesError: The instrument is an option rather than a future.
+            DerivativeError: The instrument is not a contract at all, or has no expiry date.
+            TradeableInstrumentError: The instrument is an index.
+            InstrumentError: UBI has no instrument matching the lookup.
+            BadRequestError: The lookup is incomplete or malformed.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        super().__init__(
+            instrument_id=instrument_id,
+            exchange=exchange,
+            segment=segment,
+            symbol=symbol,
+            underlying_symbol=underlying_symbol,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            option_type=option_type,
+            unified_broker_interface=unified_broker_interface,
+        )
+        if not self.segment.endswith(INDEX_FUTURES_SEGMENT_SUFFIX):
+            raise exceptions.IndexFuturesError(
+                f"Only a futures contract on an index is an {type(self).__name__}, and this is in {self.segment}: {self!r}"
+            )
+
+    @property
+    def underlying(self) -> NonTradeableInstrument:
+        """The index the contract is written on, built afresh on every read and never stored.
+
+        Each read sends one lookup to UBI, so bind it to a local variable to use it more than once.
+
+        Returns:
+            The index as a NonTradeableInstrument.
+
+        Raises:
+            InstrumentError: UBI has no index whose symbol matches the contract's underlying symbol, which happens for an index outside UBI's alias table.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return NonTradeableInstrument(
+            exchange=self.exchange,
+            segment=self.underlying_segment,
+            symbol=self.underlying_symbol,
+            unified_broker_interface=self._unified_broker_interface,
+        )
+
+
+class IndexOption(Option):
+    """An option on an index, which settles in cash because an index cannot be delivered.
+
+    It adds a guarantee to `Option` rather than members: the option is in an index options segment, and its `underlying` is a `NonTradeableInstrument`. The family classes such as `tradingmachine.assets.equities.EquityIndexOption` inherit it.
+    """
+
+    def __init__(
+        self,
+        instrument_id: str | None = None,
+        exchange: str | None = None,
+        segment: str | None = None,
+        symbol: str | None = None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        strike_price: float | None = None,
+        option_type: str | None = None,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
+    ):
+        """Looks the option up in UBI and checks that it is an option on an index.
+
+        Args:
+            instrument_id: The str UUID of the option, or None to look it up by exchange, segment and identity fields.
+            exchange: The str exchange, such as `nse`, or None when instrument_id is given.
+            segment: The str segment, bare such as `equity_index_options` or prefixed such as `nse_equity_index_options`, or None when instrument_id is given.
+            symbol: The str symbol of a security, or None, since an option has none.
+            underlying_symbol: The str symbol of the index, such as `NIFTY`, or None when instrument_id is given.
+            expiry_date: The expiry of the option as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
+            strike_price: The float strike price of the option in index points, or None when instrument_id is given.
+            option_type: The str option type, `CE` for a call or `PE` for a put, or None when instrument_id is given.
+            unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
+
+        Raises:
+            IndexOptionError: The option is written on something other than an index.
+            OptionError: The instrument is a future rather than an option, or UBI gave it no strike price or option type.
+            DerivativeError: The instrument is not a contract at all, or has no expiry date.
+            TradeableInstrumentError: The instrument is an index.
+            InstrumentError: UBI has no instrument matching the lookup.
+            BadRequestError: The lookup is incomplete or malformed.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        super().__init__(
+            instrument_id=instrument_id,
+            exchange=exchange,
+            segment=segment,
+            symbol=symbol,
+            underlying_symbol=underlying_symbol,
+            expiry_date=expiry_date,
+            strike_price=strike_price,
+            option_type=option_type,
+            unified_broker_interface=unified_broker_interface,
+        )
+        if not self.segment.endswith(INDEX_OPTIONS_SEGMENT_SUFFIX):
+            raise exceptions.IndexOptionError(
+                f"Only an option on an index is an {type(self).__name__}, and this is in {self.segment}: {self!r}"
+            )
+
+    @property
+    def underlying(self) -> NonTradeableInstrument:
+        """The index the option is written on, built afresh on every read and never stored.
+
+        Each read sends one lookup to UBI, so bind it to a local variable to use it more than once.
+
+        Returns:
+            The index as a NonTradeableInstrument.
+
+        Raises:
+            InstrumentError: UBI has no index whose symbol matches the option's underlying symbol, which happens for an index outside UBI's alias table.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        return NonTradeableInstrument(
+            exchange=self.exchange,
+            segment=self.underlying_segment,
+            symbol=self.underlying_symbol,
+            unified_broker_interface=self._unified_broker_interface,
+        )

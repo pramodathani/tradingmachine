@@ -1,6 +1,6 @@
 # src/tradingmachine/assets/instruments.py
 
-This module holds `Instrument`, `TradeableInstrument` and `NonTradeableInstrument`. They were ported on 2026-09-14 from `src/tradingmachine/assets/instruments.py` in the old tradingmachine project at `/run/media/pramod/6959D90B1DAD7E59/backup_20260910/pramod/Downloads/tradingmachine-master/`. The other classes in that file (`HoldableInstrument`, `Futures`, `Option`, `ListedSecurity`, `UncategorisedInstrument`) were out of scope and are not ported yet. `TradeableInstrument` gained its order, trade and position members on 2026-09-20, which is described under "The order surface" below and is a fresh build rather than a port.
+This module holds `Instrument`, `TradeableInstrument` and `NonTradeableInstrument`. They were ported on 2026-09-14 from `src/tradingmachine/assets/instruments.py` in the old tradingmachine project at `/run/media/pramod/6959D90B1DAD7E59/backup_20260910/pramod/Downloads/tradingmachine-master/`. The other classes in that file (`HoldableInstrument`, `Futures`, `Option`, `ListedSecurity`, `UncategorisedInstrument`) were out of scope and were not ported. On 2026-09-28 the module gained `Derivative`, `Futures`, `Option`, `IndexFutures` and `IndexOption` as new classes rather than ports, as the section "The derivative bases" at the end of this note describes. `TradeableInstrument` gained its order, trade and position members on 2026-09-20, which is described under "The order surface" below and is a fresh build rather than a port.
 
 ## What changed in UBI since the old code
 
@@ -557,3 +557,98 @@ Every dry run that went through the engine, which was every placement since UBI 
 Two things were fixed from that run. The error's message had read only "UBI returned HTTP 504", which the client now takes from `status_message`. And a refusal carrying an `intent_id` on the main send, not only on the probe, now records `engine` as the placement mode, through `_record_engine_refusal`, which both paths share.
 
 Whether UBI accepts each class's settings, rather than only their shape matching its glossary, therefore still has to be checked with dry runs once the engine is running.
+
+## The derivative bases, added on 2026-09-28
+
+Until 2026-09-28 every futures and option class in the four family modules inherited `TradeableInstrument` directly, as the user had decided on 2026-09-20. On 2026-09-28 the user asked for intermediate classes that hold what is true of every contract, and chose their shape in the same session.
+
+| Class | Base | Accepts | Adds |
+|---|---|---|---|
+| `Derivative` | `TradeableInstrument` | a `future` or `option` shape with an expiry date, in one of the sixteen derivative segments | `underlying_segment`, `days_to_expiry`, `expired`, `expiry_kind`, `next_expiry`, `underlying`, `underlying_price`, `open_interest_day_high`, `open_interest_day_low`, `contract_value` |
+| `Futures` | `Derivative` | a `future` shape | `basis`, `basis_percent`, `cost_of_carry`; class methods `expiries`, `contracts` |
+| `Option` | `Derivative` | an `option` shape with a strike and an option type | `is_call`, `is_put`, `intrinsic_value`, `time_value`, `in_the_money`, `moneyness_percent`, `breakeven_price`, `premium_per_lot`, `notional_value`; methods `implied_volatility`, `greeks`; class methods `expiries`, `strikes`, `chain` |
+| `IndexFutures` | `Futures` | a segment ending in `_index_futures` | an `underlying` typed as `NonTradeableInstrument` |
+| `IndexOption` | `Option` | a segment ending in `_index_options` | an `underlying` typed as `NonTradeableInstrument` |
+
+The user named the four public bases `Futures`, `Option`, `IndexFutures` and `IndexOption`, singular `Option` to match `EquityOption`. The fifth, `Derivative`, was the user's choice over writing the shared members out twice in `Futures` and `Option`. The index classes inherit `Futures` and `Option` rather than sitting beside them, also by the user's choice, so an index future has every futures member. The classes sit at the end of the module, after `NonTradeableInstrument`, because the two index `underlying` properties name it in their return type.
+
+### What this reverses, and what it does not
+
+This reverses the rule of 2026-09-20 against intermediate `Futures` and `Option` bases, which `docs/architecture/design-choices.md` and `docs/project/adding-an-asset-class.md` had recorded. It fits the user's global rule that a shallow base may hold mechanism that is genuinely identical across cases: the sixteen derivative classes had byte-identical copies of `expiries`, `contracts`, `strikes` and `chain`, differing only in a segment constant, and every new member here is identical across the families by construction.
+
+The family classes still stand alone for everything that differs. Each keeps its own constructor with exactly its identity fields, its own error class, and its own docstrings, and declares `SEGMENT`, the bare segment name the discovery class methods read. The discovery class methods moved up, which the user chose over leaving the copies in place, so a new asset family now writes only `search` by hand. On the bases themselves `SEGMENT` is None, and the discovery calls raise `FuturesError` or `OptionError` saying to call them on a family class.
+
+The holdings logic is not affected. It stays copied into each holdable class, as the user chose on 2026-09-20.
+
+### The underlying is looked up, never stored
+
+On 2026-09-20 the user removed a stored `underlying` attribute, because it doubled the cost of building a contract and because UBI joins a contract to its underlying only by symbol, with no key, a match that rests on an alias table for indices. On 2026-09-28 the user allowed two members that touch the underlying without storing it:
+
+- `underlying_price` sends one `GET /api/instruments/ltp` with `exchange`, `segment` and `symbol`, which UBI's quote routes accept in place of `instrument_id`. It builds no object, so it is the cheap way to get the one figure most members need.
+- `underlying` builds a new instrument on every read. It returns a `NonTradeableInstrument` when `underlying_segment` ends in `_indices` and a `TradeableInstrument` otherwise, so even a bare `Futures` built from an index future's id gets an index back. It cannot return a family class such as `Equity`, because this module cannot import the family modules without a cycle. The two index classes override it only to state the narrower return type.
+
+A failed match raises `InstrumentError`. For the ltp route that is a 404 turned into `InstrumentError` here, and for `underlying` it comes from `_fetch_details`.
+
+`underlying_segment` comes from `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT`, because the cash segment cannot be derived by a rule: `equity_futures` maps to `equities` but `fixed_income_futures` to `fixed_income`. A contract in a segment outside the sixteen, such as one in `uncategorised`, is refused with `DerivativeError`.
+
+### Checks the constructors make
+
+`Derivative` checks the shape, then the expiry date, then the segment, so a security given to `Futures` raises `DerivativeError` rather than `FuturesError`. The expiry check exists because the master holds rows with no expiry, which is why `_contracts_for` skips them, and the bases accept `instrument_id`. `Option` also refuses a row without a strike price or option type, so every option member can rely on both.
+
+### Time and expiry
+
+`days_to_expiry` counts calendar days from today in India time, the same "today" `_contracts_for` uses, so a contract expiring today has 0 days and is not `expired`. `expiry_kind` calls a contract monthly when no later expiry of the same underlying in the same segment falls in the same calendar month, which makes quarterly and long-dated contracts monthly too. It and `next_expiry` each download the segment's whole master, about two and a half seconds for single-stock options, and nothing is cached, by the standing rule.
+
+The pricing methods measure time to 15:30 India time on the expiry date, which is `EXPIRES_AT` in UBI's `unified_broker_interface/utilities/order_engine/volatility_order.py`. After 15:30 on expiry day `expired` is still False while `implied_volatility` and `greeks` return None, rather than dividing by zero. MCX commodity options trade later into the evening, so 15:30 is an approximation for them.
+
+### The members that need two quotes
+
+`basis`, `time_value` and the rest read the contract's last price and the underlying's in two requests, which may be a moment apart. That follows the rule of one request per value and no caching. `bid_offer_spread` avoids the problem by reading both sides from one quote, but there is no single request that returns two instruments' prices here.
+
+`cost_of_carry` annualises the basis by the calendar days left. With one day left it magnifies noise: on 2026-09-28 a NIFTY basis of 0.15 per cent read as 55.5 per cent a year and a RELIANCE basis of 0.28 per cent as 103.6 per cent. The docstring says so rather than refusing short-dated contracts, because where the figure stops meaning anything is a judgement for the caller.
+
+### Which underlyings have a quote
+
+A live check on 2026-09-28 found that UBI quotes the underlying of equity contracts only. For fixed income, commodity and currency contracts, nse and bse alike, `underlying_price` raised `ServiceUnavailableError`, because no broker that serves quotes carries the bond, commodity or currency pair itself. The first docstrings said nse currencies were quoted, which was wrong, and were corrected after the check. `implied_volatility` and `greeks` therefore take an `underlying_price`, so an nse currency option can be priced off its future. It does not help an MCX commodity option, which had no quote of its own that day.
+
+### Greeks
+
+The maths is in `src/tradingmachine/assets/option_pricing.py`, and its note explains the formulas, the units and why this is Black-Scholes where UBI's engine uses Black-76. `greeks` returns the implied volatility, the model's fair price and the five greeks in one dict, so all of them come from the same two quotes. Without a volatility it uses the implied one, so the fair price equals the last price, which is a useful check in itself.
+
+## The derivative bases, verified on 2026-09-28
+
+A read-only scratchpad script ran against the live UBI at 17:21 IST on Monday 2026-09-28, after the close, so the figures are the day's closing quotes. It was checked beforehand to name no order-placing method. Before it, an offline script built all five classes against a fake client serving made-up rows and passed all sixty checks, including `underlying_segment` for every one of the sixteen segments.
+
+| Member | NIFTY future 2026-09-29 | NIFTY 22800 CE 2026-10-06 | RELIANCE future 2026-09-29 | RELIANCE 1200 CE 2026-09-29 |
+|---|---|---|---|---|
+| `days_to_expiry` | 1 | 8 | 1 | 1 |
+| `expiry_kind` | monthly | weekly | monthly | monthly |
+| `next_expiry` | 2026-10-27 | 2026-10-13 | 2026-10-27 | 2026-10-27 |
+| `last_price` | 22814.9 | 203.7 | 1201.0 | 7.25 |
+| `underlying_price` | 22780.25 | 22780.25 | 1197.6 | 1197.6 |
+| `open_interest`, day high, day low | 10,349,755; 11,670,165; 10,349,495 | 1,475,305; 1,522,885; 169,325 | 55,437,000; 59,165,000; 55,433,500 | 755,000; 758,000; 395,000 |
+| `contract_value` | 1,482,968.5 | 13,240.5 | 600,500.0 | 3,625.0 |
+| `basis`, `basis_percent`, `cost_of_carry` | 34.65, 0.1521, 55.52 | | 3.4, 0.2839, 103.62 | |
+| `intrinsic_value`, `time_value` | | 0.0, 203.7 | | 0.0, 7.25 |
+| `moneyness_percent`, `breakeven_price` | | −0.0867, 23003.7 | | −0.2004, 1207.25 |
+| `notional_value` | | 1,482,000.0 | | 600,000.0 |
+| `implied_volatility()` | | 0.1475 | | 0.3454 |
+| delta, gamma, theta, vega, rho | | 0.51432, 0.00081, −14.50612, 13.38075, 2.49897 | | 0.46131, 0.01909, −4.57253, 0.23908, 0.01378 |
+
+`underlying` returned a `NonTradeableInstrument` in `nse_equity_indices` for NIFTY and a `TradeableInstrument` in `nse_equities` for RELIANCE, and `underlying_price` equalled the underlying object's `last_price`. A bare `Futures` built from the NIFTY future's id compared equal to the `EquityIndexFutures` and returned an index as its underlying. The moved class methods behaved as before: `EquityIndexOption.expiries("nse", "NIFTY")` gave eighteen expiries, the chain for 2026-10-06 had 462 rows, `EquityOption.strikes` for RELIANCE gave 107 strikes in 2.56 seconds, and `EquityFutures.contracts("nse", "RELIANCE")` gave three rows.
+
+Every refusal raised the intended error:
+
+| Attempt | Error |
+|---|---|
+| `Futures` on INFY | `DerivativeError` |
+| `Futures` on an option's id | `FuturesError` |
+| `Option` on a future's id | `OptionError` |
+| `IndexFutures` on the RELIANCE future | `IndexFuturesError` |
+| `IndexOption` on the RELIANCE option | `IndexOptionError` |
+| `Futures.expiries` on the bare class | `FuturesError` |
+| `Option.chain` on the bare class | `OptionError` |
+| `EquityOption` at strike 999999 | `EquityOptionError` |
+
+A second read-only script checked the other families. MCX GOLD, nse and bse USDINR, and the nse 633GS2035 futures all built and reported `expiry_kind` monthly, and all raised `ServiceUnavailableError` from `underlying_price` and `basis`. The bse USDINR future had no quote of its own either, and neither did the MCX GOLD 147200 CE for 2026-10-30, so `greeks` could not price it even with the future's price of 147150.0 supplied.
+
