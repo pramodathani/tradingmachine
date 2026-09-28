@@ -718,5 +718,9 @@ Live, reading only, after the close for equities and during the MCX evening sess
 | 633GS2035 96.75 CE 2026-10-29 | the rate future 2026-10-29 at 96.83 | Black-76 | 0.068 |
 | CRUDEOIL future | none; `basis` raised `UnderlyingError` | | |
 | NIFTY 22800 CE 2026-10-06 | the NIFTY index by name at 22780.25 | Black-Scholes | 0.1482 |
-| NIFTYFPI option | none; `UnderlyingError`, until UBI carries the link | | |
+| NIFTYFPI option | none; `UnderlyingError`, before UBI carried the link | | |
+
+### UBI's link went live on the evening of 2026-09-28
+
+UBI's pull request #20, which adds `underlying_instrument_id` to `/details` and `/master`, was merged and deployed that evening: the table was created, the day's links decided and warmed, the REST API restarted, and the links backfilled for 2026-09-22 to 2026-09-27, the earliest date whose broker records carry the codes. Read through this library afterwards, a NIFTY 22800 call's link led to the NIFTY index, a NIFTYFPI 1545 call's to "Nifty FPI 150" at 1481.7, and a SENSEX50 future's to "SNSX50". Combined with the per-family defaults, 196,465 of the 198,122 live derivatives that day find an underlying: 147,374 by UBI's link, 4,898 by an equity's name and 44,193 by an option's default future. The 1,657 left are the 825 futures on bonds, commodities and currencies, which have no default by design, and the 832 bse `USDINR-CNV` and `USDINR-STD` options, which have no future.
 

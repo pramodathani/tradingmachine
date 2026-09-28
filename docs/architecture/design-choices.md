@@ -141,7 +141,7 @@ flowchart TB
 
 **Why.** A check of UBI's database that day counted the 198,122 live derivatives. Names found 96.1 per cent of underlyings, the brokers' codes fixed the two real mismatches, `NIFTYFPI` and `SENSEX50`, and 98.9 per cent of options had a future to be priced off. Each way covers what the one before it misses, and the order puts the most certain first. Renaming the two mismatched indices in UBI was considered and rejected, because a new name gives an index a new `instrument_id` and strands its price history.
 
-**The cost.** Nothing checks a given object against `underlying_symbol`, so a wrong one gives wrong figures silently. Only a given object is free; the others send a request or two on every read. And UBI's link reaches this library only once UBI serves it.
+**The cost.** Nothing checks a given object against `underlying_symbol`, so a wrong one gives wrong figures silently. Only a given object is free; the others send a request or two on every read. UBI has served its link since 2026-09-28, and holds it for mapping dates from 2026-09-22; earlier dates have none.
 
 **In the code.** `Derivative._look_up_underlying`, `Derivative._nearest_future` and `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT` in `src/tradingmachine/assets/instruments.py`. [Derivatives](../python-api/derivatives.md#how-a-contract-finds-its-underlying) documents the order.
 

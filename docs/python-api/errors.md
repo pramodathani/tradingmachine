@@ -293,7 +293,7 @@ The table below lists what each one means.
 | <a id="optionerror"></a>`OptionError` | `Option` or `IndexOption` is given a future or an option with no strike price or option type, or `expiries`, `strikes` or `chain` is called on one of those two bare classes |
 | <a id="indexfutureserror"></a>`IndexFuturesError` | `IndexFutures` is given a futures contract whose segment is not an index futures segment, such as a share future |
 | <a id="indexoptionerror"></a>`IndexOptionError` | `IndexOption` is given an option whose segment is not an index options segment, such as a share option |
-| <a id="underlyingerror"></a>`UnderlyingError` | A contract's underlying cannot be found: none was given, UBI links it to none, and its family's default finds none. Every future outside equities raises it from `underlying`, `underlying_price` and the basis members unless given an underlying, and so does an index option whose index UBI stores under another name, such as `NIFTYFPI`, until UBI carries the link. [Derivatives](derivatives.md#how-a-contract-finds-its-underlying) gives the order a contract tries. |
+| <a id="underlyingerror"></a>`UnderlyingError` | A contract's underlying cannot be found: none was given, UBI links it to none, and its family's default finds none. Every future outside equities raises it from `underlying`, `underlying_price` and the basis members unless given an underlying, and so do the bse `USDINR-CNV` and `USDINR-STD` options, which have no future to be priced off. [Derivatives](derivatives.md#how-a-contract-finds-its-underlying) gives the order a contract tries. |
 
 ## The family errors
 
