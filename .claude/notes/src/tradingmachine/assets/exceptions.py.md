@@ -45,3 +45,7 @@ They are flat siblings rather than a chain. `FuturesError` does not inherit from
 In practice a caller who builds a family class such as `EquityFutures` never sees these five. The family constructor passes its own segment, UBI resolves that segment to exactly one shape, so the base class's shape and segment checks cannot fail. They fire when one of the five bases is built directly, for example `instruments.Futures(instrument_id=...)` on an option's id, and `FuturesError` and `OptionError` also fire when a discovery class method such as `expiries` is called on a base class that names no segment.
 
 `Derivative` checks first, so a security given to `instruments.Futures` raises `DerivativeError` rather than `FuturesError`, and `IndexFutures.expiries` on the bare class raises `FuturesError`, because the class method lives on `Futures`.
+
+## UnderlyingError, added on the evening of 2026-09-28
+
+`UnderlyingError` means a futures or option contract's underlying cannot be found: none was given, UBI links it to none, and its family's default finds none. It is raised by `underlying`, `underlying_price` and every member built on them. It sits directly under `InstrumentError`, like the other derivative errors, so code that caught `InstrumentError` when the lookup by symbol failed still catches it. It replaced two misleading failures: an `InstrumentError` from the lookup by symbol, and a `ServiceUnavailableError` from reading the price of a quoteless reference record, which looked like UBI being down. `InstrumentError` now has thirty-seven subclasses.

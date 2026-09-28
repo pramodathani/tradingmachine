@@ -58,6 +58,8 @@ INDEX_OPTIONS_SEGMENT_SUFFIX = "_index_options"
 
 FUTURE_SHAPE = "future"
 
+FUTURES_SEGMENT_SUFFIX = "_futures"
+
 OPTION_SHAPE = "option"
 
 DERIVATIVE_SHAPES = [
@@ -81,23 +83,27 @@ SECONDS_PER_YEAR = DAYS_PER_YEAR * 24 * 60 * 60
 
 PERCENT = 100
 
+BLACK_76_MODEL = "black_76"
+
+BLACK_SCHOLES_MODEL = "black_scholes"
+
 UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT = {
     "equity_futures": "equities",
     "equity_options": "equities",
     "equity_index_futures": "equity_indices",
     "equity_index_options": "equity_indices",
-    "fixed_income_futures": "fixed_income",
-    "fixed_income_options": "fixed_income",
-    "fixed_income_index_futures": "fixed_income_indices",
-    "fixed_income_index_options": "fixed_income_indices",
-    "commodity_futures": "commodities",
-    "commodity_options": "commodities",
-    "commodity_index_futures": "commodity_indices",
-    "commodity_index_options": "commodity_indices",
-    "currency_futures": "currencies",
-    "currency_options": "currencies",
-    "currency_index_futures": "currency_indices",
-    "currency_index_options": "currency_indices",
+    "fixed_income_futures": None,
+    "fixed_income_options": "fixed_income_futures",
+    "fixed_income_index_futures": None,
+    "fixed_income_index_options": "fixed_income_index_futures",
+    "commodity_futures": None,
+    "commodity_options": "commodity_futures",
+    "commodity_index_futures": None,
+    "commodity_index_options": "commodity_index_futures",
+    "currency_futures": None,
+    "currency_options": "currency_futures",
+    "currency_index_futures": None,
+    "currency_index_options": "currency_index_futures",
 }
 
 SEARCH_PATH = "/api/instruments/search"
@@ -177,6 +183,7 @@ class Instrument(
         expiry_date: The datetime.date a future or option expires, or None for a security.
         strike_price: The float strike price of an option, or None for anything else.
         option_type: The str option type, `CE` or `PE`, or None for anything else.
+        underlying_instrument_id: The str UUID UBI gives for the instrument a future or option is written on, or None for a security or when UBI does not say.
         mapping_date: The datetime.date of the UBI mapping the details were read from.
         first_seen_date: The datetime.date UBI first saw the instrument, or None when unknown.
         last_seen_date: The datetime.date UBI last saw the instrument, or None when unknown.
@@ -242,6 +249,7 @@ class Instrument(
         self.expiry_date = self._parse_date(details["expiry_date"])
         self.strike_price = details["strike_price"]
         self.option_type = details["option_type"]
+        self.underlying_instrument_id = details.get("underlying_instrument_id")
         self.mapping_date = self._parse_date(details["mapping_date"])
         self.first_seen_date = self._parse_date(details["first_seen_date"])
         self.last_seen_date = self._parse_date(details["last_seen_date"])
@@ -3414,11 +3422,11 @@ class Derivative(TradeableInstrument):
 
     This is the shared base of `Futures` and `Option`, and it holds what is true of every contract: when it expires, what it is written on, how much of it is open, and what one lot of it is worth. It is rarely built directly; the family classes such as `tradingmachine.assets.equities.EquityFutures` inherit it.
 
-    The underlying can be given as an object when the contract is built, and then the contract keeps it and uses it. This is the reliable way, because UBI links a contract to its underlying only by the underlying symbol matching an instrument's own symbol, with no key joining them, and not every underlying in UBI's master carries the contract's `underlying_symbol`. Without one, `underlying` and `underlying_price` look the underlying up by that symbol on every read and raise `InstrumentError` when the match fails.
+    The underlying is found in this order, and the first that applies wins. An underlying given as an object when the contract is built is kept and used as it is. Otherwise UBI's `underlying_instrument_id`, resolved from the brokers' own records, is used when UBI supplies one. Otherwise the family's default applies, from `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT`: an equity contract's share or index found by its symbol, the nearest future for an option on a commodity, a currency pair or a bond, and nothing for a future outside equities, whose cash underlying has no price in UBI. Nothing but the given object is stored, so the other ways look the underlying up again on every read, and `UnderlyingError` says when none of them finds one.
 
     Attributes:
         SEGMENT: The str bare UBI segment a family class supplies, such as `equity_futures`, which the discovery class methods read; None on the base classes.
-        underlying_segment: The str exchange-prefixed segment of the underlying, such as `nse_equities` or `nse_equity_indices`: the given underlying's own segment, or else the one the lookup by symbol searches.
+        underlying_segment: The str exchange-prefixed segment of the underlying, such as `nse_equities`, `nse_equity_indices` or `mcx_commodity_futures`: the given underlying's own segment, or else the one the family's default searches, or None when the family has no default.
     """
 
     SEGMENT = None
@@ -3447,7 +3455,7 @@ class Derivative(TradeableInstrument):
             expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
             strike_price: The float strike price of an option, or None for a future.
             option_type: The str option type of an option, `CE` or `PE`, or None for a future.
-            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by its symbol each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -3487,24 +3495,125 @@ class Derivative(TradeableInstrument):
         else:
             self.underlying_segment = self._underlying_segment_from_table()
 
-    def _underlying_segment_from_table(self) -> str:
-        """Works out the underlying's segment from the contract's own segment.
+    def _underlying_segment_from_table(self) -> str | None:
+        """Works out where the family's default underlying is found, from the contract's own segment.
 
         Returns:
-            The str exchange-prefixed segment, such as `nse_equity_indices` for an index option on the nse.
+            The str exchange-prefixed segment, such as `nse_equity_indices` for an index option on the nse or `mcx_commodity_futures` for an option on a commodity, or None when the family has no default underlying for this kind of contract.
 
         Raises:
             DerivativeError: The contract's segment is not one of the sixteen derivative segments in `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT`.
         """
         bare_segment = self.segment.removeprefix(f"{self.exchange}_")
-        underlying_bare_segment = UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT.get(
-            bare_segment
-        )
-        if underlying_bare_segment is None:
+        if bare_segment not in UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT:
             raise exceptions.DerivativeError(
                 f"The {self.segment} segment has no known underlying segment, so give the underlying when building the contract: {self!r}"
             )
+        underlying_bare_segment = UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT[
+            bare_segment
+        ]
+        if underlying_bare_segment is None:
+            return None
         return f"{self.exchange}_{underlying_bare_segment}"
+
+    def _look_up_underlying(self) -> Instrument:
+        """Finds the underlying when none was given, trying UBI's link first and then the family's default.
+
+        Returns:
+            The underlying as an Instrument: a TradeableInstrument or NonTradeableInstrument for UBI's link or an equity's share or index, or a Futures for an option priced off a future.
+
+        Raises:
+            UnderlyingError: UBI gives no link, and the family has no default for this contract, or the default finds nothing.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        if self.underlying_instrument_id is not None:
+            try:
+                return TradeableInstrument(
+                    instrument_id=self.underlying_instrument_id,
+                    unified_broker_interface=self._unified_broker_interface,
+                )
+            except exceptions.TradeableInstrumentError:
+                return NonTradeableInstrument(
+                    instrument_id=self.underlying_instrument_id,
+                    unified_broker_interface=self._unified_broker_interface,
+                )
+        if self.underlying_segment is None:
+            raise exceptions.UnderlyingError(
+                f"UBI links {self!r} to no underlying, and a {self.segment} contract has no default one, because its cash underlying has no price in UBI; give the underlying when building it"
+            )
+        if self.underlying_segment.endswith(FUTURES_SEGMENT_SUFFIX):
+            return self._nearest_future()
+        try:
+            if self.underlying_segment.endswith(INDEX_SEGMENT_SUFFIX):
+                return NonTradeableInstrument(
+                    exchange=self.exchange,
+                    segment=self.underlying_segment,
+                    symbol=self.underlying_symbol,
+                    unified_broker_interface=self._unified_broker_interface,
+                )
+            return TradeableInstrument(
+                exchange=self.exchange,
+                segment=self.underlying_segment,
+                symbol=self.underlying_symbol,
+                unified_broker_interface=self._unified_broker_interface,
+            )
+        except exceptions.InstrumentError as error:
+            raise exceptions.UnderlyingError(
+                f"UBI has no {self.underlying_segment} instrument with the symbol {self.underlying_symbol}, so {self!r} has no underlying; give it when building the contract"
+            ) from error
+
+    def _nearest_future(self) -> "Futures":
+        """Finds the future the contract is priced off: the same underlying's future that expires first on or after the contract does.
+
+        On or after, rather than in the same month, because an option can settle into a later future: an MCX GOLD option expiring at the end of October settles into the December future, since the October one has already expired.
+
+        Returns:
+            The future as a Futures.
+
+        Raises:
+            UnderlyingError: No live future on the same underlying expires on or after the contract.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+        """
+        frame = self._contracts_for(
+            self.exchange,
+            self.underlying_segment,
+            self.underlying_symbol,
+            None,
+            False,
+            self._unified_broker_interface,
+        )
+        chosen_instrument_id = None
+        chosen_expiry = None
+        if frame is not None:
+            for row in frame.to_dict("records"):
+                if row["expiry_date"] < self.expiry_date:
+                    continue
+                if chosen_expiry is None or row["expiry_date"] < chosen_expiry:
+                    chosen_instrument_id = row["instrument_id"]
+                    chosen_expiry = row["expiry_date"]
+        if chosen_instrument_id is None:
+            raise exceptions.UnderlyingError(
+                f"No live {self.underlying_segment} contract on {self.underlying_symbol} expires on or after {self.expiry_date.isoformat()}, so {self!r} has no underlying; give it when building the contract"
+            )
+        return Futures(
+            instrument_id=chosen_instrument_id,
+            unified_broker_interface=self._unified_broker_interface,
+        )
+
+    def _underlying_is_future(self) -> bool:
+        """Says whether the contract is priced off a future, which decides between the Black-76 and Black-Scholes models.
+
+        Returns:
+            A bool that is True when the given underlying is a future, or, with none given, when the family's default is a future.
+
+        Raises:
+            Nothing.
+        """
+        if self._given_underlying is not None:
+            return self._given_underlying.shape == FUTURE_SHAPE
+        if self.underlying_segment is None:
+            return False
+        return self.underlying_segment.endswith(FUTURES_SEGMENT_SUFFIX)
 
     @property
     def days_to_expiry(self) -> int:
@@ -3589,49 +3698,49 @@ class Derivative(TradeableInstrument):
 
     @property
     def underlying(self) -> Instrument:
-        """The instrument the contract is written on: the one given when the contract was built, or else one looked up by symbol on every read.
+        """The instrument the contract is written on, found in the order the class docstring gives.
 
-        Given, it is returned as it is, with no request, whatever its class. Looked up, it is a `NonTradeableInstrument` when the underlying is an index and a `TradeableInstrument` otherwise, never a family class such as `Equity`, because this module cannot import the family modules; the lookup sends one request each time, so bind it to a local variable to use it more than once. Give the underlying when building the contract to get the family class or to avoid the lookup.
+        A given underlying is returned as it is, with no request, whatever its class. Any other is looked up again on every read, so bind it to a local variable to use it more than once: UBI's link or an equity's share or index comes back as a `TradeableInstrument` or `NonTradeableInstrument`, never a family class such as `Equity`, because this module cannot import the family modules, and an option's default future comes back as a `Futures`.
 
         Returns:
             The underlying as an Instrument.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            UnderlyingError: No underlying was given, UBI gives no link, and the family's default finds none.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         if self._given_underlying is not None:
             return self._given_underlying
-        if self.underlying_segment.endswith(INDEX_SEGMENT_SUFFIX):
-            return NonTradeableInstrument(
-                exchange=self.exchange,
-                segment=self.underlying_segment,
-                symbol=self.underlying_symbol,
-                unified_broker_interface=self._unified_broker_interface,
-            )
-        return TradeableInstrument(
-            exchange=self.exchange,
-            segment=self.underlying_segment,
-            symbol=self.underlying_symbol,
-            unified_broker_interface=self._unified_broker_interface,
-        )
+        return self._look_up_underlying()
 
     @property
     def underlying_price(self) -> float | None:
         """The underlying's last traded price, read from UBI on every access.
 
-        With an underlying given when the contract was built, this is that instrument's `last_price`. Without one, it asks UBI by the underlying's exchange, segment and symbol, which costs one request and builds no object. When this was checked on 2026-09-28 UBI quoted the underlying of equity contracts only: for fixed income, commodity and currency contracts it raises `ServiceUnavailableError`, because no broker that serves quotes carries the bond, rate, commodity or currency pair a contract is written on.
+        It is the last price of the instrument `underlying` finds, read as cheaply as that way allows: a given underlying's own `last_price`, one request by instrument id for UBI's link, one request by exchange, segment and symbol for an equity's share or index, and the future's lookup and last price for an option priced off a future.
 
         Returns:
             The float last price of the underlying, or None when UBI has none.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            UnderlyingError: No underlying was given, UBI gives no link, and the family's default finds none, which is the case for every future outside equities.
             ServiceUnavailableError: UBI has no recent quote for the underlying and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         if self._given_underlying is not None:
             return self._given_underlying.last_price
+        if self.underlying_instrument_id is not None:
+            response = self._unified_broker_interface.get(
+                LAST_PRICE_PATH,
+                params={
+                    "instrument_id": self.underlying_instrument_id,
+                },
+            )
+            return response["last_price"]
+        if self.underlying_segment is None:
+            return self._look_up_underlying().last_price
+        if self.underlying_segment.endswith(FUTURES_SEGMENT_SUFFIX):
+            return self._nearest_future().last_price
         try:
             response = self._unified_broker_interface.get(
                 LAST_PRICE_PATH,
@@ -3642,8 +3751,8 @@ class Derivative(TradeableInstrument):
                 },
             )
         except ubi_exceptions.NotFoundError as error:
-            raise exceptions.InstrumentError(
-                f"UBI has no {self.underlying_segment} instrument with the symbol {self.underlying_symbol}, so the underlying price of {self!r} cannot be read: {error.message}"
+            raise exceptions.UnderlyingError(
+                f"UBI has no {self.underlying_segment} instrument with the symbol {self.underlying_symbol}, so {self!r} has no underlying; give it when building the contract: {error.message}"
             ) from error
         return response["last_price"]
 
@@ -3722,7 +3831,7 @@ class Futures(Derivative):
             expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
             strike_price: A float strike price, or None, since a future has none.
             option_type: A str option type, or None, since a future has none.
-            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by its symbol each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -3838,8 +3947,8 @@ class Futures(Derivative):
             The float basis in the underlying's price units, or None when either last price is unknown.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         last_price = self.last_price
@@ -3856,8 +3965,8 @@ class Futures(Derivative):
             The float percentage, such as 0.4 for a future 0.4 per cent above its underlying, or None when either last price is unknown or the underlying's is zero.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         last_price = self.last_price
@@ -3878,8 +3987,8 @@ class Futures(Derivative):
             The float annual percentage, or None when the contract expires today or has expired, or when either last price is unknown.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the future or its underlying, which is the case for the underlying of every fixed income, commodity and currency future.
+            UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
+            ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         days_to_expiry = self.days_to_expiry
@@ -3923,7 +4032,7 @@ class Option(Derivative):
             expiry_date: The expiry of the option as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
             strike_price: The float strike price of the option, or None when instrument_id is given.
             option_type: The str option type, `CE` for a call or `PE` for a put, or None when instrument_id is given.
-            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by its symbol each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -4110,8 +4219,8 @@ class Option(Derivative):
             The float intrinsic value per unit of the underlying, or None when the underlying's last price is unknown.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnderlyingError: The option's underlying cannot be found.
+            ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         underlying_price = self.underlying_price
@@ -4127,8 +4236,8 @@ class Option(Derivative):
             The float time value per unit of the underlying, or None when either last price is unknown.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the option or its underlying, which is the case for the underlying of every fixed income, commodity and currency option.
+            UnderlyingError: The option's underlying cannot be found.
+            ServiceUnavailableError: UBI has no recent quote for the option or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         last_price = self.last_price
@@ -4145,8 +4254,8 @@ class Option(Derivative):
             A bool that is True when a call's strike is below the underlying or a put's is above it, or None when the underlying's last price is unknown.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnderlyingError: The option's underlying cannot be found.
+            ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         intrinsic_value = self.intrinsic_value
@@ -4164,8 +4273,8 @@ class Option(Derivative):
             The float signed percentage, or None when the underlying's last price is unknown or zero.
 
         Raises:
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
-            ServiceUnavailableError: UBI has no recent quote for the underlying, which is the case for every fixed income, commodity and currency option.
+            UnderlyingError: The option's underlying cannot be found.
+            ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
         underlying_price = self.underlying_price
@@ -4226,9 +4335,9 @@ class Option(Derivative):
         risk_free_rate: float = option_pricing.DEFAULT_RISK_FREE_RATE,
         underlying_price: float | None = None,
     ) -> float | None:
-        """Finds the volatility at which the Black-Scholes model reproduces the option's last price.
+        """Finds the volatility at which the pricing model reproduces the option's last price.
 
-        The underlying's price is read from UBI unless one is given. Giving one prices an option whose underlying has no quote, such as a commodity or currency option priced off the future of the same month on the same underlying, or asks what the volatility would be at another underlying price. The option still needs a last price of its own, which some contracts lack, such as the MCX GOLD options checked on 2026-09-28.
+        The model is Black-76 when the option is priced off a future, which is the default for an option on a commodity, a currency pair or a bond and the case whenever the given underlying is a future, and Black-Scholes otherwise. The underlying's price is read from UBI unless one is given, and a figure given is taken as the same kind of price, spot or forward, as the underlying it stands in for; giving one asks what the volatility would be at another underlying price. The option still needs a last price of its own, which some contracts lack, such as the MCX GOLD options checked on 2026-09-28.
 
         Args:
             risk_free_rate: The float annual risk-free interest rate, continuously compounded, such as 0.065 for 6.5 per cent.
@@ -4239,7 +4348,7 @@ class Option(Derivative):
 
         Raises:
             ValueError: underlying_price is given and is not above zero.
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            UnderlyingError: No underlying price is given and the option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -4251,7 +4360,7 @@ class Option(Derivative):
         premium = self.last_price
         if underlying_price is None or premium is None:
             return None
-        return option_pricing.BlackScholes.implied_volatility(
+        return self._pricing_model().implied_volatility(
             premium,
             underlying_price,
             self.strike_price,
@@ -4266,9 +4375,9 @@ class Option(Derivative):
         volatility: float | None = None,
         underlying_price: float | None = None,
     ) -> dict | None:
-        """Works out the option's fair price and greeks with the Black-Scholes model.
+        """Works out the option's fair price and greeks with the pricing model that fits its underlying.
 
-        Without a volatility, the option's implied volatility is used, so the fair price equals the last price and the greeks describe the option as the market prices it. Theta is per calendar day, and vega and rho are per percentage point, which is how brokers' option chains show them.
+        The model is Black-76 when the option is priced off a future and Black-Scholes otherwise, as `implied_volatility` explains, and the answer names it. Under Black-76 delta and gamma are measured against the future's price, and rho holds that price still, so it only discounts. Without a volatility, the option's implied volatility is used, so the fair price equals the last price and the greeks describe the option as the market prices it. Theta is per calendar day, and vega and rho are per percentage point, which is how brokers' option chains show them.
 
         Args:
             risk_free_rate: The float annual risk-free interest rate, continuously compounded, such as 0.065 for 6.5 per cent.
@@ -4276,11 +4385,11 @@ class Option(Derivative):
             underlying_price: The float price of the underlying to use, or None to read the underlying's last price from UBI.
 
         Returns:
-            A dict with `volatility`, `price`, `delta`, `gamma`, `theta`, `vega` and `rho`, each a float, or None when the prices needed are unknown, when the option is at or past 15:30 India time on its expiry date, or when no implied volatility can be found.
+            A dict with `model`, the str `black_76` or `black_scholes`, and `volatility`, `price`, `delta`, `gamma`, `theta`, `vega` and `rho`, each a float, or None when the prices needed are unknown, when the option is at or past 15:30 India time on its expiry date, or when no implied volatility can be found.
 
         Raises:
             ValueError: underlying_price or volatility is given and is not above zero.
-            InstrumentError: UBI has no instrument in the underlying segment whose symbol matches the contract's underlying symbol.
+            UnderlyingError: No underlying price is given and the option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -4298,7 +4407,8 @@ class Option(Derivative):
             )
         if volatility is None:
             return None
-        model = option_pricing.BlackScholes(
+        model_class = self._pricing_model()
+        model = model_class(
             underlying_price,
             self.strike_price,
             years_to_expiry,
@@ -4306,7 +4416,12 @@ class Option(Derivative):
             volatility,
             self.is_call,
         )
+        if model_class is option_pricing.Black76:
+            model_name = BLACK_76_MODEL
+        else:
+            model_name = BLACK_SCHOLES_MODEL
         return {
+            "model": model_name,
             "volatility": volatility,
             "price": model.price,
             "delta": model.delta,
@@ -4315,6 +4430,19 @@ class Option(Derivative):
             "vega": model.vega,
             "rho": model.rho,
         }
+
+    def _pricing_model(self) -> type[option_pricing.OptionPricingModel]:
+        """Picks the pricing model that fits what the option is priced off.
+
+        Returns:
+            The class option_pricing.Black76 when the option is priced off a future, and option_pricing.BlackScholes otherwise.
+
+        Raises:
+            Nothing.
+        """
+        if self._underlying_is_future():
+            return option_pricing.Black76
+        return option_pricing.BlackScholes
 
     def _intrinsic_value_at(self, underlying_price: float) -> float:
         """Works out the option's intrinsic value at a given underlying price.
@@ -4353,7 +4481,7 @@ class Option(Derivative):
 class IndexFutures(Futures):
     """A futures contract on an index, which settles in cash because an index cannot be delivered.
 
-    It adds a guarantee to `Futures` rather than members: the contract is in an index futures segment, and its `underlying` is a `NonTradeableInstrument`. The family classes such as `tradingmachine.assets.equities.EquityIndexFutures` inherit it.
+    It adds a guarantee to `Futures` rather than members: the contract is in an index futures segment, so its default underlying is the index, found by symbol as a `NonTradeableInstrument` unless it is given or UBI links it. The family classes such as `tradingmachine.assets.equities.EquityIndexFutures` inherit it.
     """
 
     def __init__(
@@ -4380,7 +4508,7 @@ class IndexFutures(Futures):
             expiry_date: The expiry of the contract as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
             strike_price: A float strike price, or None, since a future has none.
             option_type: A str option type, or None, since a future has none.
-            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by its symbol each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -4410,33 +4538,11 @@ class IndexFutures(Futures):
                 f"Only a futures contract on an index is an {type(self).__name__}, and this is in {self.segment}: {self!r}"
             )
 
-    @property
-    def underlying(self) -> Instrument:
-        """The index the contract is written on: the one given when the contract was built, or else one looked up by symbol on every read.
-
-        Given, it is returned as it is, with no request. Looked up, it is a `NonTradeableInstrument`, and each read sends one request, so bind it to a local variable to use it more than once.
-
-        Returns:
-            The underlying as an Instrument, which is a NonTradeableInstrument when it was looked up.
-
-        Raises:
-            InstrumentError: UBI has no index whose symbol matches the contract's underlying symbol, which happens for an index outside UBI's alias table.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        if self._given_underlying is not None:
-            return self._given_underlying
-        return NonTradeableInstrument(
-            exchange=self.exchange,
-            segment=self.underlying_segment,
-            symbol=self.underlying_symbol,
-            unified_broker_interface=self._unified_broker_interface,
-        )
-
 
 class IndexOption(Option):
     """An option on an index, which settles in cash because an index cannot be delivered.
 
-    It adds a guarantee to `Option` rather than members: the option is in an index options segment, and its `underlying` is a `NonTradeableInstrument`. The family classes such as `tradingmachine.assets.equities.EquityIndexOption` inherit it.
+    It adds a guarantee to `Option` rather than members: the option is in an index options segment, so its default underlying is the index, found by symbol as a `NonTradeableInstrument` unless it is given or UBI links it. The family classes such as `tradingmachine.assets.equities.EquityIndexOption` inherit it.
     """
 
     def __init__(
@@ -4463,7 +4569,7 @@ class IndexOption(Option):
             expiry_date: The expiry of the option as a datetime.date or a `YYYY-MM-DD` str, or None when instrument_id is given.
             strike_price: The float strike price of the option in index points, or None when instrument_id is given.
             option_type: The str option type, `CE` for a call or `PE` for a put, or None when instrument_id is given.
-            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by its symbol each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity, an EquityIndex or a future, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -4492,25 +4598,3 @@ class IndexOption(Option):
             raise exceptions.IndexOptionError(
                 f"Only an option on an index is an {type(self).__name__}, and this is in {self.segment}: {self!r}"
             )
-
-    @property
-    def underlying(self) -> Instrument:
-        """The index the option is written on: the one given when the option was built, or else one looked up by symbol on every read.
-
-        Given, it is returned as it is, with no request. Looked up, it is a `NonTradeableInstrument`, and each read sends one request, so bind it to a local variable to use it more than once.
-
-        Returns:
-            The underlying as an Instrument, which is a NonTradeableInstrument when it was looked up.
-
-        Raises:
-            InstrumentError: UBI has no index whose symbol matches the option's underlying symbol, which happens for an index outside UBI's alias table.
-            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
-        """
-        if self._given_underlying is not None:
-            return self._given_underlying
-        return NonTradeableInstrument(
-            exchange=self.exchange,
-            segment=self.underlying_segment,
-            symbol=self.underlying_symbol,
-            unified_broker_interface=self._unified_broker_interface,
-        )

@@ -687,3 +687,36 @@ Live, reading only:
 
 The same CRUDEOIL option built without an underlying got `mcx_commodities` as its segment and raised `ServiceUnavailableError` from `underlying_price`, as before. The USDINR volatility of 0.32 is high for that pair; the option had three days left and was priced from after-hours quotes, so it says more about the quote than the model.
 
+## How a contract finds its underlying, since the evening of 2026-09-28
+
+An analysis of UBI's database that evening counted, for the 198,122 live derivatives, how many could reach an underlying each way. The name match found 96.1 per cent; the brokers' exchange codes, matched within the right segment, found 63.6 per cent but fixed the two real name mismatches, `NIFTYFPI` and `SENSEX50`; and 98.9 per cent of options had a future on the same underlying expiring on or after them. The name match, however, finds a quoteless reference record for commodities and currencies, so for those only the future gives a price. On that evidence the user asked for all five of the suggestions that followed, and the order `underlying` tries is now:
+
+1. The object given when the contract was built, used as it is.
+2. `underlying_instrument_id`, when UBI's details answer carries one, built as a `TradeableInstrument` or, if that refuses an index, a `NonTradeableInstrument`. `Instrument.__init__` reads it with `dict.get`, so a UBI without the field gives None and this step is skipped.
+3. The family's default from `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT`. A value of None, now used for every future outside equities, means there is no default and `UnderlyingError` is raised, because the cash underlying of a bond, commodity or currency future has no price in UBI. A futures segment, now used for every option outside equities, means `_nearest_future`. A cash or index segment, used for equities, means the lookup by symbol.
+4. `UnderlyingError` when the chosen way finds nothing.
+
+`_nearest_future` takes the live future on the same underlying that expires first on or after the contract, not the one in the same month. The live check showed why: an MCX GOLD option expiring on 2026-10-30 settles into the December future, and the October future expired on 2026-10-05, before the option. On or after picks 2026-12-04, which is right; same month would have picked a future that is gone before the option expires.
+
+`underlying_price` follows the same order but reads as cheaply as each way allows: a given object's own `last_price`, one `/ltp` request by instrument id for UBI's link, one `/ltp` request by identity for the name match, and the future's lookup and last price for the futures default.
+
+`UnderlyingError` is a new flat subclass of `InstrumentError`, so code that caught `InstrumentError` for a failed lookup still works. Before it, a missing underlying looked like UBI being down, because the members raised `ServiceUnavailableError` on a quoteless reference record; now a future outside equities says plainly that it has no underlying. The two index classes lost their `underlying` overrides, because `_look_up_underlying` already returns a `NonTradeableInstrument` for an index segment and a UBI link to an index.
+
+The pricing methods pick their model from the same facts through `_underlying_is_future`: a given object's `shape`, or else whether the default segment is a futures segment. UBI's link is assumed to be of the same kind as the default, which holds because UBI resolves it within the same segments. `greeks()` now names its model under `model`, `black_76` or `black_scholes`.
+
+### Checked on 2026-09-28
+
+Offline, against a fake client serving a made-up instrument list, 23 checks passed, covering every step of the order, the on-or-after rule with a future expiring before the option, the model choice, and `UnderlyingError` for a commodity future, a name mismatch without a link and the bse `USDINR-CNV` option with no future. The earlier offline scripts passed after their expectations were moved to the new table.
+
+Live, reading only, after the close for equities and during the MCX evening session:
+
+| Contract, no underlying given | Underlying found | Model | Implied volatility |
+|---|---|---|---|
+| CRUDEOIL 9100 CE 2026-10-15 | CRUDEOIL future 2026-10-19 at 9082.0 | Black-76 | 0.6092 |
+| GOLD 148900 CE 2026-10-30 | GOLD future 2026-12-04 at 148900.0 | the option had no quote | |
+| USDINR 96 CE 2026-09-28 | USDINR future 2026-09-28 at 95.945 | past 15:30 on expiry day, so None | |
+| 633GS2035 96.75 CE 2026-10-29 | the rate future 2026-10-29 at 96.83 | Black-76 | 0.068 |
+| CRUDEOIL future | none; `basis` raised `UnderlyingError` | | |
+| NIFTY 22800 CE 2026-10-06 | the NIFTY index by name at 22780.25 | Black-Scholes | 0.1482 |
+| NIFTYFPI option | none; `UnderlyingError`, until UBI carries the link | | |
+

@@ -16,7 +16,7 @@ An order can also be refused for a reason that has nothing to do with the order.
 
 A commodity or a commodity index has no quote, because the tick streams only resolve a token to a derivative segment, so `quote`, `last_price`, `ohlc` and the order-book values raise `ServiceUnavailableError` for `Commodity` and `CommodityIndex`. The four derivative classes are quoted normally, and unlike every other family ported so far they also have candles, so the analysis methods work on them.
 
-A derivative does not store an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols match in this family. The inherited `underlying_price` and every member built on it, such as `basis` and `greeks`, raise `ServiceUnavailableError` here, because a `Commodity` has no quote. `implied_volatility` and `greeks` take an `underlying_price`, so pass the last price of the future of the same month to price an option. They also need the option's own last price, which most MCX options had when this was checked on 2026-09-28 but the GOLD options did not.
+A `Commodity` has no quote, so the two option classes find their underlying as the future on the same underlying that expires first on or after the option, which is also what an MCX option settles into, and price with Black-76; an MCX GOLD option expiring at the end of October is priced off the December future. The two futures classes have no default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. Pricing still needs the option's own last price, which most MCX options had when this was checked on 2026-09-28 but the GOLD options did not.
 
 Typical usage example:
 
@@ -153,7 +153,7 @@ class CommodityFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, `mcx`, `ncdex` or `nse`.
             underlying_symbol: The str symbol of the commodity the contract is written on, such as `GOLD`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as the Commodity it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the Commodity it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -205,7 +205,7 @@ class CommodityOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in the commodity's own quotation units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as the CommodityFutures of the same month, since a Commodity has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CommodityFutures it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -327,7 +327,7 @@ class CommodityIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, such as `mcx`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `MCXBULLDEX`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as the CommodityIndex it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CommodityIndex it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -379,7 +379,7 @@ class CommodityIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as the CommodityFutures of the same month, since a Commodity has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CommodityFutures it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:

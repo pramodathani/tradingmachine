@@ -14,7 +14,7 @@ A `Currency` cannot be ordered at all, although it inherits every order method. 
 
 Coverage of prices is thinner than for commodities. A currency pair itself has no quote, because the tick streams only resolve a token to a derivative segment. The nse derivatives are quoted, the bse ones are not, and UBI stores no candles for anything in this family, so `prices` returns None and the analysis methods have nothing to work on.
 
-A derivative does not store an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols match in this family. The inherited `underlying_price` and every member built on it, such as `basis` and `greeks`, raise `ServiceUnavailableError` here, because no broker that serves quotes carries a currency pair itself, on the nse or the bse. Pass the future's last price as `underlying_price` to `implied_volatility` and `greeks` to price an nse option; a bse contract has no quote of its own either.
+No broker that serves quotes carries a currency pair itself, on the nse or the bse, so the two option classes find their underlying as the future on the same pair that expires first on or after the option, and price with Black-76. The two futures classes have no default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. A bse contract has no quote of its own either, so it cannot be priced at all, and the bse `USDINR-CNV` and `USDINR-STD` options have no future to be priced off.
 
 Typical usage example:
 
@@ -149,7 +149,7 @@ class CurrencyFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, `nse` or `bse`.
             underlying_symbol: The str symbol of the pair the contract is written on, such as `USDINR`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as the Currency it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the Currency it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -201,7 +201,7 @@ class CurrencyOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted in the pair's own rate units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as the CurrencyFutures of the same expiry, since a Currency has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CurrencyFutures it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -321,7 +321,7 @@ class CurrencyIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, `nse` or `bse`.
             underlying_symbol: The str symbol of the index the contract is written on.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as the CurrencyIndex it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CurrencyIndex it is written on, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -373,7 +373,7 @@ class CurrencyIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as the CurrencyFutures of the same expiry, since a Currency has no quote, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the CurrencyFutures it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:

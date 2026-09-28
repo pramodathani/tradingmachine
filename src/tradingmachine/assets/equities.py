@@ -395,7 +395,7 @@ class EquityFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the share the contract is written on, such as `RELIANCE`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -445,7 +445,7 @@ class EquityOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in rupees.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -563,7 +563,7 @@ class EquityIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `NIFTY`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -613,7 +613,7 @@ class EquityIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option in index points.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as an Equity for a share contract or an EquityIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:

@@ -8,7 +8,7 @@ A bond is named by its ISIN rather than by a ticker, such as `IN000126C010`, bec
 
 Two limits of UBI's coverage are worth knowing before reaching for these classes, because they are not obvious and they are not faults in this module. No broker that serves quotes carries a cash bond or a rate index, so `quote`, `last_price`, `ohlc` and the order-book values raise `ServiceUnavailableError` for `FixedIncome` and `FixedIncomeIndex`, while the three derivative classes are quoted normally. And UBI stores no candles for any fixed income segment at all, so `prices` returns None everywhere here and the analysis methods have nothing to work on.
 
-A derivative does not store an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols do match in this family. The inherited `underlying_price` and every member built on it, such as `basis` and `greeks`, raise `ServiceUnavailableError` here, because no broker quotes a bond or a rate index; pass `underlying_price` to `implied_volatility` and `greeks` to price an option anyway.
+No broker quotes a bond or a rate index, so the two option classes find their underlying as the rate future on the same underlying that expires first on or after the option, and price with Black-76; the two futures classes have no default underlying, so their `underlying_price` and basis members raise `UnderlyingError` unless one is given. Any of them can be given its underlying when it is built, as in `tradingmachine.assets.equities`.
 
 Typical usage example:
 
@@ -408,7 +408,7 @@ class FixedIncomeFutures(instruments.Futures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str rate code of the bond the contract is written on, such as `633GS2035`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -458,7 +458,7 @@ class FixedIncomeOption(instruments.Option):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted as a bond price rather than in rupees.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the rate future it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -576,7 +576,7 @@ class FixedIncomeIndexFutures(instruments.IndexFutures):
             exchange: The str exchange the contract trades on, such as `nse`.
             underlying_symbol: The str symbol of the index the contract is written on, such as `ONMIBOR`.
             expiry_date: The day the contract expires, as a datetime.date or a `YYYY-MM-DD` str.
-            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
@@ -628,7 +628,7 @@ class FixedIncomeIndexOption(instruments.IndexOption):
             expiry_date: The day the option expires, as a datetime.date or a `YYYY-MM-DD` str.
             strike_price: The float strike price of the option, quoted in the index's own units.
             option_type: The str option type, `CE` for a call or `PE` for a put.
-            underlying: The Instrument the contract is written on, such as a FixedIncome for a bond contract or a FixedIncomeIndex for an index contract, which the contract keeps and uses for `underlying` and `underlying_price`, or None to look the underlying up by `underlying_symbol` each time it is asked for.
+            underlying: The Instrument the contract is written on, such as the rate future it is priced off, which is also what is found when none is given, which the contract keeps and uses for `underlying` and `underlying_price`, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:

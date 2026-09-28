@@ -43,6 +43,10 @@ class IndexOptionError(InstrumentError):
     """An option asked for as an index option whose segment is not an index options segment."""
 
 
+class UnderlyingError(InstrumentError):
+    """A futures or option contract whose underlying cannot be found: none was given, UBI links it to none, and its family's default finds none."""
+
+
 class PositionError(InstrumentError):
     """A position that cannot be changed as asked, or one that is not held at all."""
 
