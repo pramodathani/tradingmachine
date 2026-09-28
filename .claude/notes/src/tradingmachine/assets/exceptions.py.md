@@ -35,3 +35,13 @@ The last of those cases deserves a word, because it looks like local validation 
 It sits under `InstrumentError` beside `OrderError` and `PositionError`, by the same choice and for the same reason.
 
 It lives here rather than in an equity-specific place because anything that can be held raises it. `FixedIncome` already does, and exchange traded funds, investment trusts and mutual funds will when they are ported. The old project called it `HoldingException` and gave it the code 1505, rooted directly at its own `TradingMachineException` rather than under the instrument errors.
+
+## The derivative errors, added on 2026-09-28
+
+Five errors came with the derivative base classes in `src/tradingmachine/assets/instruments.py`: `DerivativeError`, `FuturesError`, `OptionError`, `IndexFuturesError` and `IndexOptionError`. They sit directly under `InstrumentError` beside `TradeableInstrumentError` and `NonTradeableInstrumentError`, which they resemble: each says that an instrument was asked for as a kind of contract it is not. That leaves `InstrumentError` with thirty-six subclasses.
+
+They are flat siblings rather than a chain. `FuturesError` does not inherit from `DerivativeError`, and `EquityFuturesError` does not inherit from `FuturesError`, for the same reason the family errors were never rooted in the cash class's error: code that cares about one contract catches that contract's error, and code that cares about any instrument problem catches `InstrumentError`.
+
+In practice a caller who builds a family class such as `EquityFutures` never sees these five. The family constructor passes its own segment, UBI resolves that segment to exactly one shape, so the base class's shape and segment checks cannot fail. They fire when one of the five bases is built directly, for example `instruments.Futures(instrument_id=...)` on an option's id, and `FuturesError` and `OptionError` also fire when a discovery class method such as `expiries` is called on a base class that names no segment.
+
+`Derivative` checks first, so a security given to `instruments.Futures` raises `DerivativeError` rather than `FuturesError`, and `IndexFutures.expiries` on the bare class raises `FuturesError`, because the class method lives on `Futures`.

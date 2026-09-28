@@ -1,6 +1,6 @@
 """Errors raised by the instrument classes in `tradingmachine.assets.instruments`, `tradingmachine.assets.equities`, `tradingmachine.assets.fixed_income`, `tradingmachine.assets.commodities`, `tradingmachine.assets.currencies`, `tradingmachine.assets.funds` and `tradingmachine.assets.mutual_funds`.
 
-These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, or a position or holding that cannot be changed as asked. Failures of the request to UBI stay as the classes in `tradingmachine.unified_broker_interface.exceptions`, chained onto these where one caused the other.
+These describe problems with an instrument itself, such as one UBI does not know, an index used as something tradeable, a security used as a futures or option contract, or a position or holding that cannot be changed as asked. Failures of the request to UBI stay as the classes in `tradingmachine.unified_broker_interface.exceptions`, chained onto these where one caused the other.
 
 Typical usage example:
 
@@ -21,6 +21,26 @@ class TradeableInstrumentError(InstrumentError):
 
 class NonTradeableInstrumentError(InstrumentError):
     """An instrument asked for as non-tradeable that can in fact be traded."""
+
+
+class DerivativeError(InstrumentError):
+    """An instrument asked for as a derivative that is neither a future nor an option, has no expiry date, or sits in a segment with no known underlying segment."""
+
+
+class FuturesError(InstrumentError):
+    """An instrument asked for as a futures contract that is not one, or a futures discovery call made on a class that names no segment."""
+
+
+class OptionError(InstrumentError):
+    """An instrument asked for as an option that is not one or lacks a strike price or option type, or an option discovery call made on a class that names no segment."""
+
+
+class IndexFuturesError(InstrumentError):
+    """A futures contract asked for as an index future whose segment is not an index futures segment."""
+
+
+class IndexOptionError(InstrumentError):
+    """An option asked for as an index option whose segment is not an index options segment."""
 
 
 class PositionError(InstrumentError):
