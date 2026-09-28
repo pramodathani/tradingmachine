@@ -16,7 +16,7 @@ An order can also be refused for a reason that has nothing to do with the order.
 
 A commodity or a commodity index has no quote, because the tick streams only resolve a token to a derivative segment, so `quote`, `last_price`, `ohlc` and the order-book values raise `ServiceUnavailableError` for `Commodity` and `CommodityIndex`. The four derivative classes are quoted normally, and unlike every other family ported so far they also have candles, so the analysis methods work on them.
 
-A derivative does not store an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols match in this family. The inherited `underlying_price` and every member built on it, such as `basis` and `greeks`, raise `ServiceUnavailableError` here, because a `Commodity` has no quote. `implied_volatility` and `greeks` take an `underlying_price`, such as the future's last price, but they also need the option's own last price, which no broker that serves quotes carried for MCX gold options when this was checked on 2026-09-28.
+A derivative does not store an object for its underlying, as in `tradingmachine.assets.equities`, even though the symbols match in this family. The inherited `underlying_price` and every member built on it, such as `basis` and `greeks`, raise `ServiceUnavailableError` here, because a `Commodity` has no quote. `implied_volatility` and `greeks` take an `underlying_price`, so pass the last price of the future of the same month to price an option. They also need the option's own last price, which most MCX options had when this was checked on 2026-09-28 but the GOLD options did not.
 
 Typical usage example:
 

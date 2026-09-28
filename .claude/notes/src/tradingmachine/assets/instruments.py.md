@@ -609,7 +609,7 @@ The pricing methods measure time to 15:30 India time on the expiry date, which i
 
 ### Which underlyings have a quote
 
-A live check on 2026-09-28 found that UBI quotes the underlying of equity contracts only. For fixed income, commodity and currency contracts, nse and bse alike, `underlying_price` raised `ServiceUnavailableError`, because no broker that serves quotes carries the bond, commodity or currency pair itself. The first docstrings said nse currencies were quoted, which was wrong, and were corrected after the check. `implied_volatility` and `greeks` therefore take an `underlying_price`, so an nse currency option can be priced off its future. It does not help an MCX commodity option, which had no quote of its own that day.
+A live check on 2026-09-28 found that UBI quotes the underlying of equity contracts only. For fixed income, commodity and currency contracts, nse and bse alike, `underlying_price` raised `ServiceUnavailableError`, because no broker that serves quotes carries the bond, commodity or currency pair itself. The first docstrings said nse currencies were quoted, which was wrong, and were corrected after the check. `implied_volatility` and `greeks` therefore take an `underlying_price`, so a commodity or nse currency option can be priced off the future of the same month. It still needs a quote of its own, which most MCX options had that day and the GOLD options did not; the commodities note has the figures.
 
 ### Greeks
 
@@ -650,5 +650,5 @@ Every refusal raised the intended error:
 | `Option.chain` on the bare class | `OptionError` |
 | `EquityOption` at strike 999999 | `EquityOptionError` |
 
-A second read-only script checked the other families. MCX GOLD, nse and bse USDINR, and the nse 633GS2035 futures all built and reported `expiry_kind` monthly, and all raised `ServiceUnavailableError` from `underlying_price` and `basis`. The bse USDINR future had no quote of its own either, and neither did the MCX GOLD 147200 CE for 2026-10-30, so `greeks` could not price it even with the future's price of 147150.0 supplied.
+A second read-only script checked the other families. MCX GOLD, nse and bse USDINR, and the nse 633GS2035 futures all built and reported `expiry_kind` monthly, and all raised `ServiceUnavailableError` from `underlying_price` and `basis`. The bse USDINR future had no quote of its own either, and neither did the MCX GOLD 147200 CE for 2026-10-30, so `greeks` could not price it even with the future's price of 147150.0 supplied. A third script then tried sixteen MCX calls near the money and found most of them quoted: CRUDEOIL, NATURALGAS and some SILVER calls priced normally off their futures, while every GOLD call and two SILVER strikes had no quote.
 

@@ -4194,7 +4194,7 @@ class Option(Derivative):
     ) -> float | None:
         """Finds the volatility at which the Black-Scholes model reproduces the option's last price.
 
-        The underlying's price is read from UBI unless one is given. Giving one prices an option whose underlying has no quote, such as a currency option priced off the future on the same pair, or asks what the volatility would be at another underlying price. The option still needs a last price of its own, which MCX commodity options did not have when this was checked on 2026-09-28.
+        The underlying's price is read from UBI unless one is given. Giving one prices an option whose underlying has no quote, such as a commodity or currency option priced off the future of the same month on the same underlying, or asks what the volatility would be at another underlying price. The option still needs a last price of its own, which some contracts lack, such as the MCX GOLD options checked on 2026-09-28.
 
         Args:
             risk_free_rate: The float annual risk-free interest rate, continuously compounded, such as 0.065 for 6.5 per cent.
