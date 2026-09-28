@@ -143,7 +143,7 @@ The future is taken on or after the option's expiry, not in the same month, beca
     black_76 0.068
     ```
 
-Two kinds of contract still find nothing. Until UBI carries its link, an index whose derivatives use a different name from the index, such as `NIFTYFPI`, whose index UBI stores as "Nifty FPI 150", raises `UnderlyingError`; give the index yourself. And the bse `USDINR-CNV` and `USDINR-STD` options have no future at all.
+UBI's link is what finds an index whose derivatives use a different name from it. UBI has served it since 2026-09-28, so a `NIFTYFPI` option finds the index UBI stores as "Nifty FPI 150", and a `SENSEX50` contract the one stored as "SNSX50". Futures on commodities, currencies and bonds deliberately find nothing, and the bse `USDINR-CNV` and `USDINR-STD` options have no future to be priced off; on 2026-09-28 those were 825 and 832 of the 198,122 live derivatives, and every other one found an underlying. A date before 2026-09-22 has no link in UBI, because the brokers' codes were not stored then.
 
 !!! warning "An option still needs a price of its own"
     The default underlying makes the pricing members work, but `implied_volatility` and `greeks` also need the option's own last price. Some contracts have none: on 2026-09-28 no broker that serves quotes carried the MCX GOLD options or any bse currency contract, and those raise [`ServiceUnavailableError`](errors.md#serviceunavailableerror).

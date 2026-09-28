@@ -718,5 +718,24 @@ Live, reading only, after the close for equities and during the MCX evening sess
 | 633GS2035 96.75 CE 2026-10-29 | the rate future 2026-10-29 at 96.83 | Black-76 | 0.068 |
 | CRUDEOIL future | none; `basis` raised `UnderlyingError` | | |
 | NIFTY 22800 CE 2026-10-06 | the NIFTY index by name at 22780.25 | Black-Scholes | 0.1482 |
-| NIFTYFPI option | none; `UnderlyingError`, until UBI carries the link | | |
+| NIFTYFPI option | none; `UnderlyingError`, before UBI carried the link | | |
 
+### UBI's link went live on the evening of 2026-09-28
+
+UBI's pull request #20, which adds `underlying_instrument_id` to `/details` and `/master`, was merged and deployed that evening: the table was created, the day's links decided and warmed, the REST API restarted, and the links backfilled for 2026-09-22 to 2026-09-27, the earliest date whose broker records carry the codes. Read through this library afterwards, a NIFTY 22800 call's link led to the NIFTY index, a NIFTYFPI 1545 call's to "Nifty FPI 150" at 1481.7, and a SENSEX50 future's to "SNSX50". Combined with the per-family defaults, 196,465 of the 198,122 live derivatives that day find an underlying: 147,374 by UBI's link, 4,898 by an equity's name and 44,193 by an option's default future. The 1,657 left are the 825 futures on bonds, commodities and currencies, which have no default by design, and the 832 bse `USDINR-CNV` and `USDINR-STD` options, which have no future.
+
+
+## The derivative classes placed real orders, on the evening of 2026-09-28
+
+The user ran a script that, for each of the four equity derivative classes, placed an after-market limit buy of one lot well below the market through `buy_at_limit_price(product="nrml", after_market=True)`, waited for it to appear in `orders`, changed its price with `modify_order`, and cancelled it with `cancel_order` from a `finally` block. It retried a broker's refusal up to three times, because UBI chooses a different broker each time, and never retried an unknown outcome. The script was first run in a record mode that sent every write to a recorder, to check the requests it would build, and the live run was the user's own, as the rule about real orders requires.
+
+| Class | Broker | Limit, then modified to | Read back | Final status |
+|---|---|---|---|---|
+| `EquityFutures`, RELIANCE 2026-10-27, 500 | zerodha | 1147.60, then 1135.50 | 1135.50 | `CANCELLED` |
+| `EquityOption`, RELIANCE 1200 CE 2026-10-27, 500 | flattrade | 28.20, then 26.45 | 26.45 | `CANCELLED` |
+| `EquityIndexFutures`, NIFTY 2026-10-27, 65 | kotak | 21772.90, then 21543.70 | 21543.70 | `CANCELLED` |
+| `EquityIndexOption`, NIFTY 22800 CE 2026-10-06, 65 | shoonya | 162.95, then 152.75 | 152.75 | `CANCELLED` |
+
+A read afterwards found one cancelled order in each contract, and no open order, open parent or position. Nothing filled.
+
+Three brokers refused a first attempt, each for a reason outside this library. Stoxkart answered `invalid algo_id`, which points at UBI's Stoxkart order setup. Dhan answered that the account needed Rs. 4204.84 more for the RELIANCE option. INDmoney refused the NIFTY future's price as outside 22450.70 to 23367.00, a band of about two per cent that it checks even on an after-market order, while Kotak took the same price. Every modify answered with `status_before_modify` empty, although every one took effect; a broker modify answered with it on 2026-09-20, so the engine's path may not pass it back.
