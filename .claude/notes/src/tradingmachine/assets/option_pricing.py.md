@@ -54,3 +54,21 @@ A scratchpad script compared the model with values computed independently for S 
 | Rho | 0.53232 | −0.41890 |
 
 Put-call parity held, since 10.45058 − 5.57353 = 4.87706 = 100 − 100 e^(−0.05). `implied_volatility` recovered 0.2000004 from the call price and 0.1999993 from the put price, returned None for premiums of 0, 0.001 and 99, and a time to expiry of zero raised `ValueError`.
+
+## Black-76, added later on 2026-09-28
+
+The user asked for Black-76 whenever an option is priced off a future. Black-Scholes treats the price it is given as a spot price and adds the cost of carry on top, so fed a future's price it counts the carry twice; Black-76 takes the forward price as it is and only discounts. It is also the model UBI's order engine uses, in `unified_broker_interface/utilities/order_engine/utilities/black76.py`, so the two now give the same figures from the same inputs.
+
+The module now has three classes. `OptionPricingModel` is a shallow base holding only what is genuinely identical: the normal distribution and the bisection that finds an implied volatility. The bisection builds `cls(reference_price, strike_price, years_to_expiry, risk_free_rate, volatility, is_call)` by position, so both models keep that order, and its second argument was renamed from `underlying_price` to `reference_price` because it is a forward price for Black-76. `BlackScholes` is otherwise unchanged. `Black76` takes `forward_price` in its place.
+
+| Quantity | Black-76 |
+|---|---|
+| d1 | (ln(F / K) + σ² T / 2) / (σ √T) |
+| Call, put | e^(−rT) (F N(d1) − K N(d2)), e^(−rT) (K N(−d2) − F N(−d1)) |
+| Delta | e^(−rT) N(d1) for a call, −e^(−rT) N(−d1) for a put, discounted as UBI does |
+| Gamma | e^(−rT) n(d1) / (F σ √T) |
+| Theta | (r V − F e^(−rT) n(d1) σ / (2 √T)) / 365 |
+| Vega | F e^(−rT) n(d1) √T / 100 |
+| Rho | −T V / 100, because with the forward held still the rate only discounts |
+
+Checked offline on 2026-09-28, for F = 9125, K = 9100, 17 days, r = 0.065 and σ = 0.59, calls and puts alike: price, delta and implied volatility agreed with UBI's `Black76` to eight decimals, gamma, vega, rho and theta agreed with central finite differences, and put-call parity on a forward held to 1e-9. `BlackScholes` still gave 10.45058357 for the textbook case.
