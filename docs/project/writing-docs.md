@@ -75,9 +75,9 @@ The theme is `mkdocs-material==9.6.9`, with deep orange as its primary and accen
 
 1. It skips any path containing `__pycache__`.
 2. It turns the file path, relative to `src`, into a dotted module path and a page path under `reference/`. A package's `__init__.py` becomes that package's `index.md`, and an empty `__init__.py` is skipped because it has nothing to show. Today that skips the `assets`, `assets.analysis`, `unified_broker_interface` and `utilities` packages, so only `tradingmachine`, `tradingmachine.accounts`, `tradingmachine.asset_baskets` and `tradingmachine.orders` get an index page. Any other dunder module, such as a `__main__.py`, is skipped too. A module that is itself named `index`, such as `tradingmachine.asset_baskets.index`, is written to `index_module.md`, because `index.md` in its folder already belongs to the package; two entries sharing one page made the section-index plugin loop forever.
-3. It writes the page in memory, not on disk, with a single line such as `::: tradingmachine.assets.equities`, which mkdocstrings expands.
+3. It writes the page in memory, not on disk, as a hierarchy. The module comes first as the page title, through `::: tradingmachine.assets.equities` with `heading_level: 1` and only the module's constants as members. Then each public class follows in the order the module defines it, through its own `::: tradingmachine.assets.equities.Equity` line with `heading_level: 2`, so its properties and methods become third-level headings in source order and the menu on the right lists every class with its members beneath it. After each class it adds that class's example programs, described below.
 4. It records an edit link back to the source file, such as `src/tradingmachine/assets/equities.py`, and adds the page to the navigation.
-5. At the end it writes `reference/SUMMARY.md`, which literate-nav reads. That is why the nav in `mkdocs.yml` says only `- API reference: reference/`.
+5. At the end it writes `reference/index.md`, the class hierarchy, a tree of all the library's classes by inheritance with each one linked to its section, and then `reference/SUMMARY.md`, which literate-nav reads, with the class hierarchy as the section's first entry. That is why the nav in `mkdocs.yml` says only `- API reference: reference/`.
 
 A new module therefore appears in the reference with no edits anywhere. The builder keeps two roots on purpose: the repository root for edit links, and `src` for the dotted path, so that the identifier reads `tradingmachine.assets.equities` rather than `src.tradingmachine.assets.equities`. The script sits in `scripts/` rather than in the package, so it is never shipped to anyone installing the library.
 
@@ -92,6 +92,8 @@ The mkdocstrings options in `mkdocs.yml` matter when you write docstrings. The t
 | `inherited_members` | `false` | A class page does not repeat what it inherits, as explained below |
 | `returns_named_value` | `false` | `Returns: A pandas.DataFrame ...` is read as a description, not as a value named "A" |
 | `merge_init_into_class` | `true` | The constructor's arguments appear on the class |
+| `members_order` | `source` | Members appear in the order the code defines them |
+| `group_by_category` | `false` | Properties and methods are not gathered into separate groups, so `members_order: source` holds across both |
 
 ### What the build hook does
 

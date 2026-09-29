@@ -74,3 +74,7 @@ MkDocs logs `Doc file 'index.md' contains an unrecognized relative link 'referen
 ## Asset baskets pages, added on 2026-09-28
 
 Two pages were added to the nav: `python-api/asset-baskets.md` under Python API, after The account, and `analysis/performance.md` under Analysis, after Signals and backtests. The new package's reference pages need no nav entry, because `scripts/gen_ref_pages.py` generates one per module.
+
+## `group_by_category: false`, since 2026-09-29
+
+mkdocstrings-python groups members by category by default, putting attributes, which includes properties, ahead of functions, so `members_order: source` only held within each group and `Account.parents` came before `Account.flatten`. The user asked on 2026-09-29 for every property and method in the order it appears in the code, so grouping is off. The reasoning for the new reference layout is in `.claude/notes/scripts/gen_ref_pages.py.md`.
