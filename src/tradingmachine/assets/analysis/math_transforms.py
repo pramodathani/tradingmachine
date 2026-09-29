@@ -43,6 +43,28 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Take the arc cosine of Infosys's price adjustment factor, which lies between -1 and 1:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.arc_cosine(column="price_factor", days=30)
+            print(frame.set_index("datetime")["acos"].tail())
+            ```
+
+            Show that a close above 1 has no arc cosine, so every value comes back undefined:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.arc_cosine(days=30)
+            missing = frame["acos"].isna().sum()
+            print(f"{missing} of {len(frame)} values are undefined")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -80,6 +102,28 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Take the arc sine of Infosys's price adjustment factor, which lies between -1 and 1:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.arc_sine(column="price_factor", days=30)
+            print(frame.set_index("datetime")["asin"].tail())
+            ```
+
+            Show that a close above 1 has no arc sine, so every value comes back undefined:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.arc_sine(days=30)
+            missing = frame["asin"].isna().sum()
+            print(f"{missing} of {len(frame)} values are undefined")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -117,6 +161,27 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five arc tangents of Vodafone Idea's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.arc_tangent(days=30)
+            print(frame.set_index("datetime")["atan"].tail())
+            ```
+
+            Print the arc tangent of NIFTY's daily low, which is close to pi over two for any large value:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.arc_tangent(column="low", days=30)
+            print(frame.set_index("datetime")["atan"].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -154,6 +219,33 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Vodafone Idea's close rounded up to the next whole rupee:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.ceiling(days=30)
+            columns = [
+                "datetime",
+                "close",
+                "ceil",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Count the days in the last half year on which Infosys closed on a whole rupee:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.ceiling(days=180)
+            whole = (frame["ceil"] == frame["close"]).sum()
+            print(f"Closed on a whole rupee on {whole} of {len(frame)} days")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -191,6 +283,27 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five cosines of Infosys's close, treated as radians:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.cosine(days=30)
+            print(frame.set_index("datetime")["cos"].tail())
+            ```
+
+            Take the cosine of Infosys's price adjustment factor:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.cosine(column="price_factor", days=30)
+            print(frame.set_index("datetime")["cos"].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -228,6 +341,29 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five hyperbolic cosines of Vodafone Idea's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.hyperbolic_cosine(days=30)
+            print(frame.set_index("datetime")["cosh"].tail())
+            ```
+
+            Show that a close in the thousands overflows to infinity:
+
+            ```python
+            import numpy
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.hyperbolic_cosine(days=30)
+            infinite = numpy.isinf(frame["cosh"]).sum()
+            print(f"{infinite} of {len(frame)} values overflowed to infinity")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -265,6 +401,29 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five exponentials of Vodafone Idea's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.exponential(days=30)
+            print(frame.set_index("datetime")["exp"].tail())
+            ```
+
+            Check that the natural logarithm of the exponential gives the close back:
+
+            ```python
+            import numpy
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.exponential(days=30)
+            error = (numpy.log(frame["exp"]) - frame["close"]).abs().max()
+            print(f"Largest round-trip error: {error}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -302,6 +461,33 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Vodafone Idea's close rounded down to the whole rupee:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.floor(days=30)
+            columns = [
+                "datetime",
+                "close",
+                "floor",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Average the paise part of Infosys's close over the last quarter:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.floor(days=90)
+            paise = (frame["close"] - frame["floor"]) * 100
+            print(f"Average paise part of the close: {paise.mean():.1f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -339,6 +525,30 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five natural logarithms of Infosys's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.natural_logarithm(days=30)
+            print(frame.set_index("datetime")["ln"].tail())
+            ```
+
+            Add up NIFTY's daily log returns into its total log return for the last year:
+
+            ```python
+            import math
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.natural_logarithm(days=365)
+            total_log_return = frame["ln"].diff().sum()
+            print(f"Total log return {total_log_return:.4f}")
+            print(f"Total return {math.exp(total_log_return) - 1:.2%}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -376,6 +586,36 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five base 10 logarithms of NIFTY's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.logarithm_base_10(days=30)
+            print(frame.set_index("datetime")["log10"].tail())
+            ```
+
+            Count the digits before the decimal point in the latest close of four shares:
+
+            ```python
+            import math
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.logarithm_base_10(days=10)
+                digits = math.floor(frame["log10"].iloc[-1]) + 1
+                print(f"{symbol}: {digits} digits")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -413,6 +653,27 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five sines of Infosys's close, treated as radians:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.sine(days=30)
+            print(frame.set_index("datetime")["sin"].tail())
+            ```
+
+            Take the sine of Infosys's price adjustment factor:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.sine(column="price_factor", days=30)
+            print(frame.set_index("datetime")["sin"].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -450,6 +711,27 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five hyperbolic sines of Vodafone Idea's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.hyperbolic_sine(days=30)
+            print(frame.set_index("datetime")["sinh"].tail())
+            ```
+
+            Take the hyperbolic sine of Infosys's price adjustment factor:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.hyperbolic_sine(column="price_factor", days=30)
+            print(frame.set_index("datetime")["sinh"].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -487,6 +769,31 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five square roots of Infosys's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.square_root(days=30)
+            print(frame.set_index("datetime")["sqrt"].tail())
+            ```
+
+            Print the square root of NIFTY's daily high for a fixed week:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.square_root(
+                column="high",
+                from_date="2026-09-21",
+                to_date="2026-09-25",
+            )
+            print(frame.set_index("datetime")["sqrt"])
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -524,6 +831,29 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five tangents of Infosys's close, treated as radians:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.tangent(days=30)
+            print(frame.set_index("datetime")["tan"].tail())
+            ```
+
+            Check that the tangent equals the sine divided by the cosine:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            tangent = infosys.tangent(days=30)["tan"].iloc[-1]
+            sine = infosys.sine(days=30)["sin"].iloc[-1]
+            cosine = infosys.cosine(days=30)["cos"].iloc[-1]
+            print(f"tan {tangent:.6f}, sin / cos {sine / cosine:.6f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -561,6 +891,30 @@ class MathTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five hyperbolic tangents of Vodafone Idea's close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.hyperbolic_tangent(days=30)
+            print(frame.set_index("datetime")["tanh"].tail())
+            ```
+
+            Take the hyperbolic tangent of Infosys's price adjustment factor:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.hyperbolic_tangent(
+                column="price_factor",
+                days=30,
+            )
+            print(frame.set_index("datetime")["tanh"].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,

@@ -43,6 +43,31 @@ class VolatilityIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day average true range:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.average_true_range(days=90)
+            print(frame.set_index("datetime")["atr_14"].tail())
+            ```
+
+            Place a hypothetical stop two average true ranges below Vodafone Idea's close, rounded to its 0.01 tick:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            vodafone_idea = equities.Equity(exchange="nse", symbol="IDEA")
+            frame = vodafone_idea.average_true_range(window=14, days=90)
+            close = frame["close"].iloc[-1]
+            average_true_range = frame["atr_14"].iloc[-1]
+            stop_level = round(close - 2 * average_true_range, 2)
+            print(f"Close {close}, ATR {average_true_range:.2f}")
+            print(f"Stop level {stop_level}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -85,6 +110,38 @@ class VolatilityIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day average true range as a percentage of the close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.normalized_average_true_range(days=90)
+            print(frame.set_index("datetime")["natr14"].tail())
+            ```
+
+            Rank four shares from the most to the least volatile by their latest value:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            latest_values = {}
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.normalized_average_true_range(window=14, days=90)
+                latest_values[symbol] = frame["natr14"].iloc[-1]
+            ranked = sorted(latest_values, key=latest_values.get, reverse=True)
+            for symbol in ranked:
+                print(f"{symbol}: {latest_values[symbol]:.2f}%")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -125,6 +182,29 @@ class VolatilityIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's true range:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.true_range(days=30)
+            print(frame.set_index("datetime")["tr"].tail())
+            ```
+
+            Find the day with NIFTY's widest true range in the last half year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.true_range(days=180)
+            widest_row = frame["tr"].idxmax()
+            widest_day = frame.loc[widest_row, "datetime"].date()
+            print(f"{widest_day}: {frame.loc[widest_row, 'tr']:.2f} points")
+            ```
         """
         prices = self.prices(
             interval=interval,

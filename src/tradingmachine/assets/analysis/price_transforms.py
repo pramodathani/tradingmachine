@@ -41,6 +41,29 @@ class PriceTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's average of open, high, low and close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.average_price(days=30)
+            print(frame.set_index("datetime")["avg_price"].tail())
+            ```
+
+            Count the days in the last quarter on which NIFTY closed above its average price:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.average_price(days=90)
+            above = (frame["close"] > frame["avg_price"]).sum()
+            total = len(frame)
+            print(f"Closed above its average price on {above} of {total} days")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -78,6 +101,30 @@ class PriceTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's midpoint of high and low:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.median_price(days=30)
+            print(frame.set_index("datetime")["med_price"].tail())
+            ```
+
+            Print NIFTY's median price for every day of a fixed week:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.median_price(
+                from_date="2026-09-21",
+                to_date="2026-09-25",
+            )
+            print(frame.set_index("datetime")["med_price"])
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -113,6 +160,29 @@ class PriceTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's typical price:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.typical_price(days=30)
+            print(frame.set_index("datetime")["typ_price"].tail())
+            ```
+
+            Work out Infosys's volume-weighted typical price over the last month:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.typical_price(days=30)
+            traded_value = (frame["typ_price"] * frame["volume"]).sum()
+            weighted_price = traded_value / frame["volume"].sum()
+            print(f"Volume-weighted typical price: {weighted_price:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -150,6 +220,29 @@ class PriceTransforms(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's weighted close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.weighted_close(days=30)
+            print(frame.set_index("datetime")["wght_close"].tail())
+            ```
+
+            Compare NIFTY's latest weighted close with its latest typical price:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            weighted_frame = nifty.weighted_close(days=30)
+            typical_frame = nifty.typical_price(days=30)
+            print(f"Weighted close {weighted_frame['wght_close'].iloc[-1]:.2f}")
+            print(f"Typical price {typical_frame['typ_price'].iloc[-1]:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,

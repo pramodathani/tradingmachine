@@ -51,6 +51,36 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 20-day beta against NIFTY:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = infosys.beta(benchmark=nifty, window=20, days=180)
+            print(frame.set_index("datetime")["beta_20"].tail())
+            ```
+
+            Compare four shares by their 60-day beta against NIFTY:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.beta(benchmark=nifty, window=60, days=365)
+                print(f"{symbol}: beta {frame['beta_60'].iloc[-1]:.2f}")
+            ```
         """
         prices = self._prices_with_benchmark(
             benchmark=benchmark,
@@ -100,6 +130,37 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 20-day correlation with NIFTY:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = infosys.correlation_coefficient(
+                benchmark=nifty,
+                window=20,
+                days=180,
+            )
+            print(frame.set_index("datetime")["corr_20"].tail())
+            ```
+
+            Average the 30-day correlation of TCS with Infosys over the last year, using a share as the benchmark:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = tcs.correlation_coefficient(
+                benchmark=infosys,
+                window=30,
+                days=365,
+            )
+            print(f"Average correlation: {frame['corr_30'].mean():.2f}")
+            ```
         """
         prices = self._prices_with_benchmark(
             benchmark=benchmark,
@@ -201,6 +262,28 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five end values of Infosys's 14-day regression line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.linear_regression(days=90)
+            print(frame.set_index("datetime")["lin_regr_14"].tail())
+            ```
+
+            Print how far NIFTY's close sits from its 20-day regression line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.linear_regression(window=20, days=120)
+            gap = frame["close"].iloc[-1] - frame["lin_regr_20"].iloc[-1]
+            print(f"The close is {gap:.2f} points from the regression line")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -242,6 +325,31 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five slopes of Infosys's 14-day regression line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.linear_regression_slope(days=90)
+            print(frame.set_index("datetime")["lin_regr_slope_14"].tail())
+            ```
+
+            Say whether NIFTY's 50-day regression line is rising or falling:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.linear_regression_slope(window=50, days=180)
+            slope = frame["lin_regr_slope_50"].iloc[-1]
+            if slope > 0:
+                print(f"Rising by {slope:.2f} points a day")
+            else:
+                print(f"Falling by {-slope:.2f} points a day")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -283,6 +391,32 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five intercepts of Infosys's 14-day regression line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.linear_regression_intercept(days=90)
+            print(frame.set_index("datetime")["lin_regr_int_14"].tail())
+            ```
+
+            Rebuild the line's end value from its intercept and slope and compare it with linear_regression:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            intercept_frame = infosys.linear_regression_intercept(days=90)
+            slope_frame = infosys.linear_regression_slope(days=90)
+            line_frame = infosys.linear_regression(days=90)
+            intercept = intercept_frame["lin_regr_int_14"].iloc[-1]
+            slope = slope_frame["lin_regr_slope_14"].iloc[-1]
+            print(f"Rebuilt end value {intercept + 13 * slope:.2f}")
+            print(f"linear_regression {line_frame['lin_regr_14'].iloc[-1]:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -324,6 +458,27 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five angles of Infosys's 14-day regression line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.linear_regression_angle(days=90)
+            print(frame.set_index("datetime")["lin_regr_angle_14"].tail())
+            ```
+
+            Print the angle of NIFTY's 30-day regression line in degrees:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.linear_regression_angle(window=30, days=120)
+            print(f"{frame['lin_regr_angle_30'].iloc[-1]:.2f} degrees")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -367,6 +522,33 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 20-day standard deviation of the close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.standard_deviation(window=20, days=90)
+            print(frame.set_index("datetime")["std_dev_20"].tail())
+            ```
+
+            Draw NIFTY's upper and lower bands two standard deviations from its 20-day average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.standard_deviation(
+                window=20,
+                standard_deviations=2,
+                days=90,
+            )
+            middle = frame["close"].rolling(20).mean().iloc[-1]
+            width = frame["std_dev_20"].iloc[-1]
+            print(f"Upper {middle + width:.2f}, lower {middle - width:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -412,6 +594,33 @@ class StatisticFunctions(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 20-day variance of the close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.variance(window=20, days=90)
+            print(frame.set_index("datetime")["var_20"].tail())
+            ```
+
+            Find the day in the first half of 2026 on which NIFTY's 10-day variance peaked:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.variance(
+                window=10,
+                from_date="2026-01-01",
+                to_date="2026-06-30",
+            )
+            peak_row = frame["var_10"].idxmax()
+            peak_day = frame.loc[peak_row, "datetime"].date()
+            print(peak_day, round(frame["var_10"].max(), 1))
+            ```
         """
         prices = self.prices(
             interval=interval,
