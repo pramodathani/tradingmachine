@@ -61,7 +61,7 @@ Each card below opens one page of this tab.
 
     ---
 
-    Every environment variable the code and the containers read, the MongoDB document holding UBI's key and secret, and the engine-mode requirement.
+    Every environment variable the code and the containers read, the MongoDB document holding UBI's key and secret, where stored baskets are kept, and why the order engine needs no configuration here.
 
     [:octicons-arrow-right-24: Configure it](configuration.md)
 

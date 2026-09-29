@@ -1,6 +1,6 @@
 # Trading Machine
 
-Trading Machine is a Python library, installed as `tradingmachine`, in which an Indian market instrument is a Python object. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, about 190 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account. It can also send any of the forty-two synthetic order types UBI's order engine runs, such as a bracket, a trailing stop or an iceberg.
+Trading Machine is a Python library, installed as `tradingmachine`, in which an Indian market instrument is a Python object. You name a share, a futures contract or an option once, and from that one object you get its candles, its live quote, its order book, 209 analysis methods, the orders you have placed in it, the positions you hold in it and the units of it sitting in your demat account. It can also send any of the fifty-three synthetic order types UBI's order engine runs, such as a bracket, a trailing stop or an iceberg, and it can gather instruments into baskets, such as a portfolio, a watchlist or an index, which are priced and analysed the same way as one instrument.
 
 Nothing in this project talks to a broker. Every call goes to the sibling project `unified_broker_interface`, which runs on the same machine, speaks to ten Indian retail brokers and normalises what they say. This project is the layer above that, where the vocabulary stops being HTTP routes and starts being instruments.
 
@@ -19,7 +19,7 @@ infosys.cancel_open_orders()
 ```
 
 > [!CAUTION]
-> This project places real orders with real money. `place_order` and its thirty-two wrappers, the position methods, the holdings methods, every class in `tradingmachine.orders` and `Account.flatten` all reach a live broker account, and there is no paper trading mode and no simulator. A synthetic order can go on placing orders long after the call returns. `dry_run=True` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
+> This project places real orders with real money. `place_order` and its thirty-two wrappers, the position methods, the holdings methods, every class in `tradingmachine.orders`, `Portfolio.place_orders`, `Portfolio.rebalance` and `Account.flatten` all reach a live broker account, and there is no paper trading mode and no simulator. A synthetic order can go on placing orders long after the call returns. `dry_run=True` asks UBI to build the broker's request and hand it back unsent, which is the only rehearsal available.
 
 ## How it fits together
 
@@ -34,8 +34,8 @@ tradingmachine.assets.currencies, tradingmachine.assets.funds, tradingmachine.as
     │   one named class per UBI segment
     ▼
 tradingmachine.assets.instruments          ◄──── tradingmachine.assets.analysis
-    │   identity, candles,          thirteen classes Instrument
-    │   quotes, order book,         inherits: ~190 methods over
+    │   identity, candles,          fourteen classes Instrument
+    │   quotes, order book,         inherits: 209 methods over
     │   orders, positions           the candles
     ▼
 tradingmachine.unified_broker_interface    ◄──── tradingmachine.utilities.configuration
@@ -48,7 +48,7 @@ UBI REST API on 127.0.0.1:8080
 ten Indian retail brokers
 ```
 
-`tradingmachine.orders` holds one class per synthetic order type and `tradingmachine.accounts` holds `Account`, whose `flatten` is UBI's kill switch; both send through the same client.
+`tradingmachine.orders` holds one class per synthetic order type and `tradingmachine.accounts` holds `Account`, whose `flatten` is UBI's kill switch; both send through the same client. `tradingmachine.asset_baskets` holds baskets of instruments, which read every member's prices in one list request through the same client, inherit the same analysis classes, and are stored in this project's MongoDB because UBI keeps no index constituents or fund holdings.
 
 Four ideas shape everything above.
 
@@ -85,7 +85,7 @@ The gaps are UBI's rather than work left undone. No broker that serves quotes ca
 | Python | 3.14 | The virtual environment in `.venv/` is built against it |
 | TA-Lib C library | 0.6 or later | The `TA-Lib` package the library depends on wraps it, and `pip` cannot install the C part |
 | Unified Broker Interface | running on `127.0.0.1:8080` | Every price and every order comes from it |
-| MongoDB | 8.0.4 | Holds the api key and secret the UBI client authenticates with |
+| MongoDB | 8.0.4 | Holds the api key and secret the UBI client authenticates with, and the stored asset baskets |
 | Redis | `redis:trixie` | Brought up by Compose, not yet read by any module |
 | PostgreSQL with TimescaleDB | 18 | The same |
 
@@ -142,7 +142,7 @@ print(infosys.last_price)
 src/tradingmachine/assets/
 ├── instruments.py         Instrument, TradeableInstrument, NonTradeableInstrument, and the
 │                          derivative bases Derivative, Futures, Option, IndexFutures, IndexOption
-├── option_pricing.py      BlackScholes, behind implied volatility and the greeks
+├── option_pricing.py      BlackScholes and Black76, behind implied volatility and the greeks
 ├── equities.py            the six equity classes, one per UBI equity segment
 ├── fixed_income.py        the six fixed income classes
 ├── commodities.py         the six commodity classes
@@ -150,7 +150,8 @@ src/tradingmachine/assets/
 ├── funds.py               ExchangeTradedFund and InvestmentTrust, which trade like shares
 ├── mutual_funds.py        MutualFund, which is held rather than traded
 ├── exceptions.py          InstrumentError and its thirty-seven subclasses
-└── analysis/              thirteen classes of candle analysis that Instrument inherits
+└── analysis/              fourteen classes of candle analysis that Instrument inherits,
+                           the last being PerformanceMeasures
 
 src/tradingmachine/orders/
 ├── synthetic_order.py     SyntheticOrder, the shared base
@@ -160,6 +161,15 @@ src/tradingmachine/orders/
 
 src/tradingmachine/accounts/
 └── account.py             Account, whose flatten is UBI's kill switch
+
+src/tradingmachine/asset_baskets/
+├── asset_basket.py        AssetBasket, the shared base, which inherits the analysis classes
+├── basket_member.py       BasketMember, one instrument with a weight, a quantity, or neither
+├── portfolio.py, …        Portfolio, Watchlist, Index and the two fund-contents classes
+├── basket_store.py        BasketStore, which keeps baskets in MongoDB's asset_baskets collection
+├── basket_csv_importer.py BasketCsvImporter, which fills the store from a CSV file
+├── member_resolver.py     MemberResolver, which builds every member in one request
+└── exceptions.py          AssetBasketError and its three subclasses
 
 src/tradingmachine/unified_broker_interface/
 ├── client.py              UnifiedBrokerInterface: connect, disconnect, status, get, post, …
@@ -178,7 +188,7 @@ docs/                      the MkDocs site, published on GitHub Pages
 .claude/notes/             one Markdown note per source file, holding the reasoning
 ```
 
-The library is installable and the five packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
+The library is installable and the six packages are subpackages of `tradingmachine`, so every import is a full path from it: `from tradingmachine.assets import equities`. Nothing in the repository root is importable, which is what the `src/` directory is for.
 
 This project keeps no explanatory comments in source files. Reasoning, trade-offs, dated live checks and the record of which alternative was turned down go into a sidecar note under `.claude/notes/`, mirroring the source tree, so `src/tradingmachine/assets/equities.py` is documented by `.claude/notes/src/tradingmachine/assets/equities.py.md`. Those notes are more detailed than the documentation site and are the place to look before changing anything.
 
@@ -191,7 +201,7 @@ There is no test suite. `pytest` is not in `requirements.txt` and is not install
 .venv/bin/ruff format .
 ```
 
-Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reports all 32 files already formatted. Keep it that way.
+Unlike the sibling project, lint is clean on an untouched tree: `ruff check .` reports `All checks passed!` and `ruff format --check .` reports `105 files already formatted`, checked on 2026-09-29. Keep it that way.
 
 ## Documentation
 
@@ -202,4 +212,4 @@ The `docs/` directory is a full Material for MkDocs site, published at <https://
 .venv/bin/mkdocs build --strict  # broken links and references fail the build
 ```
 
-The [Python API](https://pramodathani.github.io/tradingmachine/python-api/) tab lists every public class and member, laid out like Zerodha's Kite Connect documentation. Before changing anything, read [Design choices](https://pramodathani.github.io/tradingmachine/architecture/design-choices/), which records why the library is built the way it is, and [Adding an asset class](https://pramodathani.github.io/tradingmachine/project/adding-an-asset-class/), which walks through building the next family module in the pattern the existing seven follow. A pull request builds the site with `--strict` as a check, so a broken link fails before it can be merged.
+The [Python API](https://pramodathani.github.io/tradingmachine/python-api/) tab lists every public class and member, laid out like Zerodha's Kite Connect documentation. Before changing anything, read [Design choices](https://pramodathani.github.io/tradingmachine/architecture/design-choices/), which records why the library is built the way it is, and [Adding an asset class](https://pramodathani.github.io/tradingmachine/project/adding-an-asset-class/), which walks through building the next family module in the pattern the existing six follow. A pull request builds the site with `--strict` as a check, so a broken link fails before it can be merged.

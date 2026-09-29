@@ -1,6 +1,6 @@
 # Configuration
 
-The library needs to know three things: where UBI is, where this project's MongoDB is, and UBI's api key and secret. The first two come from environment variables, usually written in a `.env` file at the repository root. The third comes from a document in MongoDB. UBI's order engine must also be running, which is set up in UBI, not here.
+The library needs to know three things: where UBI is, where this project's MongoDB is, and UBI's api key and secret. The first two come from environment variables, usually written in a `.env` file at the repository root. The third comes from a document in MongoDB. The same MongoDB database also holds the stored asset baskets, which need no configuration of their own. UBI's order engine must also be running, which is set up in UBI, not here.
 
 ## Where each setting is read
 
@@ -16,6 +16,8 @@ flowchart LR
     CL -- "reads settings where<br/>broker_name is<br/>unified_broker_interface" --> MG
     MG -- "api_key, api_secret" --> CL
     CL -- "POST /api/session/connect" --> UBI["UBI<br/>127.0.0.1:8080"]
+    CFG --> BS["BasketStore<br/>constructor"]
+    BS -- "reads and writes the<br/>asset_baskets collection" --> MG
     UENV["UBI's own .env<br/>order engine settings"] -.-> UBI
 ```
 
@@ -40,7 +42,7 @@ Three rules follow from that, and they explain most surprises.
 | `TRADINGMACHINE_UBI_BASE_URL` | :material-check: | | | UBI's address, `http://127.0.0.1:8080` |
 | `TRADINGMACHINE_MONGODB_HOST` | :material-check: | | | The host MongoDB is reachable on |
 | `TRADINGMACHINE_MONGODB_PORT` | :material-check: | :material-check: | `2003` | The published MongoDB port |
-| `TRADINGMACHINE_MONGODB_DB` | :material-check: | | | The database holding the `settings` collection |
+| `TRADINGMACHINE_MONGODB_DB` | :material-check: | | | The database holding the `settings` and `asset_baskets` collections |
 | `TRADINGMACHINE_MONGODB_USERNAME` | :material-check: | :material-check: | `tradingmachine` | The MongoDB root user |
 | `TRADINGMACHINE_MONGODB_PASSWORD` | :material-check: | :material-check: | | The MongoDB root password |
 | `TRADINGMACHINE_REDIS_HOST` | | | | Redis's host, for future code |
@@ -133,6 +135,10 @@ The table below lists what goes wrong when part of this configuration is missing
 | `api_key` or `api_secret` in it | `ValueError: Settings document 'unified_broker_interface' is missing api_key or api_secret` | The first instrument is built |
 | The right key or secret | [`AuthenticationError`](../python-api/errors.md#authenticationerror) | The first request |
 | UBI itself | [`UnreachableError`](../python-api/errors.md#unreachableerror) | The first request |
+
+## Stored baskets use the same database
+
+Asset baskets, such as an index's constituents or a portfolio, are kept in the `asset_baskets` collection of the same database, because UBI stores no index constituents or fund holdings. `BasketStore` finds MongoDB through the same `Configuration`, so there is nothing more to set. The collection and its indexes are created by the first `save`, and there is no setup step. [Asset baskets](../python-api/asset-baskets.md) explains how baskets are saved, imported from a CSV file and loaded.
 
 ## The order engine is configured in UBI
 

@@ -15,7 +15,7 @@ The animation below shows the five layers between your program and a broker's se
 
 The numbered list below describes each layer from the top, with where it lives.
 
-1. **Instrument, order and account objects** are what your program builds and calls. An `Equity`, an `EquityIndexOption` or a `CommodityFutures` is one instrument; a `BracketOrder` or a `TrailingStopOrder` describes one synthetic order; an `Account` stands for the whole trading account. They live in `tradingmachine.assets`, `tradingmachine.orders` and `tradingmachine.accounts`. None of them holds any market data between calls; each read is a fresh request.
+1. **Instrument, basket, order and account objects** are what your program builds and calls. An `Equity`, an `EquityIndexOption` or a `CommodityFutures` is one instrument; a `Portfolio`, a `Watchlist` or an `Index` is a basket of instruments; a `BracketOrder` or a `TrailingStopOrder` describes one synthetic order; an `Account` stands for the whole trading account. They live in `tradingmachine.assets`, `tradingmachine.asset_baskets`, `tradingmachine.orders` and `tradingmachine.accounts`. None of them holds any market data between calls; each read is a fresh request. Baskets are the one part that also keeps data of its own, in this project's MongoDB, because UBI stores no index constituents or fund holdings; [Asset baskets](../python-api/asset-baskets.md) describes them.
 2. **The shared client**, `UnifiedBrokerInterface` in `tradingmachine.unified_broker_interface.client`, is the only code that speaks HTTP. Every object in a process sends its requests through the same client, because UBI holds a single access token for the whole application and a second client would log the first one out. The client connects on first use, reconnects and retries once on HTTP 401, and turns each failure status into its own exception class.
 3. **UBI's REST API** listens on `http://127.0.0.1:8080`. It answers almost every read from its own Redis and TimescaleDB, which its background scripts keep filled from the brokers, so a read never waits for a broker. It is documented route by route on the [UBI site](https://pramodathani.github.io/unified_broker_interface/rest-api/).
 4. **UBI's order engine** is a separate UBI process that places every order on the REST API's behalf. It works out prices and quantities that were described rather than stated, holds plain limit orders until the book reaches their price, and runs the 53 synthetic order types, some of which keep placing orders long after your call has returned. See [Order engine](https://pramodathani.github.io/unified_broker_interface/rest-api/order-engine/) on the UBI site.
@@ -32,12 +32,13 @@ The rules below keep the layers independent. The table shows, for each part, wha
 |---|:---:|:---:|:---:|---|
 | Your program | :material-minus: through the objects, or directly for a route no object wraps | :material-close: | :material-close: | Whatever it chooses |
 | Instrument, order and account objects | :material-check: | :material-close: only through the client | :material-close: | Only the instrument's identity, lot size and tick size, read once at construction |
+| Basket objects and `BasketStore` | :material-check: | :material-close: only through the client | :material-close: | The members and their weights or quantities, saved in this project's MongoDB |
 | Shared client, `UnifiedBrokerInterface` | :material-minus: it is the client | :material-check: the only code that does | :material-close: | The access token and its expiry |
 | UBI REST API | :material-close: | :material-minus: it is the API | :material-check: for modifications, cancellations and flatten's cancels, and for a quote when no fresh one is cached | Everything, in Redis, TimescaleDB and MongoDB |
 | UBI order engine | :material-close: | :material-close: | :material-check: every placement | Held limit orders and armed and working synthetic orders |
 | Brokers | :material-close: | :material-close: | :material-minus: | The real orders, trades, positions and holdings |
 
-The one rule that matters most for a caller is the second row. An instrument object never opens its own connection, so any number of instruments, synthetic orders and an `Account` can live in one process and share one login. [The instrument model](instrument-model.md#one-shared-client) explains how the client is shared.
+The one rule that matters most for a caller is the second row. An instrument object never opens its own connection, so any number of instruments, baskets, synthetic orders and an `Account` can live in one process and share one login. [The instrument model](instrument-model.md#one-shared-client) explains how the client is shared.
 
 ## A read and an order, side by side
 
@@ -83,7 +84,7 @@ The pages in this tab go deeper into each part of the design.
 
     ---
 
-    The class hierarchy from `Instrument` to the 27 family classes, what lives at each level, and how the synthetic orders and the account relate to it.
+    The class hierarchy from `Instrument` to the 27 family classes, what lives at each level, and how the baskets, the synthetic orders and the account relate to it.
 
     [:octicons-arrow-right-24: The instrument model](instrument-model.md)
 
@@ -99,7 +100,7 @@ The pages in this tab go deeper into each part of the design.
 
     ---
 
-    Ten decisions that shape the library, each with its problem, its reasoning, its cost and where to see it in the code.
+    Twelve decisions that shape the library, each with its problem, its reasoning, its cost and where to see it in the code.
 
     [:octicons-arrow-right-24: Design choices](design-choices.md)
 

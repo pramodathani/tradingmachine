@@ -89,6 +89,12 @@ Both classes carry the same six holdings members as [`Equity`](equities.md#holdi
 
 Neither NIFTYBEES nor EMBASSY was held when the module was checked, so only the not-held path has been seen live. The three order methods were exercised against a recorder with invented holdings rows, and no order was sent.
 
+## What a fund holds
+
+`ExchangeTradedFund` has a `constituents` property, which returns the fund's own portfolio as an `ExchangeTradedFundConstituents` [asset basket](../python-api/asset-baskets.md#an-index-or-a-fund-is-two-things), or None when no basket has been stored for the fund. UBI stores no fund holdings, so the basket lives in this project's MongoDB and is read, along with its members from UBI, every time the property is read. The fund's official price stays on the `ExchangeTradedFund` object, and the basket's `linked_instrument` points back to it, so the two can be compared, for example to see how closely the fund tracks what it holds. `InvestmentTrust` has no `constituents` property.
+
+The fund's `constituents` are not the same thing as its `holdings`. `constituents` is what the fund itself owns, and `holdings` is how many units of the fund this account owns.
+
 ## Errors
 
 The table below lists what the two constructors raise.

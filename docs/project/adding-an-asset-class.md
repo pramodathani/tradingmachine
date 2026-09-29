@@ -1,6 +1,6 @@
 # Adding an asset class
 
-An asset class in this library is one module under `src/tradingmachine/assets/` that puts a named class on each of UBI's segments for that family. Seven modules exist today, and every asset class the old project had is ported. This page is the checklist for the next one, written from how those seven were built, so that a new module has the same shape and a reader never has to remember which family is the exception.
+An asset class in this library is one module under `src/tradingmachine/assets/` that puts a named class on each of UBI's segments for that family. Six family modules exist today, and every asset class the old project had is ported. This page is the checklist for the next one, written from how those six were built, so that a new module has the same shape and a reader never has to remember which family is the exception.
 
 ## The shape every module has
 
@@ -73,7 +73,7 @@ The steps below are in the order they are best done. Each one names the file it 
 3. **Create the module by copying `equities.py`.** Copy it to `src/tradingmachine/assets/<family>.py` and rename, rather than factoring anything out of it into a shared base. The working modules are never touched when a new one is added. Rewrite the module docstring, including its "Typical usage example", for the new family.
 4. **Declare the segment constants.** Put one bare segment name per class at module level, such as `EQUITY_FUTURES_SEGMENT = "equity_futures"`. These are values this project chooses and reuses, so constants are right here even though UBI's vocabulary is otherwise passed as plain strings.
 5. **Write one class per segment.** The cash class inherits `instruments.TradeableInstrument` and the index class `instruments.NonTradeableInstrument`. The four derivative classes inherit `instruments.Futures`, `instruments.Option`, `instruments.IndexFutures` and `instruments.IndexOption`, and each declares `SEGMENT` as its segment constant on the first line of its body. Add the family's four derivative segments to `UNDERLYING_SEGMENT_FOR_DERIVATIVE_SEGMENT` in `src/tradingmachine/assets/instruments.py`, mapping each to its cash or index segment, or `Derivative` will refuse the contracts with `DerivativeError`. Do not add a family-level base or a `ListedSecurity` base.
-6. **Make the constructor take exactly the identity fields.** A security or an index takes `exchange` and `symbol`, a future adds `underlying_symbol` and `expiry_date` in place of `symbol`, and an option adds `strike_price` and `option_type` as well. Every identity argument is required with no default, and the only optional argument is `unified_broker_interface`. There is no `instrument_id` argument, so there is exactly one way to name a contract.
+6. **Make the constructor take exactly the identity fields.** A security or an index takes `exchange` and `symbol`, a future adds `underlying_symbol` and `expiry_date` in place of `symbol`, and an option adds `strike_price` and `option_type` as well. Every identity argument is required with no default. The only optional arguments are `unified_broker_interface` on every class and, on the four derivative classes, `underlying`, an instrument object the contract keeps and passes to `super().__init__`. There is no `instrument_id` argument, so there is exactly one way to name a contract.
 7. **Re-raise UBI's not-found as the class's own error, and check the segment.** Wrap `super().__init__` in `try`, catch `exceptions.InstrumentError`, and raise the class's own error `from error` with a self-contained message. After it, compare `self.segment` with `f"{self.exchange}_{SEGMENT}"`, the whole prefixed name UBI returns.
 8. **Add the error classes.** Add one class per new family class to `src/tradingmachine/assets/exceptions.py`, named `<ClassName>Error`, each a flat sibling directly under `InstrumentError`. Do not root the family's errors in the cash class's error, because an index future is not a kind of the cash instrument.
 9. **Add the discovery class methods.** A cash or index class gets `search`, calling `cls._search_catalogue` with its own segment constant. The futures and option classes need nothing here: `expiries`, `contracts`, `strikes` and `chain` are inherited from `Futures` and `Option`, which read `SEGMENT`, so a caller still never types a segment string.
@@ -104,6 +104,7 @@ class ExampleFutures(instruments.Futures):
         exchange: str,
         underlying_symbol: str,
         expiry_date: datetime.date | str,
+        underlying: instruments.Instrument | None = None,
         unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ):
         """Looks the contract up in UBI's example futures segment and keeps its details.
@@ -112,9 +113,11 @@ class ExampleFutures(instruments.Futures):
             exchange: The str exchange the contract is listed on, such as `nse`.
             underlying_symbol: The str symbol of the underlying.
             expiry_date: The expiry as a datetime.date or a `YYYY-MM-DD` str.
+            underlying: The Instrument the contract is written on, which the contract keeps and uses, or None to use UBI's link to the underlying or else the family's default, looked up on every read.
             unified_broker_interface: The client.UnifiedBrokerInterface to send requests through, or None to share one client among all instruments.
 
         Raises:
+            TypeError: underlying is given and is not an Instrument.
             ExampleFuturesError: UBI has no such contract, or the instrument it returned is not in the example futures segment.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
@@ -124,6 +127,7 @@ class ExampleFutures(instruments.Futures):
                 segment=EXAMPLE_FUTURES_SEGMENT,
                 underlying_symbol=underlying_symbol,
                 expiry_date=expiry_date,
+                underlying=underlying,
                 unified_broker_interface=unified_broker_interface,
             )
         except exceptions.InstrumentError as error:

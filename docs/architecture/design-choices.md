@@ -18,7 +18,8 @@ The table below lists every record on this page with its main benefit and its ma
 | [A derivative is given its underlying, or finds it in a fixed order](#a-derivative-is-given-its-underlying-or-finds-it-in-a-fixed-order) | Nearly every contract has a priced underlying with no extra argument | Only a given object is free; the rest are looked up on every read |
 | [Greeks are computed here, with Black-76 or Black-Scholes](#greeks-are-computed-here-with-black-76-or-black-scholes) | Implied volatility and greeks without a UBI route | A slightly different model from UBI's engine |
 | [Discovery reads the master rather than search](#discovery-reads-the-master-rather-than-search) | Live contracts are always found | A whole segment is downloaded on each call |
-| [`inherited_members: false` in the docs](#inherited_members-false-in-the-docs) | A 13 MB site that builds in seconds | Class reference pages do not repeat inherited methods |
+| [Baskets are stored here and linked to instruments](#baskets-are-stored-here-and-linked-to-instruments) | Index and fund contents that UBI does not keep, analysed like an instrument | The contents are only as current as the last import |
+| [`inherited_members: false` in the docs](#inherited_members-false-in-the-docs) | A site measured at 13 MB rather than 151 MB, built in seconds | Class reference pages do not repeat inherited methods |
 
 ## Value members are properties
 
@@ -89,7 +90,7 @@ flowchart LR
 
 ## Order types are built in UBI, not here
 
-**The problem.** Until 2026-09-26 the price wrappers read the order book themselves, worked out a price and sent it, and the position methods read the position and worked out the side and size. On 2026-09-23 UBI gained an order engine that can do all of this itself, plus 42 synthetic order types.
+**The problem.** Until 2026-09-26 the price wrappers read the order book themselves, worked out a price and sent it, and the position methods read the position and worked out the side and size. On 2026-09-23 UBI gained an order engine that can do all of this itself, plus 42 synthetic order types, which grew to 53 on 2026-09-27.
 
 **The choice.** Anything UBI can work out is sent as a description: a `price_reference`, a `quantity_reference` or a `synthetic` object. The user decided this on 2026-09-26, saying that the order types being created here no longer needed to be, because they had been added in UBI. The wrappers kept their names and signatures and stopped reading the book, and `tradingmachine.orders` holds one thin class per synthetic type that only describes the order and sends it.
 
@@ -197,9 +198,21 @@ The chart below shows how much of each segment the master had to stream on 2026-
 
 **In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_contracts_for`, `_expiry_dates` and `_identity_frame` on `Instrument` in `src/tradingmachine/assets/instruments.py`, `search` on each cash and index class, and the other four on the `Futures` and `Option` base classes. [Finding instruments](../python-api/discovery.md) documents the public calls.
 
+## Baskets are stored here and linked to instruments
+
+**The problem.** An index's constituents and weights and a fund's holdings are needed to analyse what the index or fund is made of, and a portfolio or a watchlist is a group of instruments the caller chooses. UBI stores none of these: it has no index constituents, no index weights, no fund holdings and no net asset values. There was also a choice about the existing index and fund classes, which could have become baskets themselves.
+
+**The choice.** Baskets live in this project's MongoDB, in the `asset_baskets` collection, one document per basket name and `effective_date`, written by `BasketStore` and filled from a CSV file by `BasketCsvImporter`. An instrument is linked to its basket rather than merged with it: `NonTradeableInstrument.constituents`, `ExchangeTradedFund.constituents` and `MutualFund.constituents` return the stored basket, whose `linked_instrument` is the instrument again, while the official price stays on the instrument. Both were decided on 2026-09-28, when the package was added.
+
+**Why.** MongoDB was already configured and already read by the client, `pymongo` was already a dependency, and one basket, a name with a list of members, fits in one document. Keeping a version per date means a past rebalance can still be read. Linking rather than merging keeps the instrument classes unchanged, and a basket reads every member in one list request, because UBI's `POST` forms of the instrument routes take a whole list.
+
+**The cost.** A stored basket is only as current as the last import, and nothing refreshes it yet. `constituents` returns None until a basket has been saved for that instrument. `assets` and `asset_baskets` import each other, so the three `constituents` properties import the store inside their body to avoid a circular import. A basket's candles are built from its members, so its high and low are an approximation and its volume is empty.
+
+**In the code.** `src/tradingmachine/asset_baskets/`, with the reasoning in `.claude/notes/src/tradingmachine/asset_baskets/`. [Asset baskets](../python-api/asset-baskets.md) documents the classes and [Performance measures](../analysis/performance.md) the measures they share with instruments.
+
 ## `inherited_members: false` in the docs
 
-**The problem.** `Instrument` inherits thirteen analysis classes, about 190 methods, and all 27 family classes inherit from it. With mkdocstrings' `inherited_members: true`, which the sibling UBI site uses, every family class reprinted the whole analysis surface on its own reference page.
+**The problem.** `Instrument` inherits fourteen analysis classes, 209 methods, and all 27 family classes inherit from it; when the measurements below were taken it was thirteen classes and about 190 methods. With mkdocstrings' `inherited_members: true`, which the sibling UBI site uses, every family class reprinted the whole analysis surface on its own reference page.
 
 **The choice.** `mkdocs.yml` sets `inherited_members: false`. The analysis methods are documented once each, on the reference pages of the modules that define them, and each class page names its base classes.
 

@@ -16,6 +16,8 @@ Until 2026-09-27 UBI had a second placement mode, called direct, in which the AP
 
 When the engine is not running, UBI refuses the order before queueing anything, and the library raises `ServiceUnavailableError` with UBI's message `the order engine is not running, so the order was not placed; start unified-orders@order_engine.service`.
 
+`Portfolio.place_orders` and `Portfolio.rebalance` take the same path. They send one market order per member in the list form of `POST /api/orders/place`, up to 500 orders in one request, and the engine places them in parallel at whichever broker suits each one. They do not use the `basket` synthetic order type, which is capped at 25 legs and sends every leg to one broker. [Asset baskets](../python-api/asset-baskets.md) documents both.
+
 ## What the library sends as a description
 
 The user decided on 2026-09-26 that order types are built in UBI rather than here. So wherever UBI can work a value out itself, the library sends a small dictionary describing the value instead of computing it. `place_order` accepts three such objects as its last three arguments, and the table below lists them and the members that send each one.

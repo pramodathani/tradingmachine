@@ -29,7 +29,7 @@ flowchart LR
     subgraph ubi["UBI, a separate project"]
         API["REST API<br/>127.0.0.1:8080"] --> ENG["order engine"]
     end
-    LIB -- "UBI's key and secret" --> M
+    LIB -- "UBI's key and secret,<br/>stored baskets" --> M
     LIB -- "every price and order" --> API
 ```
 
@@ -96,7 +96,7 @@ docker compose up -d
 docker compose ps
 ```
 
-The table below lists the three services. Only MongoDB is read by the library today, for UBI's key and secret; Redis and TimescaleDB are running for code that has not been written yet.
+The table below lists the three services. Only MongoDB is used by the library today, for UBI's key and secret and for the stored [asset baskets](../python-api/asset-baskets.md); Redis and TimescaleDB are running for code that has not been written yet.
 
 | Service | Image | Host port | Container port | Volume | Used by the library |
 |---|---|---|---|---|---|
@@ -119,7 +119,7 @@ tradingmachine-timescaledb-1   timescale/timescaledb:latest-pg18   "docker-entry
 Ports 2002 to 2004 were chosen so this project can run beside UBI, whose own containers use ports 1002 to 1005 on the same machine. The ports are bound on `0.0.0.0`, so other machines on the local network can reach them too.
 
 !!! danger "`docker compose down -v` deletes the data"
-    `docker compose down` stops the containers and keeps their volumes. Adding `-v` also deletes the three `tradingmachine_*_volume` volumes and everything in them, including the MongoDB document holding UBI's key and secret.
+    `docker compose down` stops the containers and keeps their volumes. Adding `-v` also deletes the three `tradingmachine_*_volume` volumes and everything in them, including the MongoDB document holding UBI's key and secret and every stored asset basket.
 
 The usernames, passwords and database names in `.env` are read only when a container starts with an empty volume. Changing them later does not change the existing database; change the credential inside the database, or delete the volume and start again.
 

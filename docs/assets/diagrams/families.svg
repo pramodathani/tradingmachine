@@ -1,6 +1,6 @@
 <svg class="tm-svg" viewBox="0 0 900 510" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="families-title families-description">
   <title id="families-title">How the six asset-class modules inherit from the instrument classes</title>
-  <desc id="families-description">Six family modules sit at the bottom. Their cash classes and the funds inherit TradeableInstrument directly, their sixteen futures and option classes inherit the derivative base classes, which inherit TradeableInstrument, and their four index classes inherit NonTradeableInstrument. Both of those inherit Instrument, which also inherits the thirteen analysis classes. Dots travel upward along each inheritance line.</desc>
+  <desc id="families-description">Six family modules sit at the bottom. Their cash classes and the funds inherit TradeableInstrument directly, their sixteen futures and option classes inherit the derivative base classes, which inherit TradeableInstrument, and their four index classes inherit NonTradeableInstrument. Both of those inherit Instrument, which also inherits the fourteen analysis classes. Dots travel upward along each inheritance line.</desc>
   <path id="families-t0" class="wire" d="M78,400 C78,385 340,385 340,210"/>
   <path id="families-d0" class="wire" d="M36,400 C36,365 55,365 55,320"/>
   <path id="families-n0" class="wire" d="M120,400 C120,350 660,350 660,210"/>
@@ -59,8 +59,8 @@
   <text class="title" x="450" y="56" text-anchor="middle">Instrument</text>
   <text class="small" x="450" y="76" text-anchor="middle">identity, prices, quote, last_price, ohlc</text>
   <rect class="store" x="690" y="30" width="195" height="64" rx="8"/>
-  <text x="787" y="54" text-anchor="middle">13 analysis classes</text>
-  <text class="mono" x="787" y="74" text-anchor="middle">192 methods on prices()</text>
+  <text x="787" y="54" text-anchor="middle">14 analysis classes</text>
+  <text class="mono" x="787" y="74" text-anchor="middle">209 methods on prices()</text>
   <rect class="box" x="20" y="150" width="540" height="60" rx="8"/>
   <text class="title" x="290" y="175" text-anchor="middle">TradeableInstrument</text>
   <text class="small" x="290" y="195" text-anchor="middle">order book, orders, positions: 23 classes</text>

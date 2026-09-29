@@ -1,12 +1,12 @@
 # The instrument model
 
-Every instrument in the library is an object of one class, and the class says what kind of contract it is. This page shows how those classes are layered, what each layer adds, how an instrument is looked up in UBI, and how the synthetic order classes and the account sit beside the instruments rather than inside them.
+Every instrument in the library is an object of one class, and the class says what kind of contract it is. This page shows how those classes are layered, what each layer adds, how an instrument is looked up in UBI, and how the asset baskets, the synthetic order classes and the account sit beside the instruments rather than inside them.
 
 ## The levels of class
 
-The instrument classes form three levels, with a fourth for contracts. The base, `Instrument`, holds everything any instrument can do, including about 190 analysis methods it inherits from thirteen analysis classes. The middle level splits instruments into those that can be traded and indices, which cannot. Below `TradeableInstrument`, five derivative base classes hold what every futures or option contract shares. The bottom level is 27 family classes, one per UBI segment, which is what you actually construct.
+The instrument classes form three levels, with a fourth for contracts. The base, `Instrument`, holds everything any instrument can do, including 209 analysis methods it inherits from fourteen analysis classes. The middle level splits instruments into those that can be traded and indices, which cannot. Below `TradeableInstrument`, five derivative base classes hold what every futures or option contract shares. The bottom level is 27 family classes, one per UBI segment, which is what you actually construct.
 
-The class diagram below shows the levels above the family classes, with their main members. The thirteen analysis classes are drawn as one box to keep the diagram readable; each is a separate class in `tradingmachine.assets.analysis`, and all thirteen share the base `PriceAnalysis`.
+The class diagram below shows the levels above the family classes, with their main members. The fourteen analysis classes are drawn as one box to keep the diagram readable; each is a separate class in `tradingmachine.assets.analysis`, and all fourteen share the base `PriceAnalysis`.
 
 ```mermaid
 classDiagram
@@ -15,7 +15,7 @@ classDiagram
         shared candle helpers
     }
     class AnalysisClasses {
-        <<thirteen classes>>
+        <<fourteen classes>>
         PriceStatistics
         OverlapStudies
         MomentumIndicators
@@ -29,6 +29,7 @@ classDiagram
         CandlestickPatterns
         Signals
         StrategyBacktests
+        PerformanceMeasures
     }
     class Instrument {
         instrument_id
@@ -58,6 +59,7 @@ classDiagram
     }
     class NonTradeableInstrument {
         accepts only an index
+        constituents
     }
     class Derivative {
         underlying_segment
@@ -176,10 +178,10 @@ Each level adds only what is true of every class below it. The table below lists
 
 | Level | Holds | Why here |
 |---|---|---|
-| `PriceAnalysis` and the thirteen analysis classes | TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, about 190 methods | Every instrument with candles can be analysed, including an index |
-| `Instrument` | Identity attributes, `lot_size`, `tick_size`, `carried_by`; `prices`, `quote`, `last_price`, `ohlc`; the protected discovery helpers; the shared client | UBI quotes indices too, and an index's last price is one of the most used values |
-| `TradeableInstrument` | The eleven order-book values, the order and trade readers, `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the 32 price wrappers, the position readers, totals and the four position methods | An index has no order book, no orders and no position |
-| `NonTradeableInstrument` | Nothing new; it only refuses a segment that does not end in `_indices` | The refusal is its whole job |
+| `PriceAnalysis` and the fourteen analysis classes | TA-Lib indicators, candlestick patterns, statistics, crossovers, a backtest and performance measures such as the Sharpe ratio, 209 methods | Every instrument with candles can be analysed, including an index, and so can every basket |
+| `Instrument` | Identity attributes, `lot_size`, `tick_size`, `carried_by`; `prices`, `quote`, `last_price`, `ohlc`; the protected discovery helpers; the shared client; a `details` argument for building from an answer already fetched | UBI quotes indices too, and an index's last price is one of the most used values |
+| `TradeableInstrument` | The eleven order-book values, the order and trade readers, `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the parent members, the 32 price wrappers, the position readers, totals and the four position methods | An index has no order book, no orders and no position |
+| `NonTradeableInstrument` | A refusal of any segment that does not end in `_indices`, and `constituents`, the index's stored basket | An index is the one kind of instrument whose members are worth storing |
 | `Derivative` | The expiry members, the underlying's segment, object and price, the open interest range and the value of one lot | Every futures and option contract expires and is written on something |
 | `Futures`, `Option` | The basis members on `Futures`; moneyness, intrinsic and time value, implied volatility and greeks on `Option`; the discovery class methods on both | They were identical in all sixteen derivative classes apart from the segment |
 | `IndexFutures`, `IndexOption` | A check that the segment is an index one, and an `underlying` typed as `NonTradeableInstrument` | An index cannot be delivered, so these contracts differ in what their underlying is |
@@ -201,10 +203,10 @@ A member that only reports a value is a property, and a member is a method only 
 
 | Kind | Badge | Members |
 |---|---|---|
-| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `asks`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl`; the twenty-one contract properties on [Derivatives](../python-api/derivatives.md), from `days_to_expiry` to `notional_value` |
-| Takes arguments, only reads | <span class="member method">method</span> | `prices`, `implied_volatility`, `greeks` and every analysis method |
+| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `asks`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `parents`, `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl`; `constituents` on an index, an exchange traded fund and a mutual fund; the twenty-one contract properties on [Derivatives](../python-api/derivatives.md), from `days_to_expiry` to `notional_value` |
+| Takes arguments, only reads | <span class="member method">method</span> | `prices`, `parent`, `parent_orders`, `parent_trades`, `implied_volatility`, `greeks` and every analysis method |
 | Finds instruments | <span class="member function">classmethod</span> | `search`, `expiries`, `contracts`, `strikes`, `chain` |
-| Sends orders | <span class="member writes">places orders</span> | `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, the 32 price wrappers, `add_to_position`, `reduce_position`, `liquidate_position`, `liquidate_all_positions`, `add_to_holdings`, `reduce_holdings`, `liquidate_holdings` |
+| Sends orders | <span class="member writes">places orders</span> | `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, `cancel_parent`, the 32 price wrappers, `add_to_position`, `reduce_position`, `liquidate_position`, `liquidate_all_positions`, `add_to_holdings`, `reduce_holdings`, `liquidate_holdings` |
 
 !!! warning "A property is still a request"
     Every read of a property sends its own request to UBI, and nothing is cached. Code that needs a value twice, such as `share.net_positions` checked and then used, should bind it to a local variable first, or the two reads may see two different moments.
@@ -213,7 +215,7 @@ The identity attributes, such as `exchange`, `symbol` and `lot_size`, are plain 
 
 ## How an instrument is looked up
 
-Building an instrument sends exactly one request, `GET /api/instruments/details`. Every later request names the instrument only by the `instrument_id` that answer carried, which is a UUID UBI computes from the identity and which is the same at every broker. The sequence below shows the lookup for `Equity("nse", "RELIANCE")`, including the two ways it can fail.
+Building an instrument sends exactly one request, `GET /api/instruments/details`, unless the answer is passed in already through the `details` argument of `Instrument`, `TradeableInstrument` or `NonTradeableInstrument`, which is how a basket builds all its members from one `POST /api/instruments/details`. Every later request names the instrument only by the `instrument_id` that answer carried, which is a UUID UBI computes from the identity and which is the same at every broker. The sequence below shows the lookup for `Equity("nse", "RELIANCE")`, including the two ways it can fail.
 
 ```mermaid
 sequenceDiagram
@@ -348,6 +350,45 @@ classDiagram
 The three subclasses in the diagram stand for all 53. Every type is its own class in its own module, and each adds only its settings and a `synthetic_fields` method that names them the way UBI does. The base class builds the `synthetic` object, `{"type": ..., **settings}`, and `place()` calls `place_order` with it, so a synthetic order is placed exactly like a plain one, through [UBI's order engine](order-engine.md). `place()` keeps the `parent_id` UBI answers with, and `cancel()` and the `parent`, `orders` and `trades` properties use it to reach the parent through the instrument's parent members.
 
 Five types take a list of instruments rather than one. `BasketOrder`, `OneCancelsAllOrder`, `LeggedSpreadOrder` and `StrategyStopOrder` take a list of `OrderCandidate` objects, and the first candidate's instrument anchors the request. `ExposureHedgeOrder` is built on the hedge instrument and takes a list of `ExposureWatch` objects for the instruments it watches. [Synthetic orders](../python-api/synthetic-orders.md) documents every type.
+
+## Baskets sit beside the instruments
+
+An asset basket is a group of instruments, such as a portfolio, a watchlist, an index's constituents or what a fund holds. It is not an instrument and does not inherit `Instrument`, but `AssetBasket` inherits the same fourteen analysis classes, so every analysis method and performance measure works on a basket too, over candles the basket builds from its members. The class diagram below shows how the two sides link.
+
+```mermaid
+classDiagram
+    direction LR
+    class AnalysisClasses {
+        <<fourteen classes>>
+    }
+    class AssetBasket {
+        members, weights
+        last_prices, quotes
+        prices()
+    }
+    class Portfolio {
+        place_orders()
+        rebalance()
+    }
+    class Index
+    class Instrument
+    class NonTradeableInstrument {
+        constituents
+    }
+    class BasketStore {
+        save(), load()
+        load_for_instrument()
+    }
+    AnalysisClasses <|-- AssetBasket
+    Instrument <|-- NonTradeableInstrument
+    AssetBasket <|-- Portfolio
+    AssetBasket <|-- Index
+    NonTradeableInstrument ..> BasketStore : constituents calls
+    BasketStore ..> AssetBasket : builds
+    AssetBasket --> Instrument : linked_instrument
+```
+
+`Watchlist`, `ExchangeTradedFundConstituents` and `MutualFundConstituents` are left out of the diagram and sit on `AssetBasket` in the same way. `ExchangeTradedFund` and `MutualFund` have a `constituents` property just like `NonTradeableInstrument`. The link runs both ways without merging the two objects: an instrument's `constituents` returns the stored basket, whose `linked_instrument` is that instrument again, and the official price stays on the instrument. [Asset baskets](../python-api/asset-baskets.md) documents the classes and [Design choices](design-choices.md#baskets-are-stored-here-and-linked-to-instruments) records why they are built this way.
 
 ## The account sits above the instruments
 

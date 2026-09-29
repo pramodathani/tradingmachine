@@ -1,6 +1,6 @@
 # Mutual funds
 
-A mutual fund is unlike everything else in this library. It is not bought and sold in a continuous market; you subscribe to it and redeem it at the day's net asset value, the price the fund house publishes once a day. UBI has no quote for one and stores no candles, so a mutual fund is not something to analyse or trade on price. What does work is holding it, and that is what [`MutualFund`][tradingmachine.assets.mutual_funds.MutualFund] is for.
+A mutual fund is unlike everything else in this library. It is not bought and sold in a continuous market; you subscribe to it and redeem it at the day's net asset value, the price the fund house publishes once a day. UBI has no quote for one and stores no candles, so a mutual fund is not something to analyse or trade on price. What does work is holding it, and that is what [`MutualFund`][tradingmachine.assets.mutual_funds.MutualFund] is for. The one way to measure a scheme is through its stored [constituents](#measuring-a-scheme-through-its-constituents).
 
 The table below describes the one class in `tradingmachine.assets.mutual_funds`.
 
@@ -54,7 +54,7 @@ MutualFund(exchange='nse', segment='nse_mutual_funds', symbol='ABSLFTTIDG')
 
 `mutual_funds` is one of UBI's cash segments, so a scheme is reported in the account's holdings exactly as a share is, and `MutualFund` carries the same six holdings members as [`Equity`](equities.md#holding-a-share). [Holdings](../python-api/holdings.md) documents them. The old tradingmachine project gave mutual funds the three reading members only, and this library gives them the three order methods as well, so that no holdable class is an exception you have to remember.
 
-The three order methods send ordinary `cnc` orders, which is the product UBI accepts for this segment. Two things follow from that.
+The three order methods send ordinary `cnc` orders, which is the product UBI accepts for this segment. Three things follow from that.
 
 - **Give a price.** With no quote, there is nothing for a market order to be priced against, so a limit price is the only sensible form. The methods still send a market order if you pass no price, because the library does not second-guess what UBI will accept, but the docstrings ask for a price.
 - **The limit order is sent at once.** Since 2026-09-27 UBI's order engine holds a plain limit order until a live quote shows the other side reaching its price. Nothing quotes a mutual fund, so a held order would wait all day and never be sent. The holdings methods therefore pass `hold=False`, which sends the order to a broker at once, as [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains. Call `buy_at_limit_price` or `sell_at_limit_price` yourself only with `hold=False` too.
@@ -69,6 +69,21 @@ fund.add_to_holdings(quantity=10, price=25.0)
 ```
 
 As with every holdable class, `reduce_holdings` and `liquidate_holdings` sell only units that are not pledged as collateral, and raise `HoldingError` when the scheme is not held or every unit is pledged. No scheme was held when the module was checked, so the live check proved only the not-held case, and the order methods were exercised against a recorder rather than a broker.
+
+## Measuring a scheme through its constituents
+
+A scheme's own analysis and [performance measures](../analysis/performance.md) all return None, because UBI has no price history for it. What a scheme holds can still be measured. The `constituents` property returns a `MutualFundConstituents` [asset basket](../python-api/asset-baskets.md#an-index-or-a-fund-is-two-things) of the scheme's portfolio, read from this project's MongoDB and UBI every time it is read, or None when no basket has been stored for the scheme. UBI stores no fund holdings, so a basket exists only when one was saved with this scheme as its linked instrument. The basket has candles built from its members, so every analysis and performance method works on it.
+
+A scheme's `constituents` and its `holdings` are different things. `constituents` is what the fund itself owns, and `holdings` is how many units of the fund this account owns. The example below compares a scheme's portfolio with NIFTY over a year. It was not run for this page, and it returns None unless a basket has been stored for the scheme.
+
+```python
+from tradingmachine.assets import equities
+
+nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+portfolio = fund.constituents
+if portfolio is not None:
+    print(portfolio.performance_summary(benchmark=nifty, days=365))
+```
 
 ## Errors
 

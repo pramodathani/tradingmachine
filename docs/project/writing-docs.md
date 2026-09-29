@@ -101,7 +101,7 @@ MkDocs imports the file because `mkdocs.yml` lists it under `hooks:`, and calls 
 
 ### Why `inherited_members` is false
 
-`Instrument` inherits thirteen analysis classes, about 190 methods, and all 27 family classes inherit from it. With `inherited_members: true`, which the sibling UBI site uses, every family class reprinted the whole analysis surface on its own reference page. The table below shows what that did, measured on 2026-09-20 on the same content.
+`Instrument` inherits fourteen analysis classes, 209 methods, and all 27 family classes inherit from it; when the measurement below was taken it was thirteen classes and about 190 methods. With `inherited_members: true`, which the sibling UBI site uses, every family class reprinted the whole analysis surface on its own reference page. The table below shows what that did, measured on 2026-09-20 on the same content.
 
 | `inherited_members` | Whole site | Build time | Largest page |
 |---|---:|---:|---|

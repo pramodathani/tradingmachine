@@ -1,6 +1,6 @@
 <svg class="tm-svg" viewBox="0 0 900 570" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tm-layers-title tm-layers-description">
   <title id="tm-layers-title">The layers between your program and the brokers</title>
-  <desc id="tm-layers-description">Your program uses instrument, order and account objects, which all send their requests through one shared UnifiedBrokerInterface client. The client calls UBI's REST API on 127.0.0.1:8080. UBI answers reads from its own Redis and TimescaleDB, which it keeps filled from the ten brokers, and hands orders to its order engine, which sends them to a broker. Orange dots are reads travelling up to your program; the blue dot is an order travelling down to a broker.</desc>
+  <desc id="tm-layers-description">Your program uses instrument, basket, order and account objects, which all send their requests through one shared UnifiedBrokerInterface client. The client calls UBI's REST API on 127.0.0.1:8080. UBI answers reads from its own Redis and TimescaleDB, which it keeps filled from the ten brokers, and hands orders to its order engine, which sends them to a broker. Orange dots are reads travelling up to your program; the blue dot is an order travelling down to a broker.</desc>
   <path id="tm-layers-read" class="wire" d="M270,500 L270,70"/>
   <path id="tm-layers-order" class="wire" d="M630,70 L630,500"/>
   <circle class="dot" r="6"><animateMotion dur="4s" repeatCount="indefinite"><mpath href="#tm-layers-read"/></animateMotion></circle>
@@ -12,8 +12,8 @@
   <rect class="wire-solid" x="60" y="92" width="780" height="172" rx="10" stroke-dasharray="2 4"/>
   <text class="small" x="450" y="108" text-anchor="middle">tradingmachine, inside your Python process</text>
   <rect class="box" x="120" y="115" width="660" height="54" rx="8"/>
-  <text class="title" x="450" y="138" text-anchor="middle">Instrument, order and account objects</text>
-  <text class="mono" x="450" y="157" text-anchor="middle">Equity, EquityIndexOption, BracketOrder, Account, ...</text>
+  <text class="title" x="450" y="138" text-anchor="middle">Instrument, basket, order and account objects</text>
+  <text class="mono" x="450" y="157" text-anchor="middle">Equity, EquityIndexOption, Portfolio, BracketOrder, Account, ...</text>
   <rect class="accent-box" x="120" y="195" width="660" height="54" rx="8"/>
   <text class="title" x="450" y="218" text-anchor="middle">UnifiedBrokerInterface, one client shared by every object</text>
   <text class="mono" x="450" y="237" text-anchor="middle">one access token, reconnect on 401</text>

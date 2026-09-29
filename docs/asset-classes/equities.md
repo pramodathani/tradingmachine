@@ -25,7 +25,7 @@ classDiagram
         quote
         last_price
         ohlc
-        192 analysis methods
+        209 analysis methods
     }
     class TradeableInstrument {
         order book values
@@ -33,10 +33,12 @@ classDiagram
         price wrappers
         position members
     }
-    class NonTradeableInstrument
     class Equity {
         holdings members
         search()
+    }
+    class NonTradeableInstrument {
+        constituents
     }
     class EquityIndex {
         search()
@@ -86,7 +88,7 @@ classDiagram
 
 ## Naming a contract
 
-Every constructor argument is required, and the constructor accepts only the fields that identify one of its own contracts. A share takes an exchange and a symbol, a future adds nothing to that but swaps the symbol for its underlying's symbol and an expiry date, and an option also takes a strike price and an option type, `CE` for a call or `PE` for a put. The exchange is written in lower case, such as `nse` or `bse`.
+Every identity argument is required, and the constructor accepts only the fields that identify one of its own contracts. The four derivative classes also take an optional `underlying`, an instrument object the contract keeps, as [How a derivative finds its underlying](#how-a-derivative-finds-its-underlying) explains. A share takes an exchange and a symbol, a future adds nothing to that but swaps the symbol for its underlying's symbol and an expiry date, and an option also takes a strike price and an option type, `CE` for a call or `PE` for a put. The exchange is written in lower case, such as `nse` or `bse`.
 
 Leaving out a field fails at once, in Python, before any request is sent. Asking for something UBI does not have fails one request later with the class's own error, such as `EquityOptionError`, whose `__cause__` is the general `InstrumentError` carrying UBI's own message. Asking one class for another's instrument, such as `Equity(exchange="nse", symbol="NIFTY")`, fails the same way, because the class fixes its segment and UBI finds no share called NIFTY.
 
@@ -171,7 +173,7 @@ Two details matter in practice. The three order methods always send the `cnc` pr
 
 ## An index
 
-An [`EquityIndex`][tradingmachine.assets.equities.EquityIndex] has a live level and candles, so every analysis method works on it, but it has no order book and no order methods. It is also the usual benchmark for [`beta`](../analysis/statistics.md), which the library checked against NIFTY's candles on 2026-09-14. The example below searches the nse's indices for names containing NIFTY, with `limit=5`. The output was captured from a local UBI on 2026-09-26.
+An [`EquityIndex`][tradingmachine.assets.equities.EquityIndex] has a live level and candles, so every analysis method works on it, but it has no order book and no order methods. It is also the usual benchmark for [`beta`](../analysis/statistics.md) and for the [performance measures](../analysis/performance.md), and the library checked `beta` against NIFTY's candles on 2026-09-14. Its [`constituents`](../python-api/asset-baskets.md#an-index-or-a-fund-is-two-things) property, which every index class inherits from `NonTradeableInstrument`, returns the stored basket of the index's members, or None when none has been stored; UBI stores no constituents, so they are kept in this project's MongoDB. The example below searches the nse's indices for names containing NIFTY, with `limit=5`. The output was captured from a local UBI on 2026-09-26.
 
 === "Python"
 
@@ -192,7 +194,7 @@ An [`EquityIndex`][tradingmachine.assets.equities.EquityIndex] has a live level 
     4      nse        None  66d42d85-1805-5259-b2af-10132873f608        None  nse_equity_indices  security         None  NIFTY ALPHA 50              None
     ```
 
-The index the exchange publishes as "NIFTY 50" is stored by UBI as `NIFTY`, which is the name its futures and options use as their underlying symbol. The section on [why a derivative does not hold its underlying](#why-a-derivative-does-not-hold-its-underlying) explains why that matters.
+The index the exchange publishes as "NIFTY 50" is stored by UBI as `NIFTY`, which is the name its futures and options use as their underlying symbol. The section on [how a derivative finds its underlying](#how-a-derivative-finds-its-underlying) explains why that matters.
 
 The same search on shares, `Equity.search("nse", "RELI", limit=5)`, returned four rows in the same capture: RELIABLE, RELIANCE, RELIGARE and RELINFRA.
 
@@ -258,11 +260,11 @@ An equity order is a securities-market order, so its quantity is a plain count o
 
 Once built, a contract reports what it is as a contract: its days to expiry, whether it is a weekly or monthly expiry, its underlying's price, a future's basis over it, and an option's moneyness, implied volatility and greeks. Equities are the one family where all of these work, because UBI quotes shares and indices; [Derivatives](../python-api/derivatives.md) documents each member with output captured from NIFTY and RELIANCE contracts.
 
-## Why a derivative does not hold its underlying
+## How a derivative finds its underlying
 
-A RELIANCE option does not find its RELIANCE `Equity` by itself. Give it one when you build it, as `EquityOption("nse", "RELIANCE", "2026-10-27", 1200, "CE", underlying=reliance)`, and its [`underlying`](../python-api/derivatives.md#underlying) returns that very object and its [`underlying_price`](../python-api/derivatives.md#underlying_price) reads that object's last price. Without one, both fall back to a lookup by symbol on every read, which returns a plain `TradeableInstrument` or, for an index, a `NonTradeableInstrument`. Giving it is the reliable way, because UBI gives no reliable way to make the link. It has no key joining a derivative to its underlying. The two are matched only by the derivative's `underlying_symbol` string being equal to a share's or an index's `symbol`.
+A RELIANCE option does not hold its RELIANCE `Equity` unless you give it one. Give it when you build the contract, as `EquityOption("nse", "RELIANCE", "2026-10-27", 1200, "CE", underlying=reliance)`, and its [`underlying`](../python-api/derivatives.md#underlying) returns that very object and its [`underlying_price`](../python-api/derivatives.md#underlying_price) reads that object's last price. Only a given object is stored. Without one, the contract looks its underlying up again on every read, in the order [Derivatives](../python-api/derivatives.md#how-a-contract-finds-its-underlying) describes. It first tries UBI's `underlying_instrument_id`, which UBI resolves from the brokers' own underlying codes, and then falls back to the equity family's default, which is the share or index whose `symbol` equals the contract's `underlying_symbol`. Either way the lookup returns a plain `TradeableInstrument` or, for an index, a `NonTradeableInstrument`, never an `Equity` or an `EquityIndex`. Giving the underlying is still the reliable way, because it costs no request and cannot fail.
 
-The flowchart below shows how that string match works for a share and for an index, and where it can fail.
+The fallback matches strings, not keys. The flowchart below shows how that string match works for a share and for an index, and where it can fail.
 
 ```mermaid
 flowchart LR
@@ -272,7 +274,7 @@ flowchart LR
     Q["An index missing<br/>from the alias table"] -.->|"may not match"| X["no EquityIndex found"]
 ```
 
-For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match, and then the lookup raises `InstrumentError` at the moment it is read, which is why passing the `EquityIndex` yourself is safer. The live check on 2026-09-28 resolved both RELIANCE and NIFTY either way.
+For shares the match holds, because UBI strips the exchange's series suffix, such as `-EQ`, from NSE symbols when it builds its instrument list. For indices it depends on an alias table in UBI that rewrites the published names onto the derivative names, so Zerodha's `NIFTY 50` row is stored as `NIFTY` and its `NIFTYBANK` row as `BANKNIFTY`. The table covers NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY and NIFTYNXT50. An index outside it may not match by name, and when UBI gives no link either, the lookup raises [`UnderlyingError`](../python-api/errors.md#underlyingerror) at the moment it is read, which is why passing the `EquityIndex` yourself is safer. The live check on 2026-09-28 resolved both RELIANCE and NIFTY either way.
 
 ## Errors
 
