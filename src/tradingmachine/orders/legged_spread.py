@@ -101,6 +101,58 @@ class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a pair bought in one share and sold in another for a net debit:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import legged_spread
+            from tradingmachine.orders import order_candidate
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = legged_spread.LeggedSpreadOrder(
+                first_leg=order_candidate.OrderCandidate(share, price=13.0),
+                second_leg=order_candidate.OrderCandidate(
+                    second_share,
+                    transaction_type="sell",
+                ),
+                net_price=-6.0,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Print which leg is worked first and which is taken as it fills:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import legged_spread
+            from tradingmachine.orders import order_candidate
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = legged_spread.LeggedSpreadOrder(
+                first_leg=order_candidate.OrderCandidate(second_share, price=19.0),
+                second_leg=order_candidate.OrderCandidate(
+                    share,
+                    transaction_type="sell",
+                ),
+                net_price=5.0,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+            )
+            fields = order.synthetic_fields()
+            for leg in fields["candidates"]:
+                print(leg)
+            print(f"net price {fields['net_price']}")
+            ```
         """
         return {
             "candidates": [

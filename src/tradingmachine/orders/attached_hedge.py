@@ -116,6 +116,49 @@ class AttachedHedgeOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy in one share hedged one for one in another:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import attached_hedge
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = attached_hedge.AttachedHedgeOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                hedge_instrument=second_share,
+                ratio=1.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that a negative ratio, which hedges on the same side, is sent as it is given:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import attached_hedge
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = attached_hedge.AttachedHedgeOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                hedge_instrument=second_share,
+                ratio=-0.5,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "hedge_instrument_id": self.hedge_instrument.instrument_id,

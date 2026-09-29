@@ -111,6 +111,46 @@ class GoodTillTimeOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a bid that is cancelled at 14:00 if it has not filled:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import good_till_time
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = good_till_time.GoodTillTimeOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                until_time="14:00",
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a sell whose unfilled rest is made marketable at 15:10 rather than cancelled:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import good_till_time
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = good_till_time.GoodTillTimeOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=14.0,
+                until_time="15:10",
+                at_expiry="market",
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "until_time": self.until_time,

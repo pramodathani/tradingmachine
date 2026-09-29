@@ -117,6 +117,48 @@ class ImplementationShortfallOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of an order sliced six times over thirty minutes:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import implementation_shortfall
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = implementation_shortfall.ImplementationShortfallOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=12,
+                price=13.0,
+                slices=6,
+                over_minutes=30,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show an urgency of zero, which makes it an even time-weighted order:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import implementation_shortfall
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = implementation_shortfall.ImplementationShortfallOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=12,
+                price=13.0,
+                slices=4,
+                over_minutes=20,
+                urgency=0,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "slices": self.slices,

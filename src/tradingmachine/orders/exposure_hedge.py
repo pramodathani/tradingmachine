@@ -97,6 +97,52 @@ class ExposureHedgeOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a hedge in one share that keeps the exposure of another between minus five and five:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import exposure_hedge
+            from tradingmachine.orders import exposure_watch
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = exposure_hedge.ExposureHedgeOrder(
+                second_share,
+                watched=[
+                    exposure_watch.ExposureWatch(share),
+                ],
+                lower_band=-5,
+                upper_band=5,
+                product="mis",
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that the hedge instrument is named in the settings and its exposure per unit is sent when given:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import exposure_hedge
+            from tradingmachine.orders import exposure_watch
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = exposure_hedge.ExposureHedgeOrder(
+                second_share,
+                watched=[
+                    exposure_watch.ExposureWatch(share, exposure_per_unit=0.5),
+                ],
+                lower_band=-10,
+                upper_band=10,
+                product="mis",
+                hedge_exposure_per_unit=2.0,
+            )
+            fields = order.synthetic_fields()
+            print(fields["hedge_instrument_id"] == second_share.instrument_id)
+            print(fields["watched"])
+            ```
         """
         documents = []
         for watch in self.watched:

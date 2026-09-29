@@ -101,6 +101,59 @@ class BasketOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the candidate objects of a basket buying one share of each of two companies:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import basket
+            from tradingmachine.orders import order_candidate
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = basket.BasketOrder(
+                candidates=[
+                    order_candidate.OrderCandidate(share, price=13.0),
+                    order_candidate.OrderCandidate(second_share, price=19.0),
+                ],
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Count the legs of a basket in which one candidate overrides the side and the quantity:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import basket
+            from tradingmachine.orders import order_candidate
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = basket.BasketOrder(
+                candidates=[
+                    order_candidate.OrderCandidate(share, price=13.0),
+                    order_candidate.OrderCandidate(
+                        second_share,
+                        transaction_type="sell",
+                        quantity=2,
+                        price=21.0,
+                    ),
+                ],
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+            )
+            candidates = order.synthetic_fields()["candidates"]
+            print(f"{len(candidates)} legs")
+            for candidate in candidates:
+                print(candidate)
+            ```
         """
         documents = []
         for candidate in self.candidates:

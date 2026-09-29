@@ -111,6 +111,48 @@ class DiscretionaryOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a bid that shows 13 rupees and will pay up to five paise more:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import discretionary
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = discretionary.DiscretionaryOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                discretion_points=0.05,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out the worst price a discretionary sell will take:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import discretionary
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = discretionary.DiscretionaryOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=2,
+                price=14.0,
+                discretion_points=0.1,
+                discretion_quantity=1,
+            )
+            fields = order.synthetic_fields()
+            worst_price = order.price - fields["discretion_points"]
+            print(f"Shows {order.price}, takes down to {worst_price:.2f}")
+            ```
         """
         return {
             "discretion_points": self.discretion_points,

@@ -121,6 +121,47 @@ class DailyStopOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a stop placed afresh every morning at 09:30 for ten days:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import daily_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = daily_stop.DailyStopOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="sl",
+                quantity=1,
+                stop_price=12.0,
+                stop_limit_price=11.95,
+                arm_at="09:30",
+                valid_days=10,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that a daily stop left to UBI's defaults sends only its stop prices:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import daily_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = daily_stop.DailyStopOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="sl",
+                quantity=1,
+                stop_price=12.0,
+                stop_limit_price=11.95,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "stop_price": self.stop_price,

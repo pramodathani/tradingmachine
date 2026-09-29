@@ -76,6 +76,40 @@ class OrderCandidate:
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the candidate object for a leg that only overrides the price:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import order_candidate
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            candidate = order_candidate.OrderCandidate(share, price=13.0)
+            print(candidate.document())
+            ```
+
+            Build the candidate objects of a two-leg basket, one of them a sell of two shares:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import order_candidate
+
+            first_share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            candidates = [
+                order_candidate.OrderCandidate(first_share, price=13.0),
+                order_candidate.OrderCandidate(
+                    second_share,
+                    transaction_type="sell",
+                    quantity=2,
+                    price=21.0,
+                    tag="pairleg",
+                ),
+            ]
+            for candidate in candidates:
+                print(candidate.document())
+            ```
         """
         candidate = {
             "instrument_id": self.instrument.instrument_id,

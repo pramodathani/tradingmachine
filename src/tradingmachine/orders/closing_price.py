@@ -115,6 +115,60 @@ class ClosingPriceOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of an order sliced ten times through the closing half hour:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import closing_price
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = closing_price.ClosingPriceOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="limit",
+                quantity=10,
+                price=13.0,
+                slices=10,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a window that opens at 14:45 with a volume profile weighted towards the close:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import closing_price
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = closing_price.ClosingPriceOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="limit",
+                quantity=12,
+                price=13.0,
+                slices=6,
+                window_start="14:45",
+                volume_profile=[
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    3.0,
+                ],
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "slices": self.slices,

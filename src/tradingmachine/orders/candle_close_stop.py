@@ -126,6 +126,48 @@ class CandleCloseStopOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a stop that fires only when a fifteen-minute bar closes below 12 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import candle_close_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = candle_close_stop.CandleCloseStopOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                bar_minutes=15,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that the hidden level is kept as `trigger_level` and sent as `trigger_price`, next to a real backstop:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import candle_close_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = candle_close_stop.CandleCloseStopOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                backstop_price=11.5,
+                backstop_limit_price=11.45,
+            )
+            print(order.trigger_level)
+            print(order.trigger_price)
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

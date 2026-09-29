@@ -126,6 +126,48 @@ class GoodTillTriggeredOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy that waits up to ninety days for the price to fall to 12 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import good_till_triggered
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = good_till_triggered.GoodTillTriggeredOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                limit_price=12.05,
+                valid_days=90,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a sell that fires only when the price reaches 16 rupees on two trades in a row:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import good_till_triggered
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = good_till_triggered.GoodTillTriggeredOrder(
+                share,
+                transaction_type="sell",
+                product="cnc",
+                order_type="limit",
+                quantity=1,
+                trigger_price=16.0,
+                limit_price=15.95,
+                trigger_on="double_last",
+            )
+            print(order.trigger_level)
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

@@ -119,6 +119,49 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy sent when the day's average price falls to 13 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import indicator_triggered
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = indicator_triggered.IndicatorTriggeredOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=13.0,
+                limit_price=13.0,
+                watch_field="average_price",
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a sell sent when the best offer rises to 14.5 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import indicator_triggered
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = indicator_triggered.IndicatorTriggeredOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=14.5,
+                limit_price=14.45,
+                watch_field="best_offer",
+                trigger_direction="at_or_above",
+            )
+            print(order.trigger_level)
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

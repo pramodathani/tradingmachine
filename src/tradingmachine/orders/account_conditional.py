@@ -122,6 +122,50 @@ class AccountConditionalOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy that is sent only once five positions are open:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import account_conditional
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = account_conditional.AccountConditionalOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                account_field="open_positions",
+                account_level=5,
+                trigger_direction="at_or_above",
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show the synthetic object of a bid that is pulled when the day's loss reaches 2,000 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import account_conditional
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = account_conditional.AccountConditionalOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                account_field="day_pnl",
+                account_level=-2000.0,
+                trigger_direction="at_or_below",
+                action="cancel",
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "account_field": self.account_field,

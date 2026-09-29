@@ -42,6 +42,34 @@ class ExposureWatch:
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the watched object for a share, whose units each count as one:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import exposure_watch
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            watch = exposure_watch.ExposureWatch(share)
+            print(watch.document())
+            ```
+
+            Build watched objects that weight two shares differently, as a beta would:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import exposure_watch
+
+            first_share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            watches = [
+                exposure_watch.ExposureWatch(first_share, exposure_per_unit=1.2),
+                exposure_watch.ExposureWatch(second_share, exposure_per_unit=0.8),
+            ]
+            for watch in watches:
+                print(watch.document())
+            ```
         """
         watched = {
             "instrument_id": self.instrument.instrument_id,

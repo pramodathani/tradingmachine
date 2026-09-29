@@ -117,6 +117,54 @@ class GridOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a grid of three levels on each side, fifty paise apart:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import grid
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = grid.GridOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.5,
+                levels=3,
+                step_points=0.5,
+                most_inventory=3,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out the prices the rungs would rest at around a centre of 13.5 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import grid
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = grid.GridOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.5,
+                levels=2,
+                step_points=0.25,
+                most_inventory=2,
+            )
+            fields = order.synthetic_fields()
+            for level in range(1, fields["levels"] + 1):
+                distance = fields["step_points"] * level
+                buy_price = order.price - distance
+                sell_price = order.price + distance
+                print(f"buy {buy_price:.2f}  sell {sell_price:.2f}")
+            ```
         """
         return {
             "levels": self.levels,

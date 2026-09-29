@@ -100,5 +100,42 @@ class FreezeSlicerOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a freeze slicer, which has none of its own:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import freeze_slicer
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = freeze_slicer.FreezeSlicerOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that the synthetic object therefore holds only the type:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import freeze_slicer
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = freeze_slicer.FreezeSlicerOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=5,
+                price=14.0,
+            )
+            print(order.synthetic)
+            ```
         """
         return {}
