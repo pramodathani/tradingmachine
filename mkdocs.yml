@@ -135,6 +135,7 @@ plugins:
             show_if_no_docstring: false
             inherited_members: false
             members_order: source
+            group_by_category: false
             filters: ["!^_[^_]"]
             merge_init_into_class: true
             separate_signature: true

@@ -122,6 +122,46 @@ class LimitIfTouchedOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy that rests at 12.1 rupees once the price touches 12:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import limit_if_touched
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = limit_if_touched.LimitIfTouchedOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                limit_price=12.1,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a sell whose level is compared with the best bid rather than the last trade:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import limit_if_touched
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = limit_if_touched.LimitIfTouchedOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=15.0,
+                limit_price=14.95,
+                trigger_on="bid",
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

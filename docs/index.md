@@ -7,13 +7,13 @@ hide:
 
 <div class="hero" markdown>
 
-<p class="lead"><code>tradingmachine</code> is a Python library that turns Indian market instruments into <strong>objects you can ask questions of and trade through</strong>. You write <code>Equity("nse", "RELIANCE")</code>, and that object gives you its candles, its live quote, its order book, about 190 kinds of technical analysis, its orders, its positions and its holdings. Underneath, every question goes to the <a href="https://pramodathani.github.io/unified_broker_interface/">Unified Broker Interface</a> (UBI), which combines ten stock brokers into one account.</p>
+<p class="lead"><code>tradingmachine</code> is a Python library that turns Indian market instruments into <strong>objects you can ask questions of and trade through</strong>. You write <code>Equity("nse", "RELIANCE")</code>, and that object gives you its candles, its live quote, its order book, over 200 kinds of technical analysis and performance measures, its orders, its positions and its holdings. Instruments can also be gathered into baskets, such as a portfolio, a watchlist or an index, which are analysed the same way. Underneath, every question goes to the <a href="https://pramodathani.github.io/unified_broker_interface/">Unified Broker Interface</a> (UBI), which combines ten stock brokers into one account.</p>
 
 </div>
 
 <figure class="diagram">
 --8<-- "docs/assets/diagrams/overview.svg"
-<figcaption>Orange dots are quotes, candles, orders and positions coming up from the brokers to your program. The blue dot is an order going the other way, through UBI to one broker.</figcaption>
+<figcaption>Orange dots are quotes, candles, orders and positions coming up from the brokers, through the shared client, to the instrument objects and the asset baskets, and on to your program; the orange dot below the baskets is a basket being saved to or loaded from MongoDB. Blue dots are orders going the other way, from a synthetic order or a portfolio, through UBI to one broker.</figcaption>
 </figure>
 
 ## Start here
@@ -50,7 +50,7 @@ The site is split into tabs along the top. Most readers want the first card, whi
 
     ---
 
-    TA-Lib indicators, candlestick patterns, statistics, crossovers and a backtest, inherited by every instrument.
+    TA-Lib indicators, candlestick patterns, statistics, crossovers, a backtest and performance measures such as the Sharpe ratio, inherited by every instrument and every basket.
 
     [:octicons-arrow-right-24: Analyse candles](analysis/index.md)
 
@@ -105,12 +105,13 @@ The table below counts what the library holds today, so you can judge the size o
 
 | What | Count | Where |
 |---|---:|---|
-| Instrument classes | 27 | `src/tradingmachine/assets/`, in seven family modules |
+| Instrument classes | 27 | `src/tradingmachine/assets/`, in six family modules |
+| Kinds of asset basket | 5 | `src/tradingmachine/asset_baskets/`, one module each |
 | Synthetic order classes | 53 | `src/tradingmachine/orders/`, one module each |
-| Analysis methods inherited by every instrument | 192 | `src/tradingmachine/assets/analysis/`, in thirteen classes |
+| Analysis methods inherited by every instrument and basket | 209 | `src/tradingmachine/assets/analysis/`, in fourteen classes |
 | Price wrappers such as `buy_at_best_bid_price` | 32 | `TradeableInstrument` in `src/tradingmachine/assets/instruments.py` |
-| Exception classes | 45 | 32 in `assets/exceptions.py`, 13 in `unified_broker_interface/exceptions.py` |
-| Python modules | 88 | `src/tradingmachine/` |
+| Exception classes | 55 | 38 in `assets/exceptions.py`, 13 in `unified_broker_interface/exceptions.py`, 4 in `asset_baskets/exceptions.py` |
+| Python modules | 103 | `src/tradingmachine/`, counting each package's `__init__.py` |
 
 ## What the library adds to UBI
 
@@ -157,7 +158,7 @@ UBI already answers every question the library asks, over HTTP. The comparison b
     )
     ```
 
-The library looks the instrument up once, keeps the one shared login alive and renews it when UBI answers HTTP 401, checks that UBI is in the mode that understands a `price_reference` before sending one, and turns each error status into a named exception. It deliberately does not cache anything, round prices or check lot sizes, because UBI does all three.
+The library looks the instrument up once, keeps the one shared login alive and renews it when UBI answers HTTP 401, and turns each error status into a named exception. It deliberately does not cache anything, round prices or check lot sizes, because UBI does all three.
 
 !!! danger "Orders are real"
     Every member that places an order sends it through UBI to a real broker, with real money. The [Orders](python-api/orders.md) page explains `dry_run`, which asks UBI to check an order and show what it would send, without sending it.

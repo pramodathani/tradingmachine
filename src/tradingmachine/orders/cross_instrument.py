@@ -128,6 +128,51 @@ class CrossInstrumentOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy in one share sent when another share falls to 15 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import cross_instrument
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = cross_instrument.CrossInstrumentOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                watch_instrument=second_share,
+                trigger_price=15.0,
+                limit_price=13.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show the synthetic object of a sell fired when the watched share's midpoint rises to 25 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import cross_instrument
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            second_share = equities.Equity(exchange="nse", symbol="YESBANK")
+            order = cross_instrument.CrossInstrumentOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                watch_instrument=second_share,
+                trigger_price=25.0,
+                limit_price=14.0,
+                trigger_direction="at_or_above",
+                trigger_on="mid",
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "watch_instrument_id": self.watch_instrument.instrument_id,

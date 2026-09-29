@@ -6,13 +6,13 @@ The classes look alike, but what works on each one does not. UBI has live quotes
 
 ## How the classes fit together
 
-Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. The sixteen futures and option classes reach it through a layer of [derivative base classes](../python-api/derivatives.md), `Futures`, `Option`, `IndexFutures` and `IndexOption` on a shared `Derivative`, which add the expiry, underlying, basis and greeks members and the discovery class methods. An index inherits `NonTradeableInstrument`, which adds nothing and refuses anything that is not an index. Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the thirteen analysis classes described in [Analysis](../analysis/index.md).
+Every class inherits from one of two base classes. A class whose contracts can be traded inherits `TradeableInstrument`, which adds the order book, orders, positions and the price wrappers. The sixteen futures and option classes reach it through a layer of [derivative base classes](../python-api/derivatives.md), `Futures`, `Option`, `IndexFutures` and `IndexOption` on a shared `Derivative`, which add the expiry, underlying, basis and greeks members and the discovery class methods. An index inherits `NonTradeableInstrument`, which refuses anything that is not an index and adds only the `constituents` property described [below](#indices-and-funds-link-to-what-they-hold). Both inherit `Instrument`, which holds the identity fields, the candles and the quote, and which itself inherits the fourteen analysis classes described in [Analysis](../analysis/index.md).
 
 The animated diagram below shows the six family modules feeding their classes up through the derivative base classes and the two tradeable and non-tradeable classes into `Instrument`. [The instrument model](../architecture/instrument-model.md#the-27-family-classes) shows every class by name.
 
 <figure class="diagram">
 --8<-- "docs/assets/diagrams/families.svg"
-<figcaption>Orange dots follow the cash classes and the funds straight up to TradeableInstrument, green dots follow the sixteen futures and option classes up through the derivative base classes, and blue dots follow the four index classes up to NonTradeableInstrument. The orange dots entering Instrument from the right are the thirteen analysis classes it inherits.</figcaption>
+<figcaption>Orange dots follow the cash classes and the funds straight up to TradeableInstrument, green dots follow the sixteen futures and option classes up through the derivative base classes, and blue dots follow the four index classes up to NonTradeableInstrument. The orange dots entering Instrument from the right are the fourteen analysis classes it inherits.</figcaption>
 </figure>
 
 The funds module has only two classes and the mutual funds module only one, because UBI carries no futures or options on a fund, a trust or a mutual fund. The four families with derivatives each have six classes, following the same pattern: a cash instrument, its futures and its options, and an index, its futures and its options. [The instrument model](../architecture/instrument-model.md) explains the base classes in more depth.
@@ -119,6 +119,18 @@ Three patterns stand out in the chart. Equities are the only family where nearly
 ## Holdings and positions are different things
 
 A holding is something kept in the demat account overnight and beyond, such as shares bought for delivery. A position is what an order leaves open in a trading day or a derivatives contract, such as a long future. UBI reports holdings only for its cash segments, which are equities, exchange traded funds, investment trusts, mutual funds, fixed income and the catch-all `uncategorised`, so only the five classes on those segments carry the holdings members. Every class built on `TradeableInstrument` has the position members. [Holdings](../python-api/holdings.md) and [Positions](../python-api/positions.md) describe both sets.
+
+## Indices and funds link to what they hold
+
+An index, an exchange traded fund and a mutual fund each have two sides: the one official price the exchange or the fund house publishes, and the list of instruments behind that price. UBI stores only the first, so the list is kept in this project's MongoDB as an [asset basket](../python-api/asset-baskets.md) and reached through a `constituents` property. The table below shows which classes have that property and what it returns.
+
+| Class | Where `constituents` comes from | What it returns |
+|---|---|---|
+| `EquityIndex`, `FixedIncomeIndex`, `CommodityIndex`, `CurrencyIndex` | `NonTradeableInstrument`, so every index class has it | An `Index` basket, or None when none is stored |
+| `ExchangeTradedFund` | `ExchangeTradedFund` itself | An `ExchangeTradedFundConstituents` basket, or None when none is stored |
+| `MutualFund` | `MutualFund` itself | A `MutualFundConstituents` basket, or None when none is stored |
+
+The property reads MongoDB and UBI on every access, and the basket's `linked_instrument` is the instrument again, so the two sides point at each other while the official price stays on the instrument. `InvestmentTrust` has no `constituents`. A fund's constituents are not the same thing as its `holdings`, which are the units of the fund this account owns.
 
 ## The families
 

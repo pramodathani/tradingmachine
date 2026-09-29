@@ -122,6 +122,43 @@ class Commodity(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the mcx commodities whose symbol contains `CRUDE`:
+
+            ```python
+            from tradingmachine.assets import commodities
+
+            matches = commodities.Commodity.search(exchange="mcx", term="CRUDE")
+            print(matches["symbol"].tolist())
+            ```
+
+            List the first few agricultural commodities the ncdex publishes, since an empty term matches them all:
+
+            ```python
+            from tradingmachine.assets import commodities
+
+            matches = commodities.Commodity.search(
+                exchange="ncdex",
+                term="",
+                limit=10,
+            )
+            print(matches["symbol"].tolist())
+            ```
+
+            Search for a commodity, then list the expiries of the futures written on the first match:
+
+            ```python
+            from tradingmachine.assets import commodities
+
+            matches = commodities.Commodity.search(exchange="mcx", term="SILVER")
+            symbol = matches["symbol"].iloc[0]
+            expiries = commodities.CommodityFutures.expiries(
+                exchange="mcx",
+                underlying_symbol=symbol,
+            )
+            print(symbol, expiries)
+            ```
         """
         return cls._search_catalogue(
             exchange,
@@ -296,6 +333,33 @@ class CommodityIndex(instruments.NonTradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the commodity indices the mcx publishes:
+
+            ```python
+            from tradingmachine.assets import commodities
+
+            matches = commodities.CommodityIndex.search(exchange="mcx", term="MCX")
+            print(matches["symbol"].tolist())
+            ```
+
+            Find the bullion index and count the futures listed on it:
+
+            ```python
+            from tradingmachine.assets import commodities
+
+            matches = commodities.CommodityIndex.search(exchange="mcx", term="BULL")
+            symbol = matches["symbol"].iloc[0]
+            contracts = commodities.CommodityIndexFutures.contracts(
+                exchange="mcx",
+                underlying_symbol=symbol,
+            )
+            if contracts is None:
+                print(f"{symbol} has no live futures.")
+            else:
+                print(f"{symbol} has {len(contracts)} live futures.")
+            ```
         """
         return cls._search_catalogue(
             exchange,

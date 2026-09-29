@@ -121,12 +121,103 @@ class SyntheticOrder:
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of the base type, which has none of its own:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Compare the settings of the base type with those of a bracket order:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import bracket
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            plain_order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+            )
+            bracket_order = bracket.BracketOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                stop_price=12.5,
+                stop_limit_price=12.45,
+            )
+            print(f"{plain_order.SYNTHETIC_TYPE}: {plain_order.synthetic_fields()}")
+            print(f"{bracket_order.SYNTHETIC_TYPE}: {bracket_order.synthetic_fields()}")
+            ```
         """
         return {}
 
     @property
     def synthetic(self) -> dict:
-        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, and `closes_position` and `reduce_only` when each is True."""
+        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, and `closes_position` and `reduce_only` when each is True.
+
+        Examples:
+            Print the synthetic object of an order of the base type, which names only the type:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+            )
+            print(order.synthetic)
+            ```
+
+            Show that `closes_position` and `reduce_only` are added only when they are True:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=14.0,
+                closes_position=True,
+                reduce_only=True,
+            )
+            print(order.synthetic)
+            order.reduce_only = False
+            print(order.synthetic)
+            ```
+        """
         document = {
             "type": self.SYNTHETIC_TYPE,
         }
@@ -153,6 +244,77 @@ class SyntheticOrder:
             ServiceUnavailableError: No broker could take the order, a price UBI needed could not be read, or the order engine is not running.
             OrderOutcomeUnknownError: The engine did not answer in time, so the order may still be placed.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Preview the broker request for a limit buy with a dry run, which sends and records nothing:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=round(share.last_price * 0.97, 2),
+                dry_run=True,
+            )
+            answer = order.place()
+            print(answer)
+            print(order.parent_id)
+            ```
+
+            Place a buy 3% below the market, print the engine's answer and cancel it at once:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            answer = order.place()
+            try:
+                print(answer["outcome"], answer["order_id"], order.parent_id)
+            finally:
+                print(order.cancel()["state"])
+            ```
+
+            Send a reduce-only sell far bigger than any position it could reduce, which UBI refuses with HTTP 409:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+            from tradingmachine.unified_broker_interface import exceptions
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=100000,
+                price=round(share.last_price * 1.03, 2),
+                reduce_only=True,
+            )
+            try:
+                order.place()
+            except exceptions.ConflictError as error:
+                print(f"Refused: {error}")
+            finally:
+                if order.parent_id is not None:
+                    print(order.cancel()["state"])
+            ```
         """
         answer = self.instrument.place_order(
             transaction_type=self.transaction_type,
@@ -187,6 +349,51 @@ class SyntheticOrder:
             NotFoundError: The engine holds no parent with this id.
             ConflictError: The parent has already finished.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Place a buy 3% below the market and cancel it, printing each leg that was cancelled:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            answer = order.cancel()
+            print(answer["state"])
+            for leg in answer["cancelled_legs"]:
+                print(leg["broker"], leg["order_id"], leg["outcome"])
+            ```
+
+            Try to cancel an order that was never placed, which raises ValueError before UBI is asked:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+            )
+            try:
+                order.cancel()
+            except ValueError as error:
+                print(error)
+            ```
         """
         return self.instrument.cancel_parent(self._placed_parent_id())
 
@@ -198,6 +405,56 @@ class SyntheticOrder:
             ValueError: The order has not been placed, so there is no parent to read.
             NotFoundError: The engine holds no parent with this id.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Place a buy 3% below the market and print the state and legs the engine holds for it:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            try:
+                parent = order.parent
+                print(parent["synthetic_type"], parent["state"])
+                print(f"{len(parent['legs'])} legs")
+            finally:
+                order.cancel()
+            ```
+
+            Read the parent again after cancelling, to see the state it finished in:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            try:
+                print(f"before: {order.parent['state']}")
+            finally:
+                order.cancel()
+            print(f"after: {order.parent['state']}")
+            ```
         """
         return self.instrument.parent(self._placed_parent_id())
 
@@ -208,6 +465,64 @@ class SyntheticOrder:
         Raises:
             ValueError: The order has not been placed, so it has no orders.
             UnifiedBrokerInterfaceError: The order book could not be read.
+
+        Examples:
+            Place a buy 3% below the market and print the broker orders it has placed:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            try:
+                time.sleep(2)
+                print(order.orders)
+            finally:
+                order.cancel()
+            ```
+
+            Print the status of each broker order once the parent has been cancelled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            try:
+                time.sleep(2)
+            finally:
+                order.cancel()
+            time.sleep(2)
+            broker_orders = order.orders
+            if broker_orders is None:
+                print("No broker order was placed.")
+            else:
+                print(broker_orders[["order_id", "status"]])
+            ```
         """
         return self.instrument.parent_orders(self._placed_parent_id())
 
@@ -218,6 +533,68 @@ class SyntheticOrder:
         Raises:
             ValueError: The order has not been placed, so it has no trades.
             UnifiedBrokerInterfaceError: The trade book could not be read.
+
+        Examples:
+            Place a buy 3% below the market, which does not fill, and see that it has no trades:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            limit_price = round(share.last_price * 0.97, 2)
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=limit_price,
+            )
+            order.place()
+            try:
+                print(order.trades)
+            finally:
+                order.cancel()
+            ```
+
+            Buy one share at the best offer, print its fill, then sell it back at the broker that holds it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import synthetic_order
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = synthetic_order.SyntheticOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                validity="ioc",
+                price_reference={
+                    "kind": "marketable",
+                },
+            )
+            order.place()
+            fills = None
+            try:
+                for attempt in range(10):
+                    fills = order.trades
+                    if fills is not None:
+                        break
+                    time.sleep(1)
+                print(fills)
+            finally:
+                if fills is not None:
+                    share.reduce_position(
+                        quantity=1,
+                        product="mis",
+                        price=round(share.last_price * 0.995, 2),
+                    )
+            ```
         """
         return self.instrument.parent_trades(self._placed_parent_id())
 

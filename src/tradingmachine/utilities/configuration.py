@@ -57,42 +57,273 @@ class Configuration:
 
         Raises:
             Nothing.
+
+        Examples:
+            Make the configuration read the `.env` file again after a variable was removed from the process environment:
+
+            ```python
+            import os
+
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.ubi_base_url)
+            del os.environ["TRADINGMACHINE_UBI_BASE_URL"]
+            print(project_configuration.ubi_base_url)
+            project_configuration.reload()
+            print(project_configuration.ubi_base_url)
+            ```
+
+            Pick up a variable that was added to an environment file after the first read:
+
+            ```python
+            import os
+            import tempfile
+
+            from tradingmachine.utilities import configuration
+
+            with tempfile.TemporaryDirectory() as directory:
+                path = os.path.join(directory, "example.env")
+                with open(path, "w") as environment_file:
+                    print(
+                        "TRADINGMACHINE_UBI_BASE_URL=http://127.0.0.1:8080",
+                        file=environment_file,
+                    )
+                project_configuration = configuration.Configuration(
+                    environment_file=path
+                )
+                print(f"Host before: {project_configuration.mongodb_host}")
+                with open(path, "a") as environment_file:
+                    print(
+                        "TRADINGMACHINE_MONGODB_HOST=127.0.0.1",
+                        file=environment_file,
+                    )
+                project_configuration.reload()
+                print(f"Host after reload: {project_configuration.mongodb_host}")
+            ```
         """
         self._environment_file_loaded = False
 
     @property
     def ubi_base_url(self) -> str | None:
-        """The str address of the Unified Broker Interface, or None if it is not set."""
+        """The str address of the Unified Broker Interface, or None if it is not set.
+
+        Examples:
+            Print the address of UBI that the project's `.env` file names:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.ubi_base_url)
+            ```
+
+            Read the address from a variable exported by the caller, without loading any file:
+
+            ```python
+            import os
+
+            from tradingmachine.utilities import configuration
+
+            os.environ["TRADINGMACHINE_UBI_BASE_URL"] = "http://127.0.0.1:8080"
+            project_configuration = configuration.Configuration(
+                load_environment_file=False
+            )
+            print(project_configuration.ubi_base_url)
+            ```
+
+            Stop early with a clear message when the address is not configured:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            if project_configuration.ubi_base_url is None:
+                print("Set TRADINGMACHINE_UBI_BASE_URL in .env first.")
+            else:
+                print(f"UBI is expected at {project_configuration.ubi_base_url}")
+            ```
+        """
         return self._read(UBI_BASE_URL_VARIABLE)
 
     @property
     def mongodb_host(self) -> str | None:
-        """The str host MongoDB is reachable on, or None if it is not set."""
+        """The str host MongoDB is reachable on, or None if it is not set.
+
+        Examples:
+            Print the host MongoDB is reached on:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.mongodb_host)
+            ```
+
+            Read the host from a separate environment file, such as one for another machine:
+
+            ```python
+            import os
+            import tempfile
+
+            from tradingmachine.utilities import configuration
+
+            with tempfile.TemporaryDirectory() as directory:
+                path = os.path.join(directory, "other_machine.env")
+                with open(path, "w") as environment_file:
+                    print(
+                        "TRADINGMACHINE_MONGODB_HOST=192.168.1.20",
+                        file=environment_file,
+                    )
+                project_configuration = configuration.Configuration(
+                    environment_file=path
+                )
+                print(project_configuration.mongodb_host)
+            ```
+        """
         return self._read(MONGODB_HOST_VARIABLE)
 
     @property
     def mongodb_port(self) -> str | None:
-        """The str port MongoDB listens on, or None if it is not set."""
+        """The str port MongoDB listens on, or None if it is not set.
+
+        Examples:
+            Print the port MongoDB listens on:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.mongodb_port)
+            ```
+
+            Turn the port into a number, because every setting is read as text:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            port = int(project_configuration.mongodb_port)
+            in_range = 2000 <= port < 3000
+            print(f"MongoDB port {port} is in the project's range: {in_range}")
+            ```
+        """
         return self._read(MONGODB_PORT_VARIABLE)
 
     @property
     def mongodb_database_name(self) -> str | None:
-        """The str name of the project's MongoDB database, or None if it is not set."""
+        """The str name of the project's MongoDB database, or None if it is not set.
+
+        Examples:
+            Print the name of the project's database:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.mongodb_database_name)
+            ```
+
+            Count the stored baskets in the project's database:
+
+            ```python
+            import pymongo
+
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            connection_string = project_configuration.mongodb_connection_string
+            database_name = project_configuration.mongodb_database_name
+            with pymongo.MongoClient(connection_string) as mongo_client:
+                collection = mongo_client[database_name]["asset_baskets"]
+                print(f"Stored baskets: {collection.count_documents({})}")
+            ```
+        """
         return self._read(MONGODB_DATABASE_NAME_VARIABLE)
 
     @property
     def mongodb_username(self) -> str | None:
-        """The str MongoDB user to authenticate as, or None if it is not set."""
+        """The str MongoDB user to authenticate as, or None if it is not set.
+
+        Examples:
+            Print the user the library authenticates to MongoDB as:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            print(project_configuration.mongodb_username)
+            ```
+
+            Check that a user is configured before connecting:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            if project_configuration.mongodb_username:
+                print("A MongoDB user is configured.")
+            else:
+                print("Set TRADINGMACHINE_MONGODB_USERNAME in .env first.")
+            ```
+        """
         return self._read(MONGODB_USERNAME_VARIABLE)
 
     @property
     def mongodb_password(self) -> str | None:
-        """The str password for the MongoDB user, or None if it is not set."""
+        """The str password for the MongoDB user, or None if it is not set.
+
+        Examples:
+            Check that a password is configured without printing it:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            password = project_configuration.mongodb_password
+            print(f"A MongoDB password is set: {password is not None}")
+            ```
+
+            Report the password's length only, so that it never appears in a log:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            password = project_configuration.mongodb_password or ""
+            print(f"The MongoDB password has {len(password)} characters.")
+            ```
+        """
         return self._read(MONGODB_PASSWORD_VARIABLE)
 
     @property
     def mongodb_connection_string(self) -> str:
-        """The str MongoDB URI built from the host, port, username and password."""
+        """The str MongoDB URI built from the host, port, username and password.
+
+        Examples:
+            Print the part of the connection string after the credentials, which is safe to show:
+
+            ```python
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            connection_string = project_configuration.mongodb_connection_string
+            print(connection_string.split("@")[1])
+            ```
+
+            Connect to MongoDB with it and ask the server whether it is alive:
+
+            ```python
+            import pymongo
+
+            from tradingmachine.utilities import configuration
+
+            project_configuration = configuration.Configuration()
+            connection_string = project_configuration.mongodb_connection_string
+            with pymongo.MongoClient(connection_string) as mongo_client:
+                print(mongo_client.admin.command("ping"))
+            ```
+        """
         username = urllib.parse.quote_plus(self.mongodb_username or "")
         password = urllib.parse.quote_plus(self.mongodb_password or "")
         return (

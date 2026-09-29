@@ -128,6 +128,50 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a stop trailing three times the average true range of one-minute bars:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import average_true_range_trail
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = average_true_range_trail.AverageTrueRangeTrailOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="sl",
+                quantity=1,
+                trail_points=1.0,
+                stop_limit_offset=0.05,
+                bar_minutes=1,
+                periods=10,
+                average_true_range_multiple=3.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show how the Python name `average_true_range_multiple` is sent to UBI as `atr_multiple`:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import average_true_range_trail
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = average_true_range_trail.AverageTrueRangeTrailOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="sl",
+                quantity=1,
+                trail_points=1.0,
+                stop_limit_offset=0.05,
+                average_true_range_multiple=2.5,
+            )
+            print(order.average_true_range_multiple)
+            print(order.synthetic["atr_multiple"])
+            ```
         """
         return {
             "trail_points": self.trail_points,

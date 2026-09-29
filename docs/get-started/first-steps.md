@@ -260,6 +260,14 @@ The cards below point at the pages that pick up from here.
 
     [:octicons-arrow-right-24: Orders](../python-api/orders.md)
 
+-   :material-basket:{ .lg .middle } **Asset baskets**
+
+    ---
+
+    Portfolios, watchlists, indices and fund contents, priced in one request and analysed like one instrument.
+
+    [:octicons-arrow-right-24: Asset baskets](../python-api/asset-baskets.md)
+
 -   :material-alert-circle-outline:{ .lg .middle } **Errors**
 
     ---

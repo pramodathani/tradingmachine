@@ -56,104 +56,104 @@ Several methods take a moving average type, an integer that chooses which kind o
 
 ## The methods
 
-The tabs below hold one table per group. The "Columns added" column gives each new column's name, in which a placeholder such as `<window>` is replaced by the argument's value, so `relative_strength_index(window=14)` adds `rsi_14`.
+The sections below hold one table per group, in the same order as the table at the top of the page. The "Columns added" column gives each new column's name, in which a placeholder such as `<window>` is replaced by the argument's value, so `relative_strength_index(window=14)` adds `rsi_14`.
 
-=== "Overlap studies"
+### Overlap studies
 
-    Overlap studies are drawn on the same scale as the price, so they can be plotted over the candles. Moving averages smooth the price, Bollinger bands put an envelope around it, and the parabolic SAR marks a trailing stop level.
+Overlap studies are drawn on the same scale as the price, so they can be plotted over the candles. Moving averages smooth the price, Bollinger bands put an envelope around it, and the parabolic SAR marks a trailing stop level.
 
-    | Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
-    |---|---|---|---|---|
-    | `simple_moving_average` | Adds the simple moving average of one candle column | `window=10`, `column='close'` | `SMA` | `sma_<window>` |
-    | `exponential_moving_average` | Adds the exponential moving average of one candle column | `window=10`, `column='close'` | `EMA` | `ema_<window>` |
-    | `bollinger_bands` | Adds the upper, middle and lower Bollinger bands of one candle column | `window=10`, `standard_deviations_up=2`, `standard_deviations_down=2`, `column='close'` | `BBANDS` | `bb_upper_<window>`, `bb_middle_<window>`, `bb_lower_<window>` |
-    | `weighted_moving_average` | Adds the weighted moving average of one candle column | `window=10`, `column='close'` | `WMA` | `wma_<window>` |
-    | `double_exponential_moving_average` | Adds the double exponential moving average of one candle column | `window=10`, `column='close'` | `DEMA` | `dema_<window>` |
-    | `triple_exponential_moving_average` | Adds Tillson's T3 triple exponential moving average of one candle column | `window=10`, `volume_factor=0.7`, `column='close'` | `T3` | `t3_<window>` |
-    | `kaufman_adaptive_moving_average` | Adds the Kaufman adaptive moving average of one candle column | `window=10`, `column='close'` | `KAMA` | `kama_<window>` |
-    | `mesa_adaptive_moving_average` | Adds the MESA adaptive moving average and its following average of one candle column | `fast_limit=0.5`, `slow_limit=0.05`, `column='close'` | `MAMA` | `mama`, `fama` |
-    | `triangular_moving_average` | Adds the triangular moving average of one candle column | `window=10`, `column='close'` | `TRIMA` | `trima_<window>` |
-    | `parabolic_sar` | Adds the parabolic stop and reverse from the high and low columns | `acceleration=0.02`, `maximum=0.2` | `SAR` | `psar` |
-    | `mid_point` | Adds the midpoint of the highest and lowest value of one candle column over each window | `window=10`, `column='close'` | `MIDPOINT` | `mid_point_<window>` |
-    | `middle_price` | Adds the midpoint of the highest high and lowest low over each window | `window=10` | `MIDPRICE` | `middle_price_<window>` |
+| Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
+|---|---|---|---|---|
+| `simple_moving_average` | Adds the simple moving average of one candle column | `window=10`, `column='close'` | `SMA` | `sma_<window>` |
+| `exponential_moving_average` | Adds the exponential moving average of one candle column | `window=10`, `column='close'` | `EMA` | `ema_<window>` |
+| `bollinger_bands` | Adds the upper, middle and lower Bollinger bands of one candle column | `window=10`, `standard_deviations_up=2`, `standard_deviations_down=2`, `column='close'` | `BBANDS` | `bb_upper_<window>`, `bb_middle_<window>`, `bb_lower_<window>` |
+| `weighted_moving_average` | Adds the weighted moving average of one candle column | `window=10`, `column='close'` | `WMA` | `wma_<window>` |
+| `double_exponential_moving_average` | Adds the double exponential moving average of one candle column | `window=10`, `column='close'` | `DEMA` | `dema_<window>` |
+| `triple_exponential_moving_average` | Adds Tillson's T3 triple exponential moving average of one candle column | `window=10`, `volume_factor=0.7`, `column='close'` | `T3` | `t3_<window>` |
+| `kaufman_adaptive_moving_average` | Adds the Kaufman adaptive moving average of one candle column | `window=10`, `column='close'` | `KAMA` | `kama_<window>` |
+| `mesa_adaptive_moving_average` | Adds the MESA adaptive moving average and its following average of one candle column | `fast_limit=0.5`, `slow_limit=0.05`, `column='close'` | `MAMA` | `mama`, `fama` |
+| `triangular_moving_average` | Adds the triangular moving average of one candle column | `window=10`, `column='close'` | `TRIMA` | `trima_<window>` |
+| `parabolic_sar` | Adds the parabolic stop and reverse from the high and low columns | `acceleration=0.02`, `maximum=0.2` | `SAR` | `psar` |
+| `mid_point` | Adds the midpoint of the highest and lowest value of one candle column over each window | `window=10`, `column='close'` | `MIDPOINT` | `mid_point_<window>` |
+| `middle_price` | Adds the midpoint of the highest high and lowest low over each window | `window=10` | `MIDPRICE` | `middle_price_<window>` |
 
-    `triple_exponential_moving_average` calls TA-Lib's `T3`, Tillson's T3, rather than `TEMA`, which is the indicator most charting tools call the triple exponential moving average. The name was kept from the old project, and its column is `t3_<window>`.
+`triple_exponential_moving_average` calls TA-Lib's `T3`, Tillson's T3, rather than `TEMA`, which is the indicator most charting tools call the triple exponential moving average. The name was kept from the old project, and its column is `t3_<window>`.
 
-=== "Momentum indicators"
+### Momentum indicators
 
-    Momentum indicators measure how fast the price is moving and whether that speed is growing or fading. Most of them are oscillators that move between fixed bounds, such as the relative strength index between 0 and 100.
+Momentum indicators measure how fast the price is moving and whether that speed is growing or fading. Most of them are oscillators that move between fixed bounds, such as the relative strength index between 0 and 100.
 
-    | Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
-    |---|---|---|---|---|
-    | `moving_average_convergence_divergence` | Adds the moving average convergence divergence line, its signal line and their difference | `fast_period=12`, `slow_period=26`, `signal_period=9`, `column='close'` | `MACD` | `macd_<fast>_<slow>_<signal>`, `macd_<fast>_<slow>_<signal>_signal`, `macd_<fast>_<slow>_<signal>_hist` |
-    | `average_directional_movement_index` | Adds the average directional movement index | `window=14` | `ADX` | `adx_<window>` |
-    | `momentum` | Adds the momentum of one candle column, its change over each window | `window=14`, `column='close'` | `MOM` | `momentum_<window>` |
-    | `commodity_channel_index` | Adds the commodity channel index | `window=14` | `CCI` | `cci_<window>` |
-    | `average_directional_movement_index_rating` | Adds the average directional movement index rating | `window=10` | `ADXR` | `adxr_<window>` |
-    | `absolute_price_oscillator` | Adds the absolute price oscillator, the difference between a fast and a slow moving average | `fast_period=12`, `slow_period=26`, `moving_average_type=0`, `column='close'` | `APO` | `apo_<fast>_<slow>` |
-    | `aroon` | Adds the Aroon down and Aroon up lines | `window=10` | `AROON` | `aroon_down_<window>`, `aroon_up_<window>` |
-    | `aroon_oscillator` | Adds the Aroon oscillator, Aroon up minus Aroon down | `window=10` | `AROONOSC` | `aroon_osc_<window>` |
-    | `balance_of_power` | Adds the balance of power | none | `BOP` | `bop` |
-    | `chande_momentum_oscillator` | Adds the Chande momentum oscillator of one candle column | `window=10`, `column='close'` | `CMO` | `cmo_<window>` |
-    | `directional_movement_index` | Adds the directional movement index | `window=10` | `DX` | `dx_<window>` |
-    | `moving_average_convergence_divergence_extended` | Adds the moving average convergence divergence with a chosen moving average type for each of its three averages | `fast_period=12`, `fast_moving_average_type=0`, `slow_period=26`, `slow_moving_average_type=0`, `signal_period=9`, `signal_moving_average_type=0`, `column='close'` | `MACDEXT` | `macd_<fast>_<slow>_<signal>`, `macd_signal_<fast>_<slow>_<signal>`, `macd_hist_<fast>_<slow>_<signal>` |
-    | `money_flow_index` | Adds the money flow index, a relative strength index weighted by volume | `window=14` | `MFI` | `mfi_<window>` |
-    | `minus_directional_indicator` | Adds the minus directional indicator | `window=14` | `MINUS_DI` | `minus_di_<window>` |
-    | `minus_directional_movement` | Adds the minus directional movement | `window=14` | `MINUS_DM` | `minus_dm_<window>` |
-    | `plus_directional_indicator` | Adds the plus directional indicator | `window=14` | `PLUS_DI` | `plus_di_<window>` |
-    | `plus_directional_movement` | Adds the plus directional movement | `window=14` | `PLUS_DM` | `plus_dm_<window>` |
-    | `percentage_price_oscillator` | Adds the percentage price oscillator, the gap between a fast and a slow moving average as a percentage | `fast_period=12`, `slow_period=26`, `moving_average_type=0`, `column='close'` | `PPO` | `ppo<fast>_<slow>` |
-    | `rate_of_change` | Adds the rate of change of one candle column as a percentage | `window=14`, `column='close'` | `ROC` | `roc_<window>` |
-    | `rate_of_change_percent` | Adds the rate of change of one candle column as a fraction | `window=14`, `column='close'` | `ROCP` | `rocp_<window>` |
-    | `rate_of_change_ratio` | Adds the rate of change of one candle column as a ratio | `window=14`, `column='close'` | `ROCR` | `rocr_<window>` |
-    | `relative_strength_index` | Adds the relative strength index of one candle column | `window=14`, `column='close'` | `RSI` | `rsi_<window>` |
-    | `stochastic_oscillator` | Adds the slow stochastic oscillator's %K and %D lines | `fast_k_period=5`, `slow_k_period=3`, `slow_k_moving_average_type=0`, `slow_d_period=3`, `slow_d_moving_average_type=0` | `STOCH` | `slowk_<slow_k_period>`, `slowd_<slow_d_period>` |
-    | `stochastic_fast_oscillator` | Adds the fast stochastic oscillator's %K and %D lines | `fast_k_period=5`, `fast_d_period=3`, `fast_d_moving_average_type=0` | `STOCHF` | `stochf_fastk<fast_k_period>`, `stochf_fastd<fast_d_period>` |
-    | `stochastic_relative_strength_index` | Adds the stochastic relative strength index's %K and %D lines for one candle column | `window=14`, `fast_k_period=5`, `fast_d_period=3`, `fast_d_moving_average_type=0`, `column='close'` | `STOCHRSI` | `stochrsi_fastk<fast_k_period>`, `stochrsi_fastd<fast_d_period>` |
-    | `trix` | Adds TRIX, the rate of change of a triple smoothed exponential moving average of one candle column | `window=15`, `column='close'` | `TRIX` | `trix_<window>` |
-    | `ultimate_oscillator` | Adds the ultimate oscillator, which blends buying pressure over three windows | `fast_period=7`, `slow_period=14`, `signal_period=28` | `ULTOSC` | `ultosc_<fast>_<slow>_<signal>` |
-    | `williams_percent_r` | Adds Williams %R | `window=14` | `WILLR` | `willr_<window>` |
+| Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
+|---|---|---|---|---|
+| `moving_average_convergence_divergence` | Adds the moving average convergence divergence line, its signal line and their difference | `fast_period=12`, `slow_period=26`, `signal_period=9`, `column='close'` | `MACD` | `macd_<fast>_<slow>_<signal>`, `macd_<fast>_<slow>_<signal>_signal`, `macd_<fast>_<slow>_<signal>_hist` |
+| `average_directional_movement_index` | Adds the average directional movement index | `window=14` | `ADX` | `adx_<window>` |
+| `momentum` | Adds the momentum of one candle column, its change over each window | `window=14`, `column='close'` | `MOM` | `momentum_<window>` |
+| `commodity_channel_index` | Adds the commodity channel index | `window=14` | `CCI` | `cci_<window>` |
+| `average_directional_movement_index_rating` | Adds the average directional movement index rating | `window=10` | `ADXR` | `adxr_<window>` |
+| `absolute_price_oscillator` | Adds the absolute price oscillator, the difference between a fast and a slow moving average | `fast_period=12`, `slow_period=26`, `moving_average_type=0`, `column='close'` | `APO` | `apo_<fast>_<slow>` |
+| `aroon` | Adds the Aroon down and Aroon up lines | `window=10` | `AROON` | `aroon_down_<window>`, `aroon_up_<window>` |
+| `aroon_oscillator` | Adds the Aroon oscillator, Aroon up minus Aroon down | `window=10` | `AROONOSC` | `aroon_osc_<window>` |
+| `balance_of_power` | Adds the balance of power | none | `BOP` | `bop` |
+| `chande_momentum_oscillator` | Adds the Chande momentum oscillator of one candle column | `window=10`, `column='close'` | `CMO` | `cmo_<window>` |
+| `directional_movement_index` | Adds the directional movement index | `window=10` | `DX` | `dx_<window>` |
+| `moving_average_convergence_divergence_extended` | Adds the moving average convergence divergence with a chosen moving average type for each of its three averages | `fast_period=12`, `fast_moving_average_type=0`, `slow_period=26`, `slow_moving_average_type=0`, `signal_period=9`, `signal_moving_average_type=0`, `column='close'` | `MACDEXT` | `macd_<fast>_<slow>_<signal>`, `macd_signal_<fast>_<slow>_<signal>`, `macd_hist_<fast>_<slow>_<signal>` |
+| `money_flow_index` | Adds the money flow index, a relative strength index weighted by volume | `window=14` | `MFI` | `mfi_<window>` |
+| `minus_directional_indicator` | Adds the minus directional indicator | `window=14` | `MINUS_DI` | `minus_di_<window>` |
+| `minus_directional_movement` | Adds the minus directional movement | `window=14` | `MINUS_DM` | `minus_dm_<window>` |
+| `plus_directional_indicator` | Adds the plus directional indicator | `window=14` | `PLUS_DI` | `plus_di_<window>` |
+| `plus_directional_movement` | Adds the plus directional movement | `window=14` | `PLUS_DM` | `plus_dm_<window>` |
+| `percentage_price_oscillator` | Adds the percentage price oscillator, the gap between a fast and a slow moving average as a percentage | `fast_period=12`, `slow_period=26`, `moving_average_type=0`, `column='close'` | `PPO` | `ppo<fast>_<slow>` |
+| `rate_of_change` | Adds the rate of change of one candle column as a percentage | `window=14`, `column='close'` | `ROC` | `roc_<window>` |
+| `rate_of_change_percent` | Adds the rate of change of one candle column as a fraction | `window=14`, `column='close'` | `ROCP` | `rocp_<window>` |
+| `rate_of_change_ratio` | Adds the rate of change of one candle column as a ratio | `window=14`, `column='close'` | `ROCR` | `rocr_<window>` |
+| `relative_strength_index` | Adds the relative strength index of one candle column | `window=14`, `column='close'` | `RSI` | `rsi_<window>` |
+| `stochastic_oscillator` | Adds the slow stochastic oscillator's %K and %D lines | `fast_k_period=5`, `slow_k_period=3`, `slow_k_moving_average_type=0`, `slow_d_period=3`, `slow_d_moving_average_type=0` | `STOCH` | `slowk_<slow_k_period>`, `slowd_<slow_d_period>` |
+| `stochastic_fast_oscillator` | Adds the fast stochastic oscillator's %K and %D lines | `fast_k_period=5`, `fast_d_period=3`, `fast_d_moving_average_type=0` | `STOCHF` | `stochf_fastk<fast_k_period>`, `stochf_fastd<fast_d_period>` |
+| `stochastic_relative_strength_index` | Adds the stochastic relative strength index's %K and %D lines for one candle column | `window=14`, `fast_k_period=5`, `fast_d_period=3`, `fast_d_moving_average_type=0`, `column='close'` | `STOCHRSI` | `stochrsi_fastk<fast_k_period>`, `stochrsi_fastd<fast_d_period>` |
+| `trix` | Adds TRIX, the rate of change of a triple smoothed exponential moving average of one candle column | `window=15`, `column='close'` | `TRIX` | `trix_<window>` |
+| `ultimate_oscillator` | Adds the ultimate oscillator, which blends buying pressure over three windows | `fast_period=7`, `slow_period=14`, `signal_period=28` | `ULTOSC` | `ultosc_<fast>_<slow>_<signal>` |
+| `williams_percent_r` | Adds Williams %R | `window=14` | `WILLR` | `willr_<window>` |
 
-    A few labels are irregular, and they are kept as the old project wrote them so that existing code reading the frames still works. The two MACD methods name their signal and histogram columns differently, `ppo`, `stochf_` and `stochrsi_` labels have no underscore before their numbers, and `ultimate_oscillator` calls its short, middle and long windows `fast_period`, `slow_period` and `signal_period`. The directional movement defaults also differ: `average_directional_movement_index` uses 14 candles, while `average_directional_movement_index_rating` and `directional_movement_index` use 10.
+A few labels are irregular, and they are kept as the old project wrote them so that existing code reading the frames still works. The two MACD methods name their signal and histogram columns differently, `ppo`, `stochf_` and `stochrsi_` labels have no underscore before their numbers, and `ultimate_oscillator` calls its short, middle and long windows `fast_period`, `slow_period` and `signal_period`. The directional movement defaults also differ: `average_directional_movement_index` uses 14 candles, while `average_directional_movement_index_rating` and `directional_movement_index` use 10.
 
-    `stochastic_relative_strength_index` takes a separate `window` for the length of the underlying RSI, 14 by default, and passes `fast_k_period` to TA-Lib's `fastk_period`. With its defaults it matches `talib.STOCHRSI` with TA-Lib's own defaults.
+`stochastic_relative_strength_index` takes a separate `window` for the length of the underlying RSI, 14 by default, and passes `fast_k_period` to TA-Lib's `fastk_period`. With its defaults it matches `talib.STOCHRSI` with TA-Lib's own defaults.
 
-=== "Volume indicators"
+### Volume indicators
 
-    Volume indicators combine price and traded volume, to show whether buying or selling pressure is behind a move. They need a `volume` column, so they are only meaningful for instruments whose candles carry real volume.
+Volume indicators combine price and traded volume, to show whether buying or selling pressure is behind a move. They need a `volume` column, so they are only meaningful for instruments whose candles carry real volume.
 
-    | Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
-    |---|---|---|---|---|
-    | `chaikin_accumulation_distribution_line` | Adds the Chaikin accumulation distribution line | none | `AD` | `chaikin_ad` |
-    | `chaikin_accumulation_distribution_oscillator` | Adds the Chaikin accumulation distribution oscillator | `fast_period=3`, `slow_period=10` | `ADOSC` | `chaikin_adosc<fast>_<slow>` |
-    | `on_balance_volume` | Adds the on balance volume, measured against one candle column | `column='close'` | `OBV` | `obv` |
+| Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
+|---|---|---|---|---|
+| `chaikin_accumulation_distribution_line` | Adds the Chaikin accumulation distribution line | none | `AD` | `chaikin_ad` |
+| `chaikin_accumulation_distribution_oscillator` | Adds the Chaikin accumulation distribution oscillator | `fast_period=3`, `slow_period=10` | `ADOSC` | `chaikin_adosc<fast>_<slow>` |
+| `on_balance_volume` | Adds the on balance volume, measured against one candle column | `column='close'` | `OBV` | `obv` |
 
-=== "Volatility indicators"
+### Volatility indicators
 
-    Volatility indicators measure how far the price ranges. The true range of a candle is the largest of its high minus its low and the gaps from the previous close, and the average true range smooths it over a window.
+Volatility indicators measure how far the price ranges. The true range of a candle is the largest of its high minus its low and the gaps from the previous close, and the average true range smooths it over a window.
 
-    | Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
-    |---|---|---|---|---|
-    | `average_true_range` | Adds the average true range | `window=14` | `ATR` | `atr_<window>` |
-    | `normalized_average_true_range` | Adds the average true range as a percentage of the close | `window=14` | `NATR` | `natr<window>` |
-    | `true_range` | Adds each candle's true range | none | `TRANGE` | `tr` |
+| Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
+|---|---|---|---|---|
+| `average_true_range` | Adds the average true range | `window=14` | `ATR` | `atr_<window>` |
+| `normalized_average_true_range` | Adds the average true range as a percentage of the close | `window=14` | `NATR` | `natr<window>` |
+| `true_range` | Adds each candle's true range | none | `TRANGE` | `tr` |
 
-    The normalised average true range's column is `natr<window>`, without the underscore that `atr_<window>` has.
+The normalised average true range's column is `natr<window>`, without the underscore that `atr_<window>` has.
 
-=== "Cycle indicators"
+### Cycle indicators
 
-    Cycle indicators use John Ehlers' Hilbert transform to find a repeating cycle in the price and say whether the market is trending or cycling. They take no window, because the transform chooses its own.
+Cycle indicators use John Ehlers' Hilbert transform to find a repeating cycle in the price and say whether the market is trending or cycling. They take no window, because the transform chooses its own.
 
-    | Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
-    |---|---|---|---|---|
-    | `hilbert_transform_dominant_cycle_period` | Adds the Hilbert transform dominant cycle period of one candle column | `column='close'` | `HT_DCPERIOD` | `ht_dcperiod` |
-    | `hilbert_transform_dominant_cycle_phase` | Adds the Hilbert transform dominant cycle phase of one candle column | `column='close'` | `HT_DCPHASE` | `ht_dcphase` |
-    | `hilbert_transform_phasor_components` | Adds the Hilbert transform in-phase and quadrature phasor components of one candle column | `column='close'` | `HT_PHASOR` | `inphase`, `quadrature` |
-    | `hilbert_transform_sine_wave` | Adds the Hilbert transform sine wave and lead sine wave of one candle column | `column='close'` | `HT_SINE` | `sine`, `lead_sine` |
-    | `hilbert_transform_trend_mode` | Adds the Hilbert transform trend mode of one candle column, 1 in a trend and 0 in a cycle | `column='close'` | `HT_TRENDMODE` | `ht_trendmode` |
-    | `hilbert_transform_trend_line` | Adds the Hilbert transform instantaneous trend line of one candle column | `column='close'` | `HT_TRENDLINE` | `ht_trendline` |
+| Method | What it adds | Own arguments and defaults | TA-Lib function | Columns added |
+|---|---|---|---|---|
+| `hilbert_transform_dominant_cycle_period` | Adds the Hilbert transform dominant cycle period of one candle column | `column='close'` | `HT_DCPERIOD` | `ht_dcperiod` |
+| `hilbert_transform_dominant_cycle_phase` | Adds the Hilbert transform dominant cycle phase of one candle column | `column='close'` | `HT_DCPHASE` | `ht_dcphase` |
+| `hilbert_transform_phasor_components` | Adds the Hilbert transform in-phase and quadrature phasor components of one candle column | `column='close'` | `HT_PHASOR` | `inphase`, `quadrature` |
+| `hilbert_transform_sine_wave` | Adds the Hilbert transform sine wave and lead sine wave of one candle column | `column='close'` | `HT_SINE` | `sine`, `lead_sine` |
+| `hilbert_transform_trend_mode` | Adds the Hilbert transform trend mode of one candle column, 1 in a trend and 0 in a cycle | `column='close'` | `HT_TRENDMODE` | `ht_trendmode` |
+| `hilbert_transform_trend_line` | Adds the Hilbert transform instantaneous trend line of one candle column | `column='close'` | `HT_TRENDLINE` | `ht_trendline` |
 
-    These need a long run of candles before their first value. TA-Lib 0.6.8 reports a lookback of 32 candles for `HT_DCPERIOD` and `HT_PHASOR`, and 63 for the other four, so a short range gives columns that are mostly or entirely empty.
+These need a long run of candles before their first value. TA-Lib 0.6.8 reports a lookback of 32 candles for `HT_DCPERIOD` and `HT_PHASOR`, and 63 for the other four, so a short range gives columns that are mostly or entirely empty.
 
 ## A worked example
 

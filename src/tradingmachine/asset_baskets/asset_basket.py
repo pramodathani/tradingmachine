@@ -176,7 +176,51 @@ class AssetBasket(
 
     @property
     def instruments(self) -> list[asset_instruments.Instrument]:
-        """The list of tradingmachine.assets.instruments.Instrument the basket holds, in member order."""
+        """The list of tradingmachine.assets.instruments.Instrument the basket holds, in member order.
+
+        Examples:
+            Print the symbol and segment of every instrument in the basket:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            for instrument in basket.instruments:
+                print(instrument.symbol, instrument.segment)
+            ```
+
+            Read one member's own last price through its instrument object:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            first_instrument = basket.instruments[0]
+            print(first_instrument.symbol, first_instrument.last_price)
+            ```
+        """
         held = []
         for member in self.members:
             held.append(member.instrument)
@@ -184,12 +228,107 @@ class AssetBasket(
 
     @property
     def size(self) -> int:
-        """The int number of members in the basket."""
+        """The int number of members in the basket.
+
+        Examples:
+            Print how many members a basket has:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(f"{basket.name} holds {basket.size} shares")
+            ```
+
+            Watch the size grow as a member is added:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.size)
+            basket.add_member(
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="INDUSINDBK")
+                )
+            )
+            print(basket.size)
+            ```
+        """
         return len(self.members)
 
     @property
     def labels(self) -> list[str]:
-        """The list of str member labels, such as `nse:INFY`, in member order."""
+        """The list of str member labels, such as `nse:INFY`, in member order.
+
+        Examples:
+            Print the readable labels of the members:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.labels)
+            ```
+
+            Pair each label with its weight:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            for label, weight in zip(basket.labels, basket.weights):
+                print(f"{label}: {weight:.0%}")
+            ```
+        """
         member_labels = []
         for member in self.members:
             member_labels.append(member.label)
@@ -197,7 +336,52 @@ class AssetBasket(
 
     @property
     def weights(self) -> pd.Series:
-        """A pandas.Series of float weights indexed by member label, normalised to sum to 1, or equal weights when no member has a weight."""
+        """A pandas.Series of float weights indexed by member label, normalised to sum to 1, or equal weights when no member has a weight.
+
+        Examples:
+            Print the stated weights, normalised to add up to 1:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.weights)
+            ```
+
+            See every member of an unweighted basket count equally:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.weights)
+            print(f"Total: {basket.weights.sum()}")
+            ```
+        """
         stated = []
         for member in self.members:
             stated.append(member.weight)
@@ -209,7 +393,56 @@ class AssetBasket(
 
     @property
     def last_prices(self) -> pd.DataFrame:
-        """A pandas.DataFrame with one row per member, holding `label`, `instrument_id`, `last_price`, `last_trade_time` and an `error` that is None unless UBI had no price for the member, read from UBI in one request on every access."""
+        """A pandas.DataFrame with one row per member, holding `label`, `instrument_id`, `last_price`, `last_trade_time` and an `error` that is None unless UBI had no price for the member, read from UBI in one request on every access.
+
+        Examples:
+            Print every member's last price from one request:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.last_prices[["label", "last_price"]])
+            ```
+
+            List the members UBI had no price for:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            frame = basket.last_prices
+            missing = frame[frame["error"].notna()]
+            if missing.empty:
+                print("Every member has a last price.")
+            else:
+                print(missing[["label", "error"]])
+            ```
+        """
         rows = []
         results = self._post_for_every_member(LAST_PRICE_PATH)
         for member, result in zip(self.members, results):
@@ -227,7 +460,55 @@ class AssetBasket(
 
     @property
     def ohlc(self) -> pd.DataFrame:
-        """A pandas.DataFrame with one row per member, holding `label`, `instrument_id`, `open`, `high`, `low`, `last_price`, `previous_close`, `change_percent` and an `error` that is None unless UBI had no quote for the member, read from UBI in one request on every access."""
+        """A pandas.DataFrame with one row per member, holding `label`, `instrument_id`, `open`, `high`, `low`, `last_price`, `previous_close`, `change_percent` and an `error` that is None unless UBI had no quote for the member, read from UBI in one request on every access.
+
+        Examples:
+            Print each member's day so far:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.ohlc[["label", "open", "high", "low", "last_price"]])
+            ```
+
+            Work out each member's day range as a percentage of its previous close:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            frame = basket.ohlc
+            frame["range_percent"] = (
+                (frame["high"] - frame["low"]) / frame["previous_close"] * 100
+            )
+            print(frame[["label", "range_percent"]].round(2))
+            ```
+        """
         rows = []
         results = self._post_for_every_member(OHLC_PATH)
         for member, result in zip(self.members, results):
@@ -250,7 +531,52 @@ class AssetBasket(
 
     @property
     def quotes(self) -> pd.DataFrame:
-        """A pandas.DataFrame with one row per member, holding `label`, every field of UBI's unified quote such as `last_price`, `volume`, `oi` and `depth`, and an `error` that is None unless UBI had no quote for the member, read from UBI in one request on every access."""
+        """A pandas.DataFrame with one row per member, holding `label`, every field of UBI's unified quote such as `last_price`, `volume`, `oi` and `depth`, and an `error` that is None unless UBI had no quote for the member, read from UBI in one request on every access.
+
+        Examples:
+            Print each member's last price and traded volume:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.quotes[["label", "last_price", "volume"]])
+            ```
+
+            Print whether each member's quote is stale and where it came from:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            frame = basket.quotes
+            print(frame[["label", "stale", "source"]])
+            ```
+        """
         rows = []
         results = self._post_for_every_member(QUOTE_PATH)
         for member, result in zip(self.members, results):
@@ -268,7 +594,59 @@ class AssetBasket(
 
     @property
     def day_change_percent(self) -> float | None:
-        """The float weighted move of the basket since the previous close, in percent, such as 0.8, or None when any member has no quote."""
+        """The float weighted move of the basket since the previous close, in percent, such as 0.8, or None when any member has no quote.
+
+        Examples:
+            Print the weighted move of the basket since yesterday's close:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            change = basket.day_change_percent
+            if change is None:
+                print("A member has no quote.")
+            else:
+                print(f"{basket.name}: {change:+.2f}%")
+            ```
+
+            Compare a weighted basket's move with the equal-weighted move of the same shares:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            equal_members = []
+            for member in basket.members:
+                equal_members.append(basket_member.BasketMember(member.instrument))
+            equal_basket = asset_basket.AssetBasket(
+                name="IT shares, equal", members=equal_members
+            )
+            print(basket.day_change_percent, equal_basket.day_change_percent)
+            ```
+        """
         frame = self.ohlc
         if frame["change_percent"].isna().any():
             return None
@@ -279,17 +657,162 @@ class AssetBasket(
 
     @property
     def advancers(self) -> int:
-        """The int number of members trading above their previous close, read from UBI on every access."""
+        """The int number of members trading above their previous close, read from UBI on every access.
+
+        Examples:
+            Print how many members are up on the day:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(f"{basket.advancers} of {basket.size} banks are up")
+            ```
+
+            Say whether most of the basket is rising:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            if basket.advancers > basket.size / 2:
+                print("Most banks are up.")
+            else:
+                print("Most banks are not up.")
+            ```
+        """
         return self.breadth["advancers"]
 
     @property
     def decliners(self) -> int:
-        """The int number of members trading below their previous close, read from UBI on every access."""
+        """The int number of members trading below their previous close, read from UBI on every access.
+
+        Examples:
+            Print how many members are down on the day:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(f"{basket.decliners} of {basket.size} banks are down")
+            ```
+
+            Compare the decliners with the advancers:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            advancers = basket.advancers
+            decliners = basket.decliners
+            print(f"up {advancers}, down {decliners}")
+            ```
+        """
         return self.breadth["decliners"]
 
     @property
     def breadth(self) -> dict:
-        """A dict counting the members that are `advancers`, `decliners`, `unchanged` and `unavailable` since the previous close, with the `advance_decline_ratio` of advancers to decliners or None when nothing declined, read from UBI on every access."""
+        """A dict counting the members that are `advancers`, `decliners`, `unchanged` and `unavailable` since the previous close, with the `advance_decline_ratio` of advancers to decliners or None when nothing declined, read from UBI on every access.
+
+        Examples:
+            Print the full count of rising, falling, unchanged and unquoted members:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.breadth)
+            ```
+
+            Report the advance-decline ratio, which is None when nothing fell:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            ratio = basket.breadth["advance_decline_ratio"]
+            if ratio is None:
+                print("No member declined.")
+            else:
+                print(f"Advance-decline ratio: {ratio:.2f}")
+            ```
+        """
         changes = self.ohlc["change_percent"]
         advancers = int((changes > 0).sum())
         decliners = int((changes < 0).sum())
@@ -308,28 +831,248 @@ class AssetBasket(
 
     @property
     def exposure_by_segment(self) -> pd.Series:
-        """A pandas.Series of the float total weight in each segment, such as `nse_equities`, largest first."""
+        """A pandas.Series of the float total weight in each segment, such as `nse_equities`, largest first.
+
+        Examples:
+            Split a basket of shares and exchange traded funds by segment:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="INFY"), weight=60
+                ),
+                basket_member.BasketMember(
+                    funds.ExchangeTradedFund(exchange="nse", symbol="GOLDBEES"),
+                    weight=40,
+                ),
+            ]
+            basket = asset_basket.AssetBasket(name="shares and gold", members=members)
+            print(basket.exposure_by_segment)
+            ```
+
+            Check that a basket of shares is wholly in one segment:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.exposure_by_segment)
+            ```
+        """
         return self._weights_grouped_by("segment")
 
     @property
     def exposure_by_exchange(self) -> pd.Series:
-        """A pandas.Series of the float total weight on each exchange, such as `nse`, largest first."""
+        """A pandas.Series of the float total weight on each exchange, such as `nse`, largest first.
+
+        Examples:
+            Split a basket that holds shares on both the NSE and the BSE by exchange:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="INFY"), weight=0.7
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="bse", symbol="TCS"), weight=0.3
+                ),
+            ]
+            basket = asset_basket.AssetBasket(name="two exchanges", members=members)
+            print(basket.exposure_by_exchange)
+            ```
+
+            Print the largest exchange's share of an NSE-only basket:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            exposure = basket.exposure_by_exchange
+            print(exposure.index[0], exposure.iloc[0])
+            ```
+        """
         return self._weights_grouped_by("exchange")
 
     @property
     def concentration(self) -> float:
-        """The float Herfindahl index of the weights, the sum of their squares, which is 1 for a single holding and 1 divided by the size for equal weights."""
+        """The float Herfindahl index of the weights, the sum of their squares, which is 1 for a single holding and 1 divided by the size for equal weights.
+
+        Examples:
+            Print the Herfindahl index of a weighted basket:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(f"Concentration: {basket.concentration:.3f}")
+            ```
+
+            See that equal weights give 1 divided by the size:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.concentration, 1 / basket.size)
+            ```
+        """
         weights = self.weights
         return float((weights**2).sum())
 
     @property
     def effective_number_of_members(self) -> float:
-        """The float number of equal-weighted members that would be as concentrated as this basket, which is 1 divided by the Herfindahl index."""
+        """The float number of equal-weighted members that would be as concentrated as this basket, which is 1 divided by the Herfindahl index.
+
+        Examples:
+            Print how many equal members the basket is as concentrated as:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            effective = basket.effective_number_of_members
+            print(f"{basket.size} members act like {effective:.1f} equal ones")
+            ```
+
+            Warn when a basket is much less diversified than its size suggests:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            if basket.effective_number_of_members < basket.size * 0.9:
+                print("The weights are lopsided.")
+            else:
+                print("The weights are close to equal.")
+            ```
+        """
         return 1 / self.concentration
 
     @property
     def largest_weight(self) -> float:
-        """The float weight of the basket's biggest member."""
+        """The float weight of the basket's biggest member.
+
+        Examples:
+            Print the weight of the biggest member:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(f"Largest weight: {basket.largest_weight:.0%}")
+            ```
+
+            Check a basket against a limit of 40% in any one member:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            if basket.largest_weight > 0.4:
+                print("One member is above the 40% limit.")
+            else:
+                print("Every member is within the limit.")
+            ```
+        """
         return float(self.weights.max())
 
     def member_prices(
@@ -356,6 +1099,55 @@ class AssetBasket(
             BasketMemberError: UBI answered an error for one or more members, all of which the message lists.
             BadRequestError: The range or interval is invalid.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the last few day candles of every member:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            frame = basket.member_prices(days=10)
+            print(frame[["label", "datetime", "close"]].tail(6))
+            ```
+
+            Count each member's day candles over a fixed range:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            frame = basket.member_prices(
+                interval="day",
+                from_date="2026-06-01",
+                to_date="2026-09-25",
+            )
+            print(frame.groupby("label").size())
+            ```
         """
         shared_parameters = {
             "interval": interval,
@@ -420,6 +1212,52 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Line up the members' closes over the last month:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            closes = basket.member_closes(days=30)
+            print(closes.tail())
+            ```
+
+            Normalise every member to 100 at the start of the range to compare them:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            closes = basket.member_closes(days=90)
+            normalised = closes / closes.iloc[0] * 100
+            print(normalised.iloc[-1].round(1))
+            ```
         """
         aligned = self._aligned_candles(interval, from_date, to_date, days, adjusted)
         if aligned is None:
@@ -449,6 +1287,51 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the members' daily returns for the last two weeks:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            returns = basket.member_returns(days=14)
+            print(returns.round(4))
+            ```
+
+            Compare the members' daily volatility over a year:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            returns = basket.member_returns(days=365)
+            print(returns.std().sort_values())
+            ```
         """
         closes = self.member_closes(interval, from_date, to_date, days, adjusted)
         if closes is None or len(closes) < 2:
@@ -478,6 +1361,50 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the covariance of the members' daily returns over six months:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.covariance_matrix(days=180))
+            ```
+
+            Annualise the covariance matrix by 252 trading days:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            covariance = basket.covariance_matrix(days=365)
+            print((covariance * 252).round(4))
+            ```
         """
         returns = self.member_returns(interval, from_date, to_date, days, adjusted)
         if returns is None or len(returns) < 2:
@@ -509,6 +1436,57 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print how closely the members' daily returns move together:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.correlation_matrix(days=365).round(2))
+            ```
+
+            Find the least correlated pair of banks:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            correlation = basket.correlation_matrix(days=365)
+            lowest_pair = None
+            lowest_value = 2.0
+            for first in correlation.columns:
+                for second in correlation.columns:
+                    if first < second and correlation.loc[first, second] < lowest_value:
+                        lowest_value = correlation.loc[first, second]
+                        lowest_pair = f"{first} and {second}"
+            print(lowest_pair, round(lowest_value, 2))
+            ```
         """
         returns = self.member_returns(interval, from_date, to_date, days, adjusted)
         if returns is None or len(returns) < 2:
@@ -540,6 +1518,53 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print each member's share of the basket's risk beside its weight:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.risk_contributions(days=180).round(3))
+            ```
+
+            Find members whose share of risk is well above their weight:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            contributions = basket.risk_contributions(days=365)
+            for label, row in contributions.iterrows():
+                if row["risk_contribution"] > row["weight"] * 1.1:
+                    print(f"{label} carries more risk than its weight")
+            print(contributions.round(3))
+            ```
         """
         covariance = self.covariance_matrix(
             interval, from_date, to_date, days, adjusted
@@ -584,6 +1609,52 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the diversification ratio over a year:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            ratio = basket.diversification_ratio(days=365)
+            print(f"Diversification ratio: {ratio:.2f}")
+            ```
+
+            Compare the ratio over a short and a long range:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            short_ratio = basket.diversification_ratio(days=90)
+            long_ratio = basket.diversification_ratio(days=730)
+            print(f"90 days: {short_ratio:.2f}, 730 days: {long_ratio:.2f}")
+            ```
         """
         covariance = self.covariance_matrix(
             interval, from_date, to_date, days, adjusted
@@ -625,6 +1696,51 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what each member added to the basket's return over three months:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.return_contributions(days=90).round(4))
+            ```
+
+            Check that the contributions add up to the basket's cumulative return:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            contributions = basket.return_contributions(days=180)
+            print(round(contributions["contribution"].sum(), 6))
+            print(round(basket.cumulative_return(days=180), 6))
+            ```
         """
         closes = self.member_closes(interval, from_date, to_date, days, adjusted)
         if closes is None or len(closes) < 2:
@@ -654,6 +1770,53 @@ class AssetBasket(
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the two members that have risen most today:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.top_gainers(count=2)[["label", "change_percent"]])
+            ```
+
+            Print the best performer's label and move:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            best = basket.top_gainers(count=1)
+            if best.empty:
+                print("No member has a quote.")
+            else:
+                print(best.loc[0, "label"], best.loc[0, "change_percent"])
+            ```
         """
         frame = self.ohlc.dropna(subset=["change_percent"])
         frame = frame.sort_values("change_percent", ascending=False)
@@ -670,6 +1833,50 @@ class AssetBasket(
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the two members that have fallen most today:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.top_losers(count=2)[["label", "change_percent"]])
+            ```
+
+            List the members that are down more than half a percent:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            losers = basket.top_losers(count=basket.size)
+            print(losers[losers["change_percent"] < -0.5][["label", "change_percent"]])
+            ```
         """
         frame = self.ohlc.dropna(subset=["change_percent"])
         frame = frame.sort_values("change_percent", ascending=True)
@@ -688,6 +1895,59 @@ class AssetBasket(
 
         Raises:
             UnifiedBrokerInterfaceError: A basket whose weights come from live prices, such as a Portfolio, could not read them.
+
+        Examples:
+            Measure how much of an IT basket a broader basket also holds:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            broad_weights = {
+                "INFY": 0.3,
+                "RELIANCE": 0.4,
+                "HDFCBANK": 0.3,
+            }
+            broad_members = []
+            for symbol, weight in broad_weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                broad_members.append(basket_member.BasketMember(share, weight=weight))
+            broad = asset_basket.AssetBasket(name="broad", members=broad_members)
+            print(f"Overlap: {basket.overlap_with(broad):.0%}")
+            ```
+
+            See that a basket overlaps itself completely:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            print(basket.overlap_with(basket))
+            ```
         """
         own_weights = self._weights_by_instrument_id()
         other_weights = other._weights_by_instrument_id()
@@ -708,6 +1968,55 @@ class AssetBasket(
 
         Raises:
             BasketMemberError: The instrument is already in the basket, or the member's weight does not match the others'.
+
+        Examples:
+            Add a weighted member to a weighted basket:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            wipro = equities.Equity(exchange="nse", symbol="WIPRO")
+            basket.add_member(basket_member.BasketMember(wipro, weight=0.1))
+            print(basket.weights.round(3))
+            ```
+
+            See an unweighted member refused by a weighted basket:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+
+            wipro = equities.Equity(exchange="nse", symbol="WIPRO")
+            try:
+                basket.add_member(basket_member.BasketMember(wipro))
+            except exceptions.BasketMemberError as error:
+                print(error)
+            ```
         """
         candidate_members = self.members + [
             member,
@@ -726,6 +2035,56 @@ class AssetBasket(
 
         Raises:
             BasketMemberError: The instrument is not in the basket, or it is the only member.
+
+        Examples:
+            Remove a member and see the remaining weights renormalised:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            basket.remove_member(basket.instruments[0])
+            print(basket.weights)
+            ```
+
+            See removing an instrument the basket does not hold refused:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            try:
+                basket.remove_member(infosys)
+            except exceptions.BasketMemberError as error:
+                print(error)
+            ```
         """
         remaining = []
         for member in self.members:
@@ -751,6 +2110,52 @@ class AssetBasket(
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the fields a stored basket has:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            document = basket.document(effective_date="2026-10-01")
+            print(document["name"], document["kind"], document["effective_date"])
+            print(len(document["members"]))
+            ```
+
+            Print the stored description of each member:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            for member_document in basket.document()["members"]:
+                print(member_document["symbol"], member_document["instrument_id"])
+            ```
         """
         if effective_date is None:
             effective_date = datetime.date.today()
@@ -795,6 +2200,73 @@ class AssetBasket(
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the basket's own day candles, starting from 100:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            frame = basket.prices(days=30)
+            print(frame[["datetime", "open", "high", "low", "close"]].tail())
+            ```
+
+            Work out the basket's return over a fixed range from its candles:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+                "KOTAKBANK",
+                "SBIN",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            basket = asset_basket.AssetBasket(name="banks", members=members)
+            frame = basket.prices(from_date="2026-06-01", to_date="2026-09-25")
+            first_close = frame["close"].iloc[0]
+            last_close = frame["close"].iloc[-1]
+            print(f"Return: {(last_close / first_close - 1) * 100:.2f}%")
+            ```
+
+            Use an inherited analysis method on the basket's candles:
+
+            ```python
+            from tradingmachine.asset_baskets import asset_basket
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            weights = {
+                "INFY": 0.5,
+                "TCS": 0.3,
+                "HCLTECH": 0.2,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            basket = asset_basket.AssetBasket(name="IT shares", members=members)
+            print(basket.sharpe_ratio(risk_free_rate=0.065, days=365))
+            ```
         """
         aligned = self._aligned_candles(interval, from_date, to_date, days, adjusted)
         if aligned is None:

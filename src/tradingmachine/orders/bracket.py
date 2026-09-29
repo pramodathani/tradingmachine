@@ -117,6 +117,49 @@ class BracketOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the stop and target of a bracket around a limit buy:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import bracket
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = bracket.BracketOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                stop_price=12.5,
+                stop_limit_price=12.45,
+                target_price=13.6,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Leave out the target and see that the synthetic object drops it:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import bracket
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = bracket.BracketOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                stop_price=12.5,
+                stop_limit_price=12.45,
+            )
+            print(order.synthetic_fields())
+            print(order.synthetic)
+            ```
         """
         return {
             "stop_price": self.stop_price,

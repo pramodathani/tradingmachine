@@ -1,8 +1,8 @@
 # Errors
 
-The library raises two separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.unified_broker_interface.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, a share used as a futures contract, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`.
+The library raises three separate families of exception, and it helps to know which is which before catching anything. Errors about the request to UBI, such as a refused token, a rejected order or a UBI that cannot be reached, come from `tradingmachine.unified_broker_interface.exceptions` and are chosen by the HTTP status code UBI answered with. Errors about an instrument itself, such as an unknown symbol, an index used as something tradeable, a share used as a futures contract, or a position that cannot be changed as asked, come from `tradingmachine.assets.exceptions`. Errors about an [asset basket](asset-baskets.md), such as a basket that is not stored or a CSV file without a `symbol` column, come from `tradingmachine.asset_baskets.exceptions`.
 
-The two families do not share a base class, so `except UnifiedBrokerInterfaceError` never catches an `EquityError`, and the other way round. Where one causes the other, the instrument error is raised `from` the UBI error, so the original stays in the traceback as `__cause__`.
+The three families do not share a base class, so `except UnifiedBrokerInterfaceError` never catches an `EquityError` or a `BasketNotFoundError`, and the other way round. Where one causes the other, the instrument error is raised `from` the UBI error, so the original stays in the traceback as `__cause__`.
 
 The table below lists every class on this page.
 
@@ -14,8 +14,9 @@ The table below lists every class on this page.
 | <span class="member class">class</span> | [Four behaviour errors](#the-instrument-errors) | Tradeable, non-tradeable, position and holding |
 | <span class="member class">class</span> | [Six derivative errors](#the-derivative-errors) | A contract of the wrong kind given to a derivative base class, or one whose underlying cannot be found |
 | <span class="member class">class</span> | [Twenty-seven family errors](#the-family-errors) | One per named instrument class, raised when UBI has no such instrument |
+| <span class="member class">class</span> | [`AssetBasketError`](#assetbasketerror) and [three basket errors](#the-asset-basket-errors) | A basket that is not stored, has unusable members, or cannot be imported from a CSV file |
 
-## The two hierarchies
+## The three hierarchies
 
 The class diagram below shows the UBI client errors. Every one of them is a direct subclass of `UnifiedBrokerInterfaceError`, which is itself a plain `Exception`.
 
@@ -42,7 +43,7 @@ classDiagram
     }
 ```
 
-The class diagram below shows the instrument errors. They are all direct subclasses of `InstrumentError`, which is also a plain `Exception`; the twenty-seven family errors and the five derivative errors are grouped here to keep the diagram readable, and each is listed by name further down.
+The class diagram below shows the instrument errors. They are all direct subclasses of `InstrumentError`, which is also a plain `Exception`; the twenty-seven family errors and the six derivative errors are grouped here to keep the diagram readable, and each is listed by name further down.
 
 ```mermaid
 classDiagram
@@ -105,7 +106,7 @@ classDiagram
     }
 ```
 
-The six grouping boxes in that diagram are not classes; each family error and each derivative error inherits from `InstrumentError` directly.
+The six grouping boxes in that diagram are not classes; each family error and each derivative error inherits from `InstrumentError` directly. The third hierarchy, the asset basket errors, is drawn in [its own section](#the-asset-basket-errors).
 
 ## Which status becomes which exception
 
@@ -153,6 +154,10 @@ flowchart LR
     D -- "ServiceUnavailableError or BrokerError" --> D6["Start the UBI service<br/>the message names"]
     D -- "UnreachableError" --> D7["Start UBI, check<br/>TRADINGMACHINE_UBI_BASE_URL"]
     D -- "AuthenticationError" --> D9["Make the MongoDB settings<br/>match UBI's key and secret"]
+    B -- "AssetBasketError" --> E{"Which one?"}
+    E -- "BasketNotFoundError" --> E1["Check the name and date<br/>with BasketStore.names or history"]
+    E -- "BasketMemberError" --> E2["Fix the member rows,<br/>the message names them"]
+    E -- "BasketCsvImportError" --> E3["Fix the CSV file's<br/>columns or rows"]
 ```
 
 !!! danger "Never resend an order after `OrderOutcomeUnknownError`"
@@ -251,7 +256,7 @@ The example below catches one subclass and reads all three. It is built from the
 
 ## The instrument errors
 
-These classes live in `tradingmachine.assets.exceptions`. Catch `InstrumentError` to handle every one of them, including the five derivative errors and all twenty-seven family errors.
+These classes live in `tradingmachine.assets.exceptions`. Catch `InstrumentError` to handle every one of them, including the six derivative errors and all twenty-seven family errors, thirty-seven subclasses in all.
 
 ### InstrumentError
 
@@ -409,6 +414,44 @@ Some classes resolve nothing today because their segment is empty in UBI, so eve
 
 `MutualFundError` is raised by `MutualFund` when UBI has no mutual fund scheme with that code, such as `ABSLFTTIDG`, on that exchange.
 
+## The asset basket errors
+
+These classes live in `tradingmachine.asset_baskets.exceptions` and are raised by the [asset basket](asset-baskets.md) classes and by the [`constituents`](instruments.md#constituents) property. Failures reported by UBI itself during a basket's requests still arrive as the [UBI client errors](#the-ubi-client-errors). The class diagram below shows the family.
+
+```mermaid
+classDiagram
+    direction LR
+    Exception <|-- AssetBasketError
+    AssetBasketError <|-- BasketNotFoundError
+    AssetBasketError <|-- BasketMemberError
+    AssetBasketError <|-- BasketCsvImportError
+```
+
+Each of the three specific errors inherits from `AssetBasketError`, so `except AssetBasketError` catches all four.
+
+### AssetBasketError
+
+`AssetBasketError` is the base of every failure in building, reading, storing or trading an asset basket. It is also raised directly in two cases: [`BasketStore`](asset-baskets.md#basketstore-and-basketcsvimporter) finds a stored basket whose kind it does not know, and `Index.level` is read on an index that has no `base_date`.
+
+### BasketNotFoundError
+
+`BasketNotFoundError` is raised by `BasketStore.load` when no stored basket has the name asked for, or none is in effect on the date asked for. The [`constituents`](instruments.md#constituents) property does not raise it, because it returns `None` when nothing is stored for the instrument.
+
+### BasketMemberError
+
+`BasketMemberError` means a basket's members are unusable. The list below gives the common causes.
+
+- The members are empty, name the same instrument twice, or give a weight to only some members.
+- UBI could not find one or more of the instruments a row, a CSV file or a stored basket names, or a row gives neither an `instrument_id` nor an `exchange` and a `segment`.
+- UBI answered an error for a member when last prices or candles were asked for.
+- A `Portfolio` member has no quantity, a portfolio's weights are asked for while a member has no last price, or `Portfolio.from_holdings` or `from_positions` finds nothing held.
+- An `Index` with `weighting="stated"` has a member without a weight, `Index.level` finds a member with no candle near the `base_date`, or `to_portfolio` is given too little capital to buy one whole unit of any member.
+- `remove_member` names an instrument that is not in the basket.
+
+### BasketCsvImportError
+
+`BasketCsvImportError` is raised by `BasketCsvImporter.import_file` when a CSV file cannot be turned into a basket: it has no `symbol` column, it has no rows, or only some of its rows give a number in a column such as `weight` or `quantity`.
+
 ## Errors that are not the library's own
 
 A few failures come from Python or from the configuration rather than from either family. The table below lists them.
@@ -418,6 +461,8 @@ A few failures come from Python or from the configuration rather than from eithe
 | `TypeError` | Any named constructor | A required identity argument is missing, reported before any request |
 | `ValueError` | `UnifiedBrokerInterface()` and so the first instrument | No base url, or no UBI `settings` document or key or secret in MongoDB |
 | `ValueError` | The discovery calls and the constructors | A date string that is not `YYYY-MM-DD` |
+| `ValueError` | The basket constructors and `BasketStore` | An `unmapped_weight` outside 0 to 1, an unknown `weighting` or a base value that is not positive for `Index`, or no MongoDB database name configured |
+| `pymongo.errors.PyMongoError` | `BasketStore`, `BasketCsvImporter` and `constituents` | MongoDB could not be reached |
 | `AttributeError` | An index class | Reading an order-book or order member, which an index does not have |
 
 ??? note "Under the hood"

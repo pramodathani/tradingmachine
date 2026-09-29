@@ -102,6 +102,56 @@ class Equity(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the holding of Vodafone Idea, or say that none is held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            holding = share.holdings
+            if holding is None:
+                print("No IDEA shares are held.")
+            else:
+                print(holding["quantity"], "shares at", holding["average_price"])
+            ```
+
+            Report how many shares of each of a few companies are held and how many are free to sell:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "IDEA",
+                "ITC",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                holding = share.holdings
+                if holding is None:
+                    print(f"{symbol}: not held")
+                    continue
+                pledged = holding["collateral_quantity"]
+                free_quantity = holding["quantity"] - pledged
+                print(f"{symbol}: {holding['quantity']} held, {free_quantity} free")
+            ```
+
+            Compare what was paid for a holding with what it is worth now:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="ITC")
+            holding = share.holdings
+            if holding is None:
+                print("No ITC shares are held.")
+            else:
+                invested = holding["invested_value"]
+                current = holding["current_value"]
+                print(f"Invested {invested:.2f}, worth {current:.2f} now")
+            ```
         """
         rows = self._unified_broker_interface.get(HOLDINGS_PATH)["holdings"]
         for row in rows:
@@ -125,6 +175,35 @@ class Equity(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the Vodafone Idea shares held are worth, which is None when none are held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            print(share.holdings_value)
+            ```
+
+            Add up the value of the shares held in a few companies, skipping any that are not held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "IDEA",
+                "ITC",
+                "TCS",
+            ]
+            total_value = 0.0
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                value = share.holdings_value
+                if value is not None:
+                    total_value = total_value + value
+            print(f"Held in these shares: {total_value:.2f} rupees")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -144,6 +223,36 @@ class Equity(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the profit and loss of the Vodafone Idea shares held, which is None when none are held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            print(share.holdings_pnl)
+            ```
+
+            Print today's change and the unrealised profit of each of a few holdings:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "IDEA",
+                "ITC",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                profit_and_loss = share.holdings_pnl
+                if profit_and_loss is None:
+                    print(f"{symbol}: not held")
+                    continue
+                day_change = profit_and_loss["day_change"]
+                unrealized = profit_and_loss["unrealized"]
+                print(f"{symbol}: today {day_change}, unrealised {unrealized}")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -174,6 +283,43 @@ class Equity(instruments.TradeableInstrument):
 
         Raises:
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share to keep, three per cent below the last price, and cancel the order the engine holds at once:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(share.last_price * 0.97, 2)
+            answer = share.add_to_holdings(quantity=1, price=price)
+            print(answer["outcome"], answer.get("parent_id"))
+            if answer.get("parent_id") is not None:
+                cancelled = share.cancel_parent(answer["parent_id"])
+                print(cancelled["state"])
+            ```
+
+            Send the same bid as an immediate-or-cancel order, which the exchange cancels itself when nothing matches:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(share.last_price * 0.97, 2)
+            answer = share.add_to_holdings(
+                quantity=1,
+                price=price,
+                validity="ioc",
+                tag="examplebid",
+            )
+            print(answer["outcome"], answer["status_message"])
+            if answer.get("parent_id") is not None:
+                try:
+                    share.cancel_parent(answer["parent_id"])
+                except exceptions.ConflictError:
+                    print("The order had already finished.")
+            ```
         """
         if price is None:
             return self.buy_at_market_price(
@@ -217,6 +363,36 @@ class Equity(instruments.TradeableInstrument):
         Raises:
             HoldingError: This share is not held, or the quantity is more than the free shares.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share from the holding three per cent above the last price, and cancel the order at once:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            if share.holdings is None:
+                print("No IDEA shares are held, so there is nothing to offer.")
+            else:
+                price = round(share.last_price * 1.03, 2)
+                answer = share.reduce_holdings(quantity=1, price=price)
+                print(answer["outcome"], answer.get("parent_id"))
+                if answer.get("parent_id") is not None:
+                    share.cancel_parent(answer["parent_id"])
+            ```
+
+            Catch the error raised when more shares are asked for than are free to sell, which sends no order:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import exceptions
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            try:
+                share.reduce_holdings(quantity=10000000, price=100.0)
+            except exceptions.HoldingError as error:
+                print(f"Refused: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -255,6 +431,36 @@ class Equity(instruments.TradeableInstrument):
         Raises:
             HoldingError: This share is not held, or every share held is pledged as collateral.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer every free Vodafone Idea share three per cent above the last price, and cancel the order at once:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            if share.holdings is None:
+                print("No IDEA shares are held, so there is nothing to sell.")
+            else:
+                price = round(share.last_price * 1.03, 2)
+                answer = share.liquidate_holdings(price=price)
+                print(answer["outcome"], answer.get("parent_id"))
+                if answer.get("parent_id") is not None:
+                    share.cancel_parent(answer["parent_id"])
+            ```
+
+            Catch the error raised for a share that is not held, which sends no order:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import exceptions
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            try:
+                share.liquidate_holdings(price=100.0)
+            except exceptions.HoldingError as error:
+                print(f"Nothing sold: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -366,6 +572,49 @@ class Equity(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the nse shares whose symbol contains a partial name:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            matches = equities.Equity.search(exchange="nse", term="RELI")
+            print(matches[["symbol", "instrument_id"]])
+            ```
+
+            Search, then build the first match and print its last price:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            matches = equities.Equity.search(exchange="nse", term="INFY", limit=5)
+            if matches is None:
+                print("No share matches.")
+            else:
+                symbol = matches["symbol"].iloc[0]
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                print(symbol, share.last_price)
+            ```
+
+            Check whether a symbol is listed on both the nse and the bse:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            exchanges = [
+                "nse",
+                "bse",
+            ]
+            for exchange in exchanges:
+                matches = equities.Equity.search(
+                    exchange=exchange,
+                    term="TCS",
+                    limit=1,
+                )
+                found = matches is not None and matches["symbol"].iloc[0] == "TCS"
+                print(f"TCS listed on {exchange}: {found}")
+            ```
         """
         return cls._search_catalogue(
             exchange,
@@ -534,6 +783,46 @@ class EquityIndex(instruments.NonTradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the nse indices whose symbol contains `BANK`:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            matches = equities.EquityIndex.search(exchange="nse", term="BANK")
+            print(matches["symbol"].tolist())
+            ```
+
+            Print the level of each index whose symbol contains `NIFTY IT`:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            matches = equities.EquityIndex.search(exchange="nse", term="NIFTY IT")
+            if matches is None:
+                print("No index matches.")
+            else:
+                for symbol in matches["symbol"]:
+                    index = equities.EquityIndex(exchange="nse", symbol=symbol)
+                    print(symbol, index.last_price)
+            ```
+
+            Count how many indices the bse publishes with `SENSEX` in the symbol:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            matches = equities.EquityIndex.search(
+                exchange="bse",
+                term="SENSEX",
+                limit=200,
+            )
+            if matches is None:
+                print(0)
+            else:
+                print(len(matches))
+            ```
         """
         return cls._search_catalogue(
             exchange,

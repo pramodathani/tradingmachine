@@ -11,6 +11,7 @@ The table below lists what this page covers. The twenty-seven named classes are 
 | <span class="member class">class</span> | [Named by underlying, expiry, strike and option type](#named-by-underlying-expiry-strike-and-option-type) | The eight option classes |
 | <span class="member property">attribute</span> | [The attributes set on lookup](#the-attributes-set-on-lookup) | `instrument_id`, `exchange`, `segment`, `shape`, `symbol` and the rest, fixed at construction |
 | <span class="member function">classmethod</span> | [`shared_unified_broker_interface`](#shared_unified_broker_interface) | The one UBI client every instrument shares |
+| <span class="member property">property</span> | [`constituents`](#constituents) | The stored basket of what an index, an exchange traded fund or a mutual fund holds |
 | <span class="member class">class</span> | [`Instrument`](#instrument) | The base of every instrument, which quotes and analyses but cannot trade |
 | <span class="member class">class</span> | [`TradeableInstrument`](#tradeableinstrument) | An instrument that can be traded, which is anything except an index |
 | <span class="member class">class</span> | [`NonTradeableInstrument`](#nontradeableinstrument) | An index, which is followed rather than traded |
@@ -24,7 +25,7 @@ Each class stands for one of UBI's segments, so the kind of contract is the clas
 
 ```mermaid
 flowchart TB
-    I["Instrument<br/>identity, candles, quotes,<br/>about 190 analysis methods"]
+    I["Instrument<br/>identity, candles, quotes,<br/>about 210 analysis methods"]
     T["TradeableInstrument<br/>order book, orders,<br/>positions"]
     N["NonTradeableInstrument<br/>indices only"]
     I --> T
@@ -139,7 +140,7 @@ The eight futures classes name a contract by its exchange, the symbol of what it
 | `exchange` | `str` | Yes | | The exchange, such as `nse` or `mcx` |
 | `underlying_symbol` | `str` | Yes | | The symbol of the underlying, such as `RELIANCE`, `NIFTY` or `GOLD` |
 | `expiry_date` | `datetime.date` or `str` | Yes | | The expiry, as a date or a `YYYY-MM-DD` string. [`expiries`](discovery.md#expiries) lists the valid ones. |
-| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` looks the underlying up by `underlying_symbol` when it is asked for. |
+| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` uses UBI's link to the underlying, the `underlying_instrument_id` attribute, when UBI gives one, and otherwise the family's default, looked up again on every read; [How a contract finds its underlying](derivatives.md#how-a-contract-finds-its-underlying) gives the order. |
 | `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client to send requests through, or `None` for the shared one |
 
 #### Example
@@ -192,7 +193,7 @@ The eight option classes add a strike price and an option type to the futures ar
 | `expiry_date` | `datetime.date` or `str` | Yes | | The expiry, as a date or a `YYYY-MM-DD` string |
 | `strike_price` | `float` | Yes | | The strike price in rupees, such as `25000` |
 | `option_type` | `str` | Yes | | `CE` for a call or `PE` for a put |
-| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` looks the underlying up by `underlying_symbol` when it is asked for. |
+| `underlying` | `Instrument` or `None` | No | `None` | The instrument the contract is written on, such as an `Equity`, an `EquityIndex` or a future, which the contract keeps for [`underlying`](derivatives.md#underlying) and [`underlying_price`](derivatives.md#underlying_price). `None` uses UBI's link to the underlying, the `underlying_instrument_id` attribute, when UBI gives one, and otherwise the family's default, looked up again on every read; [How a contract finds its underlying](derivatives.md#how-a-contract-finds-its-underlying) gives the order. |
 | `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client to send requests through, or `None` for the shared one |
 
 #### Example
@@ -231,7 +232,7 @@ The constructor returns the option object, with `strike_price` as a float and `o
 
 ## How an instrument is looked up
 
-Every constructor, whatever its class, ends in the same single request to UBI's details route. The sequence below shows that request for `Equity("nse", "RELIANCE")`, including the two checks that run after the answer arrives.
+Every constructor, whatever its class, ends in the same single request to UBI's details route, unless the three base classes are handed UBI's answer already through `details`. The sequence below shows that request for `Equity("nse", "RELIANCE")`, including the two checks that run after the answer arrives.
 
 ```mermaid
 sequenceDiagram
@@ -257,12 +258,13 @@ A 404 from UBI is turned into `InstrumentError` inside `Instrument`, and each na
 
 The `instrument_id` is a UUID that UBI computes rather than hands out. It is a UUID version 5 of the instrument's natural key, which is its exchange, its segment, its shape and its identity fields joined together, so every broker that lists the same instrument arrives at the same id, and the id stays the same from one day to the next. [Naming an instrument](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#naming-an-instrument) on the UBI site explains the key in full.
 
-This library never computes the id itself. The table below shows the two ways a constructor can send the lookup, and which classes use each.
+This library never computes the id itself. The table below shows the two ways a constructor can send the lookup, the third way of skipping it, and which classes use each.
 
 | Lookup | What is sent | Used by |
 |---|---|---|
 | By identity | `exchange`, `segment` and the identity fields for the segment's shape | The twenty-seven named classes, always |
-| By id | `instrument_id` alone | `Instrument`, `TradeableInstrument` and `NonTradeableInstrument` when you pass `instrument_id=` |
+| By id | `instrument_id` alone | `Instrument`, `TradeableInstrument`, `NonTradeableInstrument` and the five derivative base classes when you pass `instrument_id=` |
+| From details already fetched | Nothing, because UBI's answer is passed in | `Instrument`, `TradeableInstrument` and `NonTradeableInstrument` when you pass `details=`, which is how an [asset basket](asset-baskets.md) builds every member from one list request |
 
 Two instrument objects compare equal when their `instrument_id` values are equal, and an instrument hashes by its id, so instruments work as dictionary keys and set members. An instrument built by id equals the same instrument built from its fields.
 
@@ -281,6 +283,7 @@ The constructor copies UBI's answer into plain attributes, which never change fo
 | `expiry_date` | `datetime.date` or `None` | `None` | The expiry of a future or an option |
 | `strike_price` | `float` or `None` | `None` | The strike price of an option |
 | `option_type` | `str` or `None` | `None` | `CE` or `PE` for an option |
+| `underlying_instrument_id` | `str` or `None` | `None` | UBI's id for the instrument a future or an option is written on, resolved from the brokers' own records, or `None` for a security or when UBI does not say |
 | `mapping_date` | `datetime.date` | `datetime.date(2026, 9, 26)` | The day of the UBI mapping the details were read from |
 | `first_seen_date` | `datetime.date` or `None` | `datetime.date(2026, 8, 7)` | The first day UBI saw the instrument |
 | `last_seen_date` | `datetime.date` or `None` | `datetime.date(2026, 9, 26)` | The last day UBI saw the instrument |
@@ -305,7 +308,7 @@ The constructor copies UBI's answer into plain attributes, which never change fo
 !!! warning "Use `lot_size` and `tick_size`, not a `carried_by` entry"
     The brokers do not always agree on units, and on MCX one broker's lot is another's single unit. The top-level `lot_size` and `tick_size` are the values UBI decided on for the instrument itself. For currencies even `lot_size` is not the lot an order is measured against; [Currencies](../asset-classes/currencies.md) explains why. This library never checks a quantity or a price against either figure before sending an order.
 
-The captured output below is the raw dictionary of public attributes, with `carried_by` trimmed to its first two entries.
+The captured output below is the raw dictionary of public attributes, with `carried_by` trimmed to its first two entries. It was captured on 2026-09-26, before `underlying_instrument_id` was added, so that key, which would now appear as `None` for RELIANCE, is missing from it.
 
 === "Python"
 
@@ -356,9 +359,9 @@ The shared [`UnifiedBrokerInterface`](client.md).
 
 ## Instrument
 
-<div class="endpoint" markdown><span class="member class">class</span> `Instrument(instrument_id=None, exchange=None, segment=None, symbol=None, underlying_symbol=None, expiry_date=None, strike_price=None, option_type=None, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
+<div class="endpoint" markdown><span class="member class">class</span> `Instrument(instrument_id=None, exchange=None, segment=None, symbol=None, underlying_symbol=None, expiry_date=None, strike_price=None, option_type=None, unified_broker_interface=None, details=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-`Instrument` is the base of every instrument. It holds the lookup, the attributes above, [`prices`](market-data.md#prices), [`quote`](market-data.md#quote), [`last_price`](market-data.md#last_price) and [`ohlc`](market-data.md#ohlc), and it inherits the thirteen analysis classes described under [Analysis](../analysis/index.md). You rarely build one directly; it is useful when all you have is an `instrument_id`, such as one read from an order row, and you do not care which class it belongs to.
+`Instrument` is the base of every instrument. It holds the lookup, the attributes above, [`prices`](market-data.md#prices), [`quote`](market-data.md#quote), [`last_price`](market-data.md#last_price) and [`ohlc`](market-data.md#ohlc), and it inherits the fourteen analysis classes described under [Analysis](../analysis/index.md), the last of which is the [performance measures](../analysis/performance.md). You rarely build one directly; it is useful when all you have is an `instrument_id`, such as one read from an order row, and you do not care which class it belongs to.
 
 #### Parameters
 
@@ -373,6 +376,7 @@ The shared [`UnifiedBrokerInterface`](client.md).
 | `strike_price` | `float` or `None` | For an option | `None` | The strike price |
 | `option_type` | `str` or `None` | For an option | `None` | `CE` or `PE` |
 | `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client, or `None` for the shared one |
+| `details` | `dict` or `None` | No | `None` | UBI's answer for this instrument from `/api/instruments/details`, such as one entry of a list request, used instead of looking the instrument up again. `None` sends the lookup. |
 
 #### Example
 
@@ -405,7 +409,7 @@ The constructor returns an `Instrument` with the attributes above.
 
 <div class="endpoint" markdown><span class="member class">class</span> `TradeableInstrument(...)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-`TradeableInstrument` takes the same arguments as `Instrument` and adds everything that needs an order book or an account: the [order-book values](market-data.md#the-order-book-values), [orders](orders.md), the [price wrappers](price-wrappers.md) and [positions](positions.md). After the lookup it checks that the segment does not end in `_indices`, because an index cannot be traded.
+`TradeableInstrument` takes the same arguments as `Instrument`, including `details`, and adds everything that needs an order book or an account: the [order-book values](market-data.md#the-order-book-values), [orders](orders.md), the [price wrappers](price-wrappers.md) and [positions](positions.md). After the lookup it checks that the segment does not end in `_indices`, because an index cannot be traded.
 
 #### Raises
 
@@ -419,7 +423,7 @@ The constructor returns an `Instrument` with the attributes above.
 
 <div class="endpoint" markdown><span class="member class">class</span> `NonTradeableInstrument(...)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-`NonTradeableInstrument` takes the same arguments as `Instrument` and accepts only an index, which is any instrument whose segment ends in `_indices`. It has candles, quotes and analysis, but no order book and no order members, so reading `nifty.best_bid` is an `AttributeError` rather than a request.
+`NonTradeableInstrument` takes the same arguments as `Instrument`, including `details`, and accepts only an index, which is any instrument whose segment ends in `_indices`. It has candles, quotes and analysis, but no order book and no order members, so reading `nifty.best_bid` is an `AttributeError` rather than a request.
 
 #### Raises
 
@@ -429,11 +433,61 @@ The constructor returns an `Instrument` with the attributes above.
 | [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument matching the lookup |
 | [`BadRequestError`](errors.md#badrequesterror) | The lookup is incomplete or malformed |
 
+## constituents
+
+<div class="endpoint" markdown><span class="member property">property</span> `constituents`<span class="route">MongoDB `asset_baskets`, then <span class="method post">POST</span> `/api/instruments/details`</span></div>
+
+This property returns the stored [asset basket](asset-baskets.md) of what an index or a fund holds, with the instrument itself as the basket's `linked_instrument`. It exists on `NonTradeableInstrument`, and so on all four index classes, and on `ExchangeTradedFund` and `MutualFund`. UBI stores no index constituents or fund holdings, so a basket exists only when one was saved with this instrument as its linked instrument, for instance by [`BasketCsvImporter`](asset-baskets.md#basketstore-and-basketcsvimporter). It is read from MongoDB and UBI on every access.
+
+The instrument keeps its own official price, and the basket describes what it holds, so the two can be compared. On a fund, `constituents` is the fund's own portfolio, which is different from [`holdings`](holdings.md#holdings), the units of the fund your account holds. A mutual fund has no candles in UBI, so its own performance measures return `None` and its `constituents` are the only way to measure it.
+
+The table below lists which basket class each instrument's `constituents` usually returns.
+
+| Instrument | Basket class |
+|---|---|
+| `NonTradeableInstrument` and the four index classes, such as `EquityIndex` | Usually `Index` |
+| `ExchangeTradedFund` | `ExchangeTradedFundConstituents` |
+| `MutualFund` | `MutualFundConstituents` |
+
+The basket is rebuilt as whatever kind it was stored as, so the class depends on the stored document rather than on the instrument.
+
+#### Example
+
+The example below reads the NIFTY basket stored by the import on [Asset baskets](asset-baskets.md#basketstore-and-basketcsvimporter). Its output is the first part of the output captured there on 2026-09-28.
+
+=== "Python"
+
+    ```python
+    from tradingmachine.assets import equities
+
+    nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+    five = nifty.constituents
+    print(five)
+    ```
+
+=== "Output"
+
+    ```text
+    Index(name='NIFTY FIVE', size=5)
+    ```
+
+#### Returns
+
+The stored basket in effect today, as the [`AssetBasket`][tradingmachine.asset_baskets.asset_basket.AssetBasket] subclass its stored kind names, or `None` when no basket is stored for this instrument.
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| [`BasketMemberError`](errors.md#basketmembererror) | UBI could not find one or more of the stored members |
+| [`AssetBasketError`](errors.md#assetbasketerror) | The stored kind is not one the store knows |
+| `pymongo.errors.PyMongoError` | MongoDB could not be reached |
+
 ## The derivative base classes
 
 <div class="endpoint" markdown><span class="member class">class</span> `Derivative(...)`, `Futures(...)`, `Option(...)`, `IndexFutures(...)`, `IndexOption(...)`<span class="route"><span class="method get">GET</span> `/api/instruments/details`</span></div>
 
-These five classes sit between `TradeableInstrument` and the sixteen futures and option classes, and hold what every contract of their kind shares. Their members are documented on [Derivatives](derivatives.md), and the discovery class methods they define are on [Finding instruments](discovery.md). Each takes the same arguments as `Instrument`, including `instrument_id`, and checks what UBI returned. The table below lists what each one accepts.
+These five classes sit between `TradeableInstrument` and the sixteen futures and option classes, and hold what every contract of their kind shares. Their members are documented on [Derivatives](derivatives.md), and the discovery class methods they define are on [Finding instruments](discovery.md). Each takes the same arguments as `Instrument`, including `instrument_id`, except that it adds `underlying` and has no `details`, and each checks what UBI returned. The table below lists what each one accepts.
 
 | Class | Base | Accepts |
 |---|---|---|
@@ -469,7 +523,8 @@ You normally build a family class such as `EquityOption`. Building a base class 
 
 | Exception | When |
 |---|---|
-| [`DerivativeError`](errors.md#derivativeerror) | The instrument is not a future or an option, has no expiry date, or is in a segment with no known underlying segment |
+| [`DerivativeError`](errors.md#derivativeerror) | The instrument is not a future or an option, has no expiry date, or is in a segment with no known underlying segment and no `underlying` was given |
+| `TypeError` | `underlying` is given and is not an instrument |
 | [`FuturesError`](errors.md#futureserror), [`OptionError`](errors.md#optionerror) | The contract is the other kind, or an option lacks a strike price or option type |
 | [`IndexFuturesError`](errors.md#indexfutureserror), [`IndexOptionError`](errors.md#indexoptionerror) | The contract is not written on an index |
 | [`InstrumentError`](errors.md#instrumenterror) | UBI has no instrument matching the lookup |

@@ -112,6 +112,50 @@ class AccumulationOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of ten purchases of one share, one every thirty minutes:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import accumulation
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = accumulation.AccumulationOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                every_minutes=30,
+                purchases=10,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out how many shares the plan buys in all and how long it runs:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import accumulation
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = accumulation.AccumulationOrder(
+                share,
+                transaction_type="buy",
+                product="cnc",
+                order_type="limit",
+                quantity=2,
+                price=13.0,
+                every_minutes=15,
+                purchases=8,
+            )
+            fields = order.synthetic_fields()
+            total_quantity = order.quantity * fields["purchases"]
+            total_minutes = fields["every_minutes"] * (fields["purchases"] - 1)
+            print(f"{total_quantity} shares over {total_minutes} minutes")
+            ```
         """
         return {
             "every_minutes": self.every_minutes,

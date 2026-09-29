@@ -84,6 +84,51 @@ class MutualFund(instruments.TradeableInstrument):
         Raises:
             BasketMemberError: UBI could not find one or more of the stored members.
             pymongo.errors.PyMongoError: MongoDB could not be reached.
+
+        Examples:
+            Print the stored portfolio of the ABSLFTTIDG scheme, or None when no basket is stored for it:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            print(fund.constituents)
+            ```
+
+            Store a small two-member portfolio linked to the scheme, estimate the scheme's move today from it, and delete it again:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import basket_store
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            members = [
+                basket_member.BasketMember(
+                    instrument=equities.Equity(exchange="nse", symbol="INFY"),
+                    weight=0.5,
+                ),
+                basket_member.BasketMember(
+                    instrument=equities.Equity(exchange="nse", symbol="TCS"),
+                    weight=0.5,
+                ),
+            ]
+            basket = mutual_fund_constituents.MutualFundConstituents(
+                name="EXAMPLE_ABSLFTTIDG_CONTENTS",
+                members=members,
+                fund=fund,
+            )
+            store = basket_store.BasketStore()
+            saved = store.save(basket)
+            try:
+                contents = fund.constituents
+                print(contents)
+                print(f"Estimated move today: {contents.estimated_day_change_percent}")
+            finally:
+                store.delete("EXAMPLE_ABSLFTTIDG_CONTENTS", saved["effective_date"])
+            ```
         """
         from tradingmachine.asset_baskets import basket_store
 
@@ -105,6 +150,45 @@ class MutualFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print this account's holding of the ABSLFTTIDG scheme, or None when no broker holds it:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            print(fund.holdings)
+            ```
+
+            Report the units held and the net asset value the broker last reported for them:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            row = fund.holdings
+            if row is None:
+                print("No ABSLFTTIDG units are held.")
+            else:
+                print(f"{row['quantity']} units, last valued at {row['last_price']}")
+            ```
+
+            Check which of two plans of the same scheme, growth and dividend, this account holds:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            for symbol in [
+                "ABSLFTTIDG",
+                "ABSLFTTIDN",
+            ]:
+                fund = mutual_funds.MutualFund(exchange="nse", symbol=symbol)
+                if fund.holdings is None:
+                    print(f"{symbol}: not held")
+                else:
+                    print(f"{symbol}: {fund.holdings['quantity']} units")
+            ```
         """
         rows = self._unified_broker_interface.get(HOLDINGS_PATH)["holdings"]
         for row in rows:
@@ -128,6 +212,49 @@ class MutualFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the ABSLFTTIDG units held are worth, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            print(fund.holdings_value)
+            ```
+
+            Compare the holding's value with what was invested in it:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            row = fund.holdings
+            if row is None:
+                print("No ABSLFTTIDG units are held.")
+            else:
+                value = fund.holdings_value
+                print(f"Worth {value:.2f} against {row['invested_value']:.2f} invested")
+            ```
+
+            Add up the value held across three schemes, counting one that is not held as nothing:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            total_value = 0.0
+            for symbol in [
+                "ABSLFTTIDG",
+                "ABSLFTTIDN",
+                "ABSLFTTIRG",
+            ]:
+                fund = mutual_funds.MutualFund(exchange="nse", symbol=symbol)
+                value = fund.holdings_value
+                if value is not None:
+                    total_value += value
+                print(f"{symbol}: {value}")
+            print(f"Total: {total_value:.2f}")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -147,6 +274,30 @@ class MutualFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the ABSLFTTIDG units held have made or lost, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            print(fund.holdings_pnl)
+            ```
+
+            Print the unrealised profit or loss and the move since the previous valuation:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            pnl = fund.holdings_pnl
+            if pnl is None:
+                print("No ABSLFTTIDG units are held.")
+            else:
+                print(f"Unrealised: {pnl['unrealized']:.2f}")
+                print(f"Today: {pnl['day_change_percentage']:.2f} per cent")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -177,6 +328,47 @@ class MutualFund(instruments.TradeableInstrument):
 
         Raises:
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Send a limit order for one unit of ABSLFTTIDG, which goes to the broker at once, and cancel it as soon as it shows as open; a broker may instead allot the unit at the day's net asset value, so run this only if that is acceptable:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            answer = fund.add_to_holdings(quantity=1, price=10.0)
+            print(answer)
+            order_id = answer["order_id"]
+            for attempt in range(30):
+                open_orders = fund.open_orders
+                if open_orders is not None:
+                    if order_id in open_orders["order_id"].tolist():
+                        print(fund.cancel_order(order_id))
+                        break
+                time.sleep(1)
+            print(fund.orders)
+            ```
+
+            Send the same order with a tag, then find it again among today's orders by its tag and cancel it if it is still open:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            answer = fund.add_to_holdings(quantity=1, price=10.0, tag="examplefund")
+            order_id = answer["order_id"]
+            time.sleep(10)
+            open_orders = fund.open_orders
+            if open_orders is not None:
+                if order_id in open_orders["order_id"].tolist():
+                    print(fund.cancel_order(order_id))
+            orders = fund.orders
+            print(orders[orders["order_id"] == order_id])
+            ```
         """
         if price is None:
             return self.buy_at_market_price(
@@ -221,6 +413,45 @@ class MutualFund(instruments.TradeableInstrument):
         Raises:
             HoldingError: This scheme is not held, or the quantity is more than the free units.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one held unit of ABSLFTTIDG at 3 per cent above its last valuation, and cancel the order as soon as it shows as open:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            row = fund.holdings
+            if row is None:
+                print("No ABSLFTTIDG units are held, so there is nothing to reduce.")
+            else:
+                limit_price = round(row["last_price"] * 1.03, 2)
+                answer = fund.reduce_holdings(quantity=1, price=limit_price)
+                print(answer)
+                order_id = answer["order_id"]
+                for attempt in range(30):
+                    open_orders = fund.open_orders
+                    if open_orders is not None:
+                        if order_id in open_orders["order_id"].tolist():
+                            print(fund.cancel_order(order_id))
+                            break
+                    time.sleep(1)
+            ```
+
+            Ask to redeem far more units than are free, and handle the refusal, which comes before any order is sent:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            try:
+                fund.reduce_holdings(quantity=10000000, price=10.0)
+            except exceptions.HoldingError as error:
+                print(f"Refused: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -259,6 +490,47 @@ class MutualFund(instruments.TradeableInstrument):
         Raises:
             HoldingError: This scheme is not held, or every unit held is pledged as collateral.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer every free unit of ABSLFTTIDG at 3 per cent above its last valuation, and cancel the order as soon as it shows as open:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            row = fund.holdings
+            if row is None:
+                print("No ABSLFTTIDG units are held, so there is nothing to sell.")
+            else:
+                limit_price = round(row["last_price"] * 1.03, 2)
+                answer = fund.liquidate_holdings(price=limit_price)
+                print(answer)
+                order_id = answer["order_id"]
+                for attempt in range(30):
+                    open_orders = fund.open_orders
+                    if open_orders is not None:
+                        if order_id in open_orders["order_id"].tolist():
+                            print(fund.cancel_order(order_id))
+                            break
+                    time.sleep(1)
+            ```
+
+            Try to redeem a whole holding and handle the refusal when none is held or every unit is pledged:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import mutual_funds
+
+            fund = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDN")
+            try:
+                answer = fund.liquidate_holdings(price=10.0)
+            except exceptions.HoldingError as error:
+                print(f"Nothing to redeem: {error}")
+            else:
+                print(answer)
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -371,6 +643,50 @@ class MutualFund(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the schemes whose exchange code starts with the fund house prefix `ABSL`:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            matches = mutual_funds.MutualFund.search(exchange="nse", term="ABSL")
+            print(matches["symbol"].tolist())
+            ```
+
+            Count the schemes carried for a few fund house prefixes, at most two hundred each:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            for prefix in [
+                "ABSL",
+                "HDFC",
+                "SBI",
+                "ICICI",
+            ]:
+                matches = mutual_funds.MutualFund.search(
+                    exchange="nse",
+                    term=prefix,
+                    limit=200,
+                )
+                if matches is None:
+                    print(f"{prefix}: none")
+                else:
+                    print(f"{prefix}: {len(matches)} schemes")
+            ```
+
+            Build the first match as a scheme and print its identity:
+
+            ```python
+            from tradingmachine.assets import mutual_funds
+
+            matches = mutual_funds.MutualFund.search(exchange="nse", term="ABSLFT")
+            first_symbol = matches.iloc[0]["symbol"]
+            fund = mutual_funds.MutualFund(exchange="nse", symbol=first_symbol)
+            print(repr(fund))
+            print(f"Lot size {fund.lot_size}, tick size {fund.tick_size}")
+            ```
         """
         return cls._search_catalogue(
             exchange,

@@ -112,6 +112,45 @@ class LiquiditySeekingOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy that waits for at least 5,000 shares on offer at 13 rupees or less:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import liquidity_seeking
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = liquidity_seeking.LiquiditySeekingOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                limit_price=13.0,
+                minimum_quantity=5000,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show the synthetic object of a sell that strikes only when enough bids appear at 14 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import liquidity_seeking
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = liquidity_seeking.LiquiditySeekingOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                limit_price=14.0,
+                minimum_quantity=1000,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "limit_price": self.limit_price,

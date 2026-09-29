@@ -117,6 +117,50 @@ class LadderOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a ladder of three bids from 13 rupees down to 12.8:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import ladder
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = ladder.LadderOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=3,
+                from_price=13.0,
+                to_price=12.8,
+                steps=3,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out the price of every rung of a ladder of offers:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import ladder
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = ladder.LadderOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=4,
+                from_price=14.0,
+                to_price=14.3,
+                steps=4,
+            )
+            fields = order.synthetic_fields()
+            gap = (fields["to_price"] - fields["from_price"]) / (fields["steps"] - 1)
+            for rung in range(fields["steps"]):
+                print(f"rung {rung + 1}: {fields['from_price'] + gap * rung:.2f}")
+            ```
         """
         return {
             "from_price": self.from_price,

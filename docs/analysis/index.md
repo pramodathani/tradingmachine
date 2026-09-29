@@ -1,8 +1,8 @@
 # Analysis
 
-Every instrument object can analyse its own price history. A share, an index or a commodity future has 192 analysis methods: moving averages, oscillators, candlestick pattern detectors, summary statistics, crossover signals and a backtest runner. You call one on the instrument, such as `reliance.relative_strength_index(window=14, days=90)`, and it fetches the candles from UBI, runs the calculation and hands back the candles with the result added as a new column.
+Every instrument object can analyse its own price history. A share, an index or a commodity future has 209 analysis methods: moving averages, oscillators, candlestick pattern detectors, summary statistics, crossover signals, a backtest runner and performance measures such as the Sharpe ratio. You call one on the instrument, such as `reliance.relative_strength_index(window=14, days=90)`, and it fetches the candles from UBI, runs the calculation and hands back the candles with the result added as a new column.
 
-The methods are not written on `Instrument` itself. They live in thirteen small classes under `src/tradingmachine/assets/analysis/`, one per group of related calculations, and `Instrument` inherits all thirteen. Most of the calculations come from [TA-Lib](https://ta-lib.org/), a widely used C library of technical indicators, and follow its function groups; the statistics, the signals and the backtest are this library's own.
+The methods are not written on `Instrument` itself. They live in fourteen small classes under `src/tradingmachine/assets/analysis/`, one per group of related calculations, and `Instrument` inherits all fourteen. Most of the calculations come from [TA-Lib](https://ta-lib.org/), a widely used C library of technical indicators, and follow its function groups; the statistics, the signals, the backtest and the performance measures are this library's own. Every [asset basket](../python-api/asset-baskets.md) inherits the same fourteen classes, because a basket supplies `prices` too.
 
 ## How a method works
 
@@ -59,9 +59,9 @@ Each method's own arguments use the library's spelled-out names rather than TA-L
 
     The correct call is `reliance.simple_moving_average(window=5, days=90)`.
 
-## The thirteen classes
+## The fourteen classes
 
-The table below lists the thirteen analysis classes in the order `Instrument` inherits them, with the number of public methods in each. The counts were taken from the code with a short script on 2026-09-26 and add up to 192.
+The table below lists the fourteen analysis classes in the order `Instrument` inherits them, with the number of public methods in each. The counts were taken from the code with a short script on 2026-09-29 and add up to 209. The thirteen older classes add up to 192, and `PerformanceMeasures` was added as the fourteenth on 2026-09-28.
 
 | Class | Module | Methods | What it holds | Each method returns | Page |
 |---|---|--:|---|---|---|
@@ -78,22 +78,24 @@ The table below lists the thirteen analysis classes in the order `Instrument` in
 | `CandlestickPatterns` | `candlestick_patterns` | 61 | TA-Lib's candlestick pattern recognisers | The candles with a column of 100, -100 or 0 | [Patterns](patterns.md) |
 | `Signals` | `signals` | 2 | Crossovers and crossunders between two columns | A copy of your frame with a bool column | [Signals and backtests](signals-and-backtests.md#signals) |
 | `StrategyBacktests` | `strategy_backtests` | 1 | A backtest of a `backtesting` strategy | A pandas Series of statistics | [Signals and backtests](signals-and-backtests.md#backtests) |
+| `PerformanceMeasures` | `performance_measures` | 17 | Returns, volatility, Sharpe, Sortino and Calmar ratios, drawdowns, value at risk and measures against a benchmark | A number, a DataFrame of drawdowns or a pandas Series summary | [Performance measures](performance.md) |
 
-All thirteen inherit a small base class, `PriceAnalysis`, which declares `prices` and raises `NotImplementedError` from it. That lets each module be written and read on its own, without importing the instrument classes. `Instrument` supplies the real `prices`, which reads UBI.
+All fourteen inherit a small base class, `PriceAnalysis`, which declares `prices` and raises `NotImplementedError` from it. That lets each module be written and read on its own, without importing the instrument classes. `Instrument` supplies the real `prices`, which reads UBI.
 
-The chart below shows the same counts. Candlestick patterns and price statistics make up more than half of the total.
+The chart below shows the same counts. Candlestick patterns and price statistics make up almost half of the total.
 
 ```vegalite
 {
   "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
-  "description": "Number of public methods in each of the thirteen analysis classes.",
+  "description": "Number of public methods in each of the fourteen analysis classes.",
   "width": "container",
-  "height": 340,
+  "height": 360,
   "data": {
     "values": [
       {"class": "CandlestickPatterns", "methods": 61, "source": "TA-Lib"},
       {"class": "PriceStatistics", "methods": 39, "source": "pandas"},
       {"class": "MomentumIndicators", "methods": 28, "source": "TA-Lib"},
+      {"class": "PerformanceMeasures", "methods": 17, "source": "pandas"},
       {"class": "MathTransforms", "methods": 15, "source": "TA-Lib"},
       {"class": "OverlapStudies", "methods": 12, "source": "TA-Lib"},
       {"class": "MathOperators", "methods": 10, "source": "TA-Lib"},
@@ -183,5 +185,13 @@ Each page lists every method in its groups, with the method's own arguments and 
     Crossover detection and running a `backtesting` strategy over an instrument's candles.
 
     [:octicons-arrow-right-24: Signals and backtests](signals-and-backtests.md)
+
+-   :material-trophy-outline:{ .lg .middle } **Performance measures**
+
+    ---
+
+    Returns, risk, drawdowns and comparison with a benchmark: 17 methods.
+
+    [:octicons-arrow-right-24: Performance measures](performance.md)
 
 </div>

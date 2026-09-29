@@ -1,6 +1,6 @@
 # Project
 
-This tab is for people working on the library itself rather than using it. It explains where everything lives in the repository, how to add a new asset class the way the existing seven modules were built, and how to write and publish these documentation pages.
+This tab is for people working on the library itself rather than using it. It explains where everything lives in the repository, how to add a new asset class the way the existing six family modules were built, and how to write and publish these documentation pages.
 
 The flowchart below shows the order in which the three pages are usually needed: first finding your way around, then adding code, then documenting it.
 

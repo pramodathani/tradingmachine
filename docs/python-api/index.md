@@ -38,7 +38,7 @@ The chart below counts the members documented on each page of this tab, which sh
       {"page": "Holdings", "members": 6},
       {"page": "Derivatives", "members": 24},
       {"page": "Finding instruments", "members": 5},
-      {"page": "Instruments", "members": 1},
+      {"page": "Instruments", "members": 2},
       {"page": "The account", "members": 3}
     ]
   },
@@ -51,15 +51,16 @@ The chart below counts the members documented on each page of this tab, which sh
 }
 ```
 
-Two pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 53 order classes in `tradingmachine.orders`, and [Instruments](instruments.md) documents the 27 instrument classes. The thirteen classes of candle analysis, about 190 methods, have their own [Analysis](../analysis/index.md) tab.
+Three pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 53 order classes in `tradingmachine.orders`, [Instruments](instruments.md) documents the 27 instrument classes, and [Asset baskets](asset-baskets.md) documents the five kinds of basket in `tradingmachine.asset_baskets` and the classes that store them. The fourteen classes of candle analysis, 209 methods from indicators to the performance measures, have their own [Analysis](../analysis/index.md) tab, and every instrument and every basket inherits them.
 
 ## Instruments
 
-An instrument is looked up once when you construct it, and from then on every member reads from UBI. The [Instruments](instruments.md) page documents the 27 classes, such as `Equity("nse", "RELIANCE")` or `EquityIndexOption("nse", "NIFTY", "2026-09-29", 25000, "CE")`, and the attributes the lookup fills in. The one member below belongs to every instrument class.
+An instrument is looked up once when you construct it, and from then on every member reads from UBI. The [Instruments](instruments.md) page documents the 27 classes, such as `Equity("nse", "RELIANCE")` or `EquityIndexOption("nse", "NIFTY", "2026-09-29", 25000, "CE")`, and the attributes the lookup fills in. The first member below belongs to every instrument class, and the second only to indices and funds.
 
 | Kind | Member | Description |
 |---|---|---|
 | <span class="member function">classmethod</span> | [`shared_unified_broker_interface`](instruments.md#shared_unified_broker_interface) | Returns the one client all instruments share, creating it on first use. |
+| <span class="member property">property</span> | [`constituents`](instruments.md#constituents) | The stored basket of what an index, an exchange traded fund or a mutual fund holds, on the four index classes, `ExchangeTradedFund` and `MutualFund`. |
 
 ## Market data
 
@@ -232,6 +233,22 @@ Holdings are shares kept for the long term in a demat account. Only `Equity`, `F
 | <span class="member writes">places orders</span> | [`flatten`](account.md#flatten) | Stops every synthetic order, cancels every open order at every broker, then closes every position in the account. |
 | <span class="member property">property</span> | [`parents`](account.md#parents) | Every synthetic order and held order the order engine has not finished, in every instrument. |
 | <span class="member method">method</span> | [`intent`](account.md#intent) | Reads what the order engine did with one order after its placement stopped waiting. |
+
+## Asset baskets
+
+An asset basket is a group of instruments that is priced, analysed and stored as one, such as a portfolio, a watchlist or what an index or a fund holds. The [Asset baskets](asset-baskets.md) page documents the classes below, each with its own members; two of `Portfolio`'s members place real orders.
+
+| Kind | Member | Description |
+|---|---|---|
+| <span class="member class">class</span> | [`AssetBasket`](asset-baskets.md#assetbasket) | The shared base: live prices for every member in one request, weights, correlation, risk, and every analysis method. |
+| <span class="member class">class</span> | [`Portfolio`](asset-baskets.md#portfolio) | What you hold, with a quantity per member: its value, its profit and loss, and orders for the whole basket. |
+| <span class="member writes">places orders</span> | [`Portfolio.place_orders`](asset-baskets.md#portfolio) | Sends one market order per member, all in one request. |
+| <span class="member writes">places orders</span> | [`Portfolio.rebalance`](asset-baskets.md#portfolio) | Sends the buys and sells that give the portfolio another basket's weights. |
+| <span class="member class">class</span> | [`Watchlist`](asset-baskets.md#watchlist) | Instruments followed together, each counting equally. |
+| <span class="member class">class</span> | [`Index`](asset-baskets.md#index) | A weighted index, published or your own, which can be turned into a portfolio. |
+| <span class="member class">class</span> | [`ExchangeTradedFundConstituents`](asset-baskets.md#exchangetradedfundconstituents) | What an exchange traded fund holds, compared with the fund's own price. |
+| <span class="member class">class</span> | [`MutualFundConstituents`](asset-baskets.md#mutualfundconstituents) | What a mutual fund holds, the only way to measure one. |
+| <span class="member class">class</span> | [`BasketStore`, `BasketCsvImporter`](asset-baskets.md#basketstore-and-basketcsvimporter) | Save and load baskets in MongoDB, and fill them from a CSV file. |
 
 ## The UBI client
 

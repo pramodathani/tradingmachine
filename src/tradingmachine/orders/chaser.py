@@ -119,6 +119,46 @@ class ChaserOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a buy that steps up two ticks every three seconds and never pays above 13.2 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import chaser
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = chaser.ChaserOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                step_ticks=2,
+                step_seconds=3,
+                cap_price=13.2,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show that a chaser left to UBI's defaults sends only its type:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import chaser
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = chaser.ChaserOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=14.0,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "step_ticks": self.step_ticks,

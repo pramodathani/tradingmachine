@@ -58,6 +58,49 @@ class Watchlist(asset_basket.AssetBasket):
 
         Raises:
             BasketMemberError: The instrument is already in the watchlist.
+
+        Examples:
+            Add a share to a watchlist and print its members:
+
+            ```python
+            from tradingmachine.asset_baskets import watchlist
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+            ]
+            banks = []
+            for symbol in symbols:
+                banks.append(equities.Equity(exchange="nse", symbol=symbol))
+            followed = watchlist.Watchlist(name="banks", instruments=banks)
+            followed.add(equities.Equity(exchange="nse", symbol="SBIN"))
+            print(followed.labels)
+            ```
+
+            See a share that is already followed refused:
+
+            ```python
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import watchlist
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+            ]
+            banks = []
+            for symbol in symbols:
+                banks.append(equities.Equity(exchange="nse", symbol=symbol))
+            followed = watchlist.Watchlist(name="banks", instruments=banks)
+
+            try:
+                followed.add(equities.Equity(exchange="nse", symbol="HDFCBANK"))
+            except exceptions.BasketMemberError as error:
+                print(error)
+            ```
         """
         self.add_member(basket_member.BasketMember(instrument))
 
@@ -76,6 +119,44 @@ class Watchlist(asset_basket.AssetBasket):
         Raises:
             KeyError: column is not a column of `ohlc`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Rank the watchlist by today's move, biggest rise first:
+
+            ```python
+            from tradingmachine.asset_baskets import watchlist
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+            ]
+            banks = []
+            for symbol in symbols:
+                banks.append(equities.Equity(exchange="nse", symbol=symbol))
+            followed = watchlist.Watchlist(name="banks", instruments=banks)
+            print(followed.rank_by("change_percent")[["label", "change_percent"]])
+            ```
+
+            Rank the watchlist by last price, cheapest first:
+
+            ```python
+            from tradingmachine.asset_baskets import watchlist
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "AXISBANK",
+            ]
+            banks = []
+            for symbol in symbols:
+                banks.append(equities.Equity(exchange="nse", symbol=symbol))
+            followed = watchlist.Watchlist(name="banks", instruments=banks)
+            ranked = followed.rank_by("last_price", ascending=True)
+            print(ranked[["label", "last_price"]])
+            ```
         """
         frame = self.ohlc
         return frame.sort_values(

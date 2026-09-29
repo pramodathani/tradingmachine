@@ -60,6 +60,119 @@ class StrategyBacktests(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Backtest a 10-day and 30-day moving average crossover on two years of Infosys candles:
+
+            ```python
+            import backtesting
+            import backtesting.lib
+            import talib
+
+            from tradingmachine.assets import equities
+
+
+            class MovingAverageCross(backtesting.Strategy):
+                def init(self):
+                    self.fast_average = self.I(talib.SMA, self.data.Close, 10)
+                    self.slow_average = self.I(talib.SMA, self.data.Close, 30)
+
+                def next(self):
+                    fast = self.fast_average
+                    slow = self.slow_average
+                    if backtesting.lib.crossover(fast, slow):
+                        self.position.close()
+                        self.buy()
+                    elif backtesting.lib.crossover(slow, fast):
+                        self.position.close()
+                        self.sell()
+
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            statistics = infosys.run_backtest(
+                MovingAverageCross,
+                cash=100000,
+                days=730,
+            )
+            return_percent = statistics["Return [%]"]
+            trade_count = statistics["# Trades"]
+            print(f"Return: {return_percent:.2f}% from {trade_count} trades")
+            ```
+
+            Compare buying and holding the Nifty with and without a 0.1 percent commission:
+
+            ```python
+            import backtesting
+
+            from tradingmachine.assets import equities
+
+
+            class BuyAndHold(backtesting.Strategy):
+                def init(self):
+                    pass
+
+                def next(self):
+                    if not self.position:
+                        self.buy()
+
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            commissions = [
+                0.0,
+                0.001,
+            ]
+            for commission in commissions:
+                statistics = nifty.run_backtest(
+                    BuyAndHold,
+                    cash=10000000,
+                    commission=commission,
+                    days=365,
+                )
+                final_equity = statistics["Equity Final [$]"]
+                print(f"Commission {commission}: ends at {final_equity:,.2f}")
+            ```
+
+            Backtest an RSI strategy on Tata Consultancy Services over the 2025 calendar year and save the interactive plot:
+
+            ```python
+            import pathlib
+            import tempfile
+
+            import backtesting
+            import talib
+
+            from tradingmachine.assets import equities
+
+
+            class RelativeStrengthReversal(backtesting.Strategy):
+                def init(self):
+                    self.strength = self.I(talib.RSI, self.data.Close, 14)
+
+                def next(self):
+                    if self.strength[-1] < 30 and not self.position:
+                        self.buy()
+                    elif self.strength[-1] > 70 and self.position:
+                        self.position.close()
+
+
+            temporary_directory = pathlib.Path(tempfile.gettempdir())
+            plot_path = temporary_directory / "tcs_rsi_backtest.html"
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            statistics = tcs.run_backtest(
+                RelativeStrengthReversal,
+                cash=100000,
+                from_date="2025-01-01",
+                to_date="2025-12-31",
+                plot_filename=str(plot_path),
+            )
+            measures = [
+                "Return [%]",
+                "Win Rate [%]",
+                "Max. Drawdown [%]",
+            ]
+            print(statistics[measures])
+            print(f"Plot written: {plot_path.exists()}")
+            ```
         """
         prices = self.prices(
             interval=interval,

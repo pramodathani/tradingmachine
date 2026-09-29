@@ -111,6 +111,50 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of an order for ten shares shown two at a time:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import iceberg
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = iceberg.IcebergOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=10,
+                price=13.0,
+                slice_quantity=2,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out how many slices an iceberg needs when each slice may vary by a fifth:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import iceberg
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = iceberg.IcebergOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=100,
+                price=14.0,
+                slice_quantity=15,
+                randomise_percent=20,
+            )
+            fields = order.synthetic_fields()
+            slices = order.quantity // fields["slice_quantity"]
+            if order.quantity % fields["slice_quantity"]:
+                slices = slices + 1
+            print(f"About {slices} slices, each within {fields['randomise_percent']}%")
+            ```
         """
         return {
             "slice_quantity": self.slice_quantity,

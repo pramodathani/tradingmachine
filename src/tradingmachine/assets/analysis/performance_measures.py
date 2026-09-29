@@ -60,6 +60,38 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print how much Infosys grew over the last year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            growth = infosys.cumulative_return(days=365)
+            print(f"Infosys over one year: {growth:.2%}")
+            ```
+
+            Rank three shares by their total return in the 2025 calendar year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            returns = {}
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                returns[symbol] = share.cumulative_return(
+                    from_date="2025-01-01",
+                    to_date="2025-12-31",
+                )
+            for symbol in sorted(returns, key=returns.get, reverse=True):
+                print(f"{symbol}: {returns[symbol]:.2%}")
+            ```
         """
         closes = self._closes(interval, from_date, to_date, days, adjusted)
         if closes is None:
@@ -89,6 +121,33 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the compound annual growth rate of the Nifty over five years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            growth_rate = nifty.annualised_return(days=1825)
+            print(f"Nifty over five years: {growth_rate:.2%} a year")
+            ```
+
+            Compare the annual growth rate of Infosys over one, three and five years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            periods = [
+                365,
+                1095,
+                1825,
+            ]
+            for period in periods:
+                growth_rate = infosys.annualised_return(days=period)
+                print(f"{period} days: {growth_rate:.2%} a year")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -119,6 +178,39 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the annual volatility of Infosys over the last year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            volatility = infosys.annualised_volatility(days=365)
+            print(f"Infosys volatility: {volatility:.2%}")
+            ```
+
+            Check whether each of three shares swings more than the Nifty does:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            index_volatility = nifty.annualised_volatility(days=730)
+            print(f"Nifty: {index_volatility:.2%}")
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                volatility = share.annualised_volatility(days=730)
+                if volatility > index_volatility:
+                    print(f"{symbol}: {volatility:.2%}, more than the index")
+                else:
+                    print(f"{symbol}: {volatility:.2%}, less than the index")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -156,6 +248,39 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the Sharpe ratio of Infosys over one year against a 6.5 percent treasury bill:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            ratio = infosys.sharpe_ratio(risk_free_rate=0.065, days=365)
+            print(f"Sharpe ratio: {ratio:.2f}")
+            ```
+
+            Pick the share with the best risk-adjusted return over two years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            best_symbol = None
+            best_ratio = None
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                ratio = share.sharpe_ratio(risk_free_rate=0.065, days=730)
+                print(f"{symbol}: {ratio:.2f}")
+                if best_ratio is None or ratio > best_ratio:
+                    best_symbol = symbol
+                    best_ratio = ratio
+            print(f"Best Sharpe ratio: {best_symbol}")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -194,6 +319,32 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the Sortino ratio of the Nifty over two years against a 6.5 percent risk-free rate:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            ratio = nifty.sortino_ratio(risk_free_rate=0.065, days=730)
+            print(f"Nifty Sortino ratio: {ratio:.2f}")
+            ```
+
+            Compare the Sortino and Sharpe ratios of Infosys to see whether its falls or its rises drive its volatility:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            sortino = infosys.sortino_ratio(risk_free_rate=0.065, days=365)
+            sharpe = infosys.sharpe_ratio(risk_free_rate=0.065, days=365)
+            print(f"Sortino {sortino:.2f} against Sharpe {sharpe:.2f}")
+            if sortino > sharpe:
+                print("The rises are larger than the falls.")
+            else:
+                print("The falls weigh at least as much as the rises.")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -227,6 +378,31 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print how far Infosys stands below its highest close of the last year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            drawdown_frame = infosys.drawdowns(days=365)
+            latest = drawdown_frame.iloc[-1]
+            print(f"Close {latest['close']}, peak {latest['running_peak']}")
+            print(f"Drawdown from the peak: {latest['drawdown']:.2%}")
+            ```
+
+            Count the days the Nifty spent more than five percent below its peak in the last three years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            drawdown_frame = nifty.drawdowns(days=1095)
+            deep_days = drawdown_frame[drawdown_frame["drawdown"] < -0.05]
+            day_count = len(drawdown_frame)
+            print(f"{len(deep_days)} of {day_count} days were 5% down.")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -269,6 +445,43 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the worst fall of Infosys from a peak over the last two years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            worst_fall = infosys.maximum_drawdown(days=730)
+            print(f"Maximum drawdown: {worst_fall:.2%}")
+            ```
+
+            Compare the worst fall of three shares with the Nifty's in 2025:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            symbols.append("NIFTY")
+            for symbol in symbols:
+                if symbol == "NIFTY":
+                    instrument = equities.EquityIndex(
+                        exchange="nse",
+                        symbol=symbol,
+                    )
+                else:
+                    instrument = equities.Equity(exchange="nse", symbol=symbol)
+                worst_fall = instrument.maximum_drawdown(
+                    from_date="2025-01-01",
+                    to_date="2025-12-31",
+                )
+                print(f"{symbol}: {worst_fall:.2%}")
+            ```
         """
         closes = self._closes(interval, from_date, to_date, days, adjusted)
         if closes is None:
@@ -298,6 +511,33 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the Calmar ratio of the Nifty over three years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            ratio = nifty.calmar_ratio(days=1095)
+            print(f"Nifty Calmar ratio: {ratio:.2f}")
+            ```
+
+            Show the growth rate and the worst fall that make up the Calmar ratio of Infosys:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            growth_rate = infosys.annualised_return(days=730)
+            worst_fall = infosys.maximum_drawdown(days=730)
+            ratio = infosys.calmar_ratio(days=730)
+            print(f"{growth_rate:.2%} a year, worst fall {worst_fall:.2%}")
+            if ratio is None:
+                print("The close never fell, so there is no Calmar ratio.")
+            else:
+                print(f"Calmar ratio: {ratio:.2f}")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -334,6 +574,48 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The method is neither `historical` nor `parametric`, or confidence is not between 0 and 1.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the one-day loss Infosys should not exceed on 95 days in 100, from a year of history:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            loss = infosys.value_at_risk(confidence=0.95, days=365)
+            print(f"One-day value at risk: {loss:.2%}")
+            ```
+
+            Compare the historical and parametric value at risk of the Nifty at 99 percent confidence:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            methods = [
+                "historical",
+                "parametric",
+            ]
+            for method in methods:
+                loss = nifty.value_at_risk(
+                    confidence=0.99,
+                    method=method,
+                    days=1095,
+                )
+                print(f"{method}: {loss:.2%}")
+            ```
+
+            Turn the value at risk of Infosys into rupees for a holding worth Rs 5,00,000:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            holding_value = 500000
+            loss = infosys.value_at_risk(confidence=0.95, days=730)
+            loss_in_rupees = holding_value * loss
+            print(f"Loss under Rs {loss_in_rupees:,.0f} on 19 days in 20")
+            ```
         """
         self._check_value_at_risk_arguments(confidence, method)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -372,6 +654,29 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: confidence is not between 0 and 1.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the average loss of Infosys on its worst five percent of days over one year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            shortfall = infosys.expected_shortfall(confidence=0.95, days=365)
+            print(f"Expected shortfall: {shortfall:.2%}")
+            ```
+
+            Show how much worse the Nifty's bad days are than where they begin:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            loss = nifty.value_at_risk(confidence=0.95, days=1095)
+            shortfall = nifty.expected_shortfall(confidence=0.95, days=1095)
+            print(f"Bad days begin at a loss of {loss:.2%}")
+            print(f"They average a loss of {shortfall:.2%}")
+            ```
         """
         self._check_value_at_risk_arguments(confidence, HISTORICAL_METHOD)
         closes = self._closes(interval, from_date, to_date, days, adjusted)
@@ -408,6 +713,38 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the beta of Infosys against the Nifty over two years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            beta = infosys.benchmark_beta(nifty, days=730)
+            print(f"Infosys beta against the Nifty: {beta:.2f}")
+            ```
+
+            Sort three shares into defensive and aggressive by their beta:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                beta = share.benchmark_beta(nifty, days=365)
+                if beta < 1:
+                    print(f"{symbol}: beta {beta:.2f}, defensive")
+                else:
+                    print(f"{symbol}: beta {beta:.2f}, aggressive")
+            ```
         """
         matched = self._matched_returns(
             benchmark, interval, from_date, to_date, days, adjusted
@@ -443,6 +780,40 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the annual alpha of Infosys against the Nifty over one year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            excess = infosys.alpha(nifty, risk_free_rate=0.065, days=365)
+            print(f"Jensen's alpha: {excess:.2%} a year")
+            ```
+
+            Find which of three shares beat the Nifty after allowing for its beta in 2025:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                excess = share.alpha(
+                    nifty,
+                    risk_free_rate=0.065,
+                    from_date="2025-01-01",
+                    to_date="2025-12-31",
+                )
+                print(f"{symbol}: alpha {excess:.2%}")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         matched = self._matched_returns(
@@ -479,6 +850,38 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Measure how closely the Nifty BeES exchange-traded fund followed the Nifty over one year:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            nifty_bees = funds.ExchangeTradedFund(
+                exchange="nse",
+                symbol="NIFTYBEES",
+            )
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            error = nifty_bees.tracking_error(nifty, days=365)
+            print(f"Tracking error: {error:.2%}")
+            ```
+
+            Compare the tracking error of Infosys and Reliance Industries against the Nifty:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            symbols = [
+                "INFY",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                error = share.tracking_error(nifty, days=730)
+                print(f"{symbol}: {error:.2%}")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         matched = self._matched_returns(
@@ -513,6 +916,38 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the information ratio of Infosys against the Nifty over two years:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            ratio = infosys.information_ratio(nifty, days=730)
+            print(f"Information ratio: {ratio:.2f}")
+            ```
+
+            Check whether each of three shares beat the Nifty consistently over one year, taking a ratio above 0.5 as consistent:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                ratio = share.information_ratio(nifty, days=365)
+                if ratio > 0.5:
+                    print(f"{symbol}: {ratio:.2f}, consistently ahead")
+                else:
+                    print(f"{symbol}: {ratio:.2f}, not consistently ahead")
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         matched = self._matched_returns(
@@ -546,6 +981,34 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print how much of the Nifty's rises Infosys captured over one year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            ratio = infosys.up_capture_ratio(nifty, days=365)
+            print(f"Up capture: {ratio:.2f}")
+            ```
+
+            Put the up and down capture ratios of Tata Consultancy Services side by side:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            up_ratio = tcs.up_capture_ratio(nifty, days=730)
+            down_ratio = tcs.down_capture_ratio(nifty, days=730)
+            print(f"Up capture {up_ratio:.2f}, down capture {down_ratio:.2f}")
+            if up_ratio > down_ratio:
+                print("TCS caught more of the rises than of the falls.")
+            else:
+                print("TCS caught no more of the rises than of the falls.")
+            ```
         """
         matched = self._matched_returns(
             benchmark, interval, from_date, to_date, days, adjusted
@@ -578,6 +1041,45 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print how much of the Nifty's falls Infosys suffered over one year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            ratio = infosys.down_capture_ratio(nifty, days=365)
+            print(f"Down capture: {ratio:.2f}")
+            ```
+
+            Find the share among three that fell least when the Nifty fell in 2025:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            safest_symbol = None
+            lowest_ratio = None
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                ratio = share.down_capture_ratio(
+                    nifty,
+                    from_date="2025-01-01",
+                    to_date="2025-12-31",
+                )
+                print(f"{symbol}: {ratio:.2f}")
+                if lowest_ratio is None or ratio < lowest_ratio:
+                    safest_symbol = symbol
+                    lowest_ratio = ratio
+            print(f"Fell least with the index: {safest_symbol}")
+            ```
         """
         matched = self._matched_returns(
             benchmark, interval, from_date, to_date, days, adjusted
@@ -615,6 +1117,67 @@ class PerformanceMeasures(price_analysis.PriceAnalysis):
         Raises:
             ValueError: The interval is neither `day` nor a minute interval such as `5minute`, or confidence is not between 0 and 1.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print every measure for Infosys over one year, without a benchmark:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            summary = infosys.performance_summary(
+                risk_free_rate=0.065,
+                days=365,
+            )
+            print(summary)
+            ```
+
+            Print every measure for Infosys against the Nifty over two years, including the benchmark measures:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            summary = infosys.performance_summary(
+                benchmark=nifty,
+                risk_free_rate=0.065,
+                confidence=0.99,
+                days=730,
+            )
+            print(summary.to_string())
+            ```
+
+            Build a table comparing three shares on a few of the measures:
+
+            ```python
+            import pandas as pd
+
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "RELIANCE",
+            ]
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            summaries = {}
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                summaries[symbol] = share.performance_summary(
+                    benchmark=nifty,
+                    risk_free_rate=0.065,
+                    days=365,
+                )
+            table = pd.DataFrame(summaries)
+            measures = [
+                "annualised_return",
+                "sharpe_ratio",
+                "maximum_drawdown",
+                "benchmark_beta",
+            ]
+            print(table.loc[measures])
+            ```
         """
         periods_per_year = self._periods_per_year(interval)
         self._check_value_at_risk_arguments(confidence, HISTORICAL_METHOD)

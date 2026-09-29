@@ -45,6 +45,51 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its twenty-day simple moving average for the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.simple_moving_average(window=20, days=90)
+            print(candles[["datetime", "close", "sma_20"]].tail())
+            ```
+
+            Check whether the NIFTY 50 index's fifty-day average is above its two-hundred-day average, the golden cross:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            fast = nifty.simple_moving_average(window=50, days=400)
+            slow = nifty.simple_moving_average(window=200, days=400)
+            fast_average = fast["sma_50"].iloc[-1]
+            slow_average = slow["sma_200"].iloc[-1]
+            if fast_average > slow_average:
+                print(f"Golden cross: {fast_average:.0f} > {slow_average:.0f}")
+            else:
+                print(f"Death cross: {fast_average:.0f} < {slow_average:.0f}")
+            ```
+
+            Print the ten-day average of an equal-weighted basket of three IT shares:
+
+            ```python
+            from tradingmachine.asset_baskets import watchlist
+            from tradingmachine.assets import equities
+
+            information_technology = watchlist.Watchlist(
+                name="information technology",
+                instruments=[
+                    equities.Equity(exchange="nse", symbol="INFY"),
+                    equities.Equity(exchange="nse", symbol="TCS"),
+                    equities.Equity(exchange="nse", symbol="WIPRO"),
+                ],
+            )
+            candles = information_technology.simple_moving_average(days=60)
+            print(candles[["datetime", "close", "sma_10"]].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -84,6 +129,47 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its twenty-day exponential moving average for the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.exponential_moving_average(window=20, days=120)
+            print(candles[["datetime", "close", "ema_20"]].tail())
+            ```
+
+            Print the gap between the twelve-day and twenty-six-day averages of three banks, the line MACD is built on:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "SBIN",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                fast = share.exponential_moving_average(window=12, days=180)
+                slow = share.exponential_moving_average(window=26, days=180)
+                gap = fast["ema_12"].iloc[-1] - slow["ema_26"].iloc[-1]
+                print(f"{symbol}: {gap:.2f}")
+            ```
+
+            Print how far the NIFTY 50 index closed from its fifty-day exponential average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            candles = nifty.exponential_moving_average(window=50, days=250)
+            last_row = candles.iloc[-1]
+            distance = (last_row["close"] / last_row["ema_50"] - 1) * 100
+            print(f"{distance:.2f}% from the average")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -127,6 +213,59 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's twenty-day Bollinger Bands for the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.bollinger_bands(window=20, days=120)
+            columns = [
+                "datetime",
+                "close",
+                "bb_lower_20",
+                "bb_middle_20",
+                "bb_upper_20",
+            ]
+            print(candles[columns].tail())
+            ```
+
+            Print where three shares closed within their bands, from 0 at the lower band to 1 at the upper:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "RELIANCE",
+                "INFY",
+                "HDFCBANK",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                last_row = share.bollinger_bands(window=20, days=120).iloc[-1]
+                width = last_row["bb_upper_20"] - last_row["bb_lower_20"]
+                position = (last_row["close"] - last_row["bb_lower_20"]) / width
+                print(f"{symbol}: {position:.2f}")
+            ```
+
+            Print the width of the NIFTY 50 index's bands with three standard deviations, as a percentage of the middle band:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            candles = nifty.bollinger_bands(
+                window=20,
+                standard_deviations_up=3,
+                standard_deviations_down=3,
+                days=120,
+            )
+            last_row = candles.iloc[-1]
+            width = last_row["bb_upper_20"] - last_row["bb_lower_20"]
+            print(f"{width / last_row['bb_middle_20'] * 100:.2f}%")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -174,6 +313,29 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its twenty-day weighted moving average for the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.weighted_moving_average(window=20, days=90)
+            print(candles[["datetime", "close", "wma_20"]].tail())
+            ```
+
+            Compare the weighted and simple ten-day averages of the NIFTY 50 index, since the weighted one reacts faster to the latest closes:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            weighted = nifty.weighted_moving_average(window=10, days=60)
+            simple = nifty.simple_moving_average(window=10, days=60)
+            print(f"Weighted {weighted['wma_10'].iloc[-1]:.2f}")
+            print(f"Simple {simple['sma_10'].iloc[-1]:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -213,6 +375,40 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its twenty-day double exponential moving average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.double_exponential_moving_average(
+                window=20,
+                days=180,
+            )
+            print(candles[["datetime", "close", "dema_20"]].tail())
+            ```
+
+            Print whether three banks closed above their double exponential average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "SBIN",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                candles = share.double_exponential_moving_average(days=120)
+                last_row = candles.iloc[-1]
+                if last_row["close"] > last_row["dema_10"]:
+                    print(f"{symbol}: above")
+                else:
+                    print(f"{symbol}: below")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -254,6 +450,40 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its ten-day Tillson T3 average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.triple_exponential_moving_average(
+                window=10,
+                days=180,
+            )
+            print(candles[["datetime", "close", "t3_10"]].tail())
+            ```
+
+            Compare a smoother and a more responsive T3 average of the NIFTY 50 index by changing the volume factor:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            smooth = nifty.triple_exponential_moving_average(
+                window=10,
+                volume_factor=0.9,
+                days=250,
+            )
+            responsive = nifty.triple_exponential_moving_average(
+                window=10,
+                volume_factor=0.3,
+                days=250,
+            )
+            print(f"Factor 0.9: {smooth['t3_10'].iloc[-1]:.2f}")
+            print(f"Factor 0.3: {responsive['t3_10'].iloc[-1]:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -297,6 +527,41 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its ten-day Kaufman adaptive moving average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.kaufman_adaptive_moving_average(days=120)
+            print(candles[["datetime", "close", "kama_10"]].tail())
+            ```
+
+            Print whether the Kaufman average of three IT shares rose over the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "WIPRO",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                candles = share.kaufman_adaptive_moving_average(
+                    window=20,
+                    days=180,
+                )
+                average = candles["kama_20"]
+                change = average.iloc[-1] - average.iloc[-6]
+                if change > 0:
+                    print(f"{symbol}: rising by {change:.2f}")
+                else:
+                    print(f"{symbol}: falling by {-change:.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -338,6 +603,35 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's MESA adaptive moving average and its following line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.mesa_adaptive_moving_average(days=365)
+            print(candles[["datetime", "close", "mama", "fama"]].tail())
+            ```
+
+            Print the last day on which the NIFTY 50 index's MESA average crossed its following line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            candles = nifty.mesa_adaptive_moving_average(days=365)
+            last_cross = None
+            mama = candles["mama"]
+            fama = candles["fama"]
+            for position in range(1, len(candles)):
+                before = mama.iloc[position - 1] > fama.iloc[position - 1]
+                after = mama.iloc[position] > fama.iloc[position]
+                if before != after:
+                    last_cross = candles["datetime"].iloc[position]
+            print(last_cross)
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -383,6 +677,34 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its twenty-day triangular moving average:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.triangular_moving_average(window=20, days=120)
+            print(candles[["datetime", "close", "trima_20"]].tail())
+            ```
+
+            Print how far three shares closed from their triangular average, in percent:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "RELIANCE",
+                "INFY",
+                "HDFCBANK",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                last_row = share.triangular_moving_average(days=90).iloc[-1]
+                distance = (last_row["close"] / last_row["trima_10"] - 1) * 100
+                print(f"{symbol}: {distance:.2f}%")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -422,6 +744,50 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's close and its parabolic stop and reverse for the last five days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.parabolic_sar(days=120)
+            print(candles[["datetime", "close", "psar"]].tail())
+            ```
+
+            Say whether the parabolic stop puts each bank in an uptrend or a downtrend:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "HDFCBANK",
+                "ICICIBANK",
+                "SBIN",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                last_row = share.parabolic_sar(days=120).iloc[-1]
+                if last_row["close"] > last_row["psar"]:
+                    print(f"{symbol}: uptrend, stop {last_row['psar']:.2f}")
+                else:
+                    print(f"{symbol}: downtrend, stop {last_row['psar']:.2f}")
+            ```
+
+            Print the NIFTY 50 index's parabolic stop with a slower acceleration:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            candles = nifty.parabolic_sar(
+                acceleration=0.01,
+                maximum=0.1,
+                days=180,
+            )
+            print(candles[["datetime", "close", "psar"]].tail())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -466,6 +832,30 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the midpoint of Infosys's highest and lowest close over each ten days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.mid_point(days=60)
+            print(candles[["datetime", "close", "mid_point_10"]].tail())
+            ```
+
+            Print whether the NIFTY 50 index closed above the midpoint of its last twenty closes:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            last_row = nifty.mid_point(window=20, days=90).iloc[-1]
+            if last_row["close"] > last_row["mid_point_20"]:
+                print("In the upper half of the recent range")
+            else:
+                print("In the lower half of the recent range")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -505,6 +895,34 @@ class OverlapStudies(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the midpoint of Infosys's highest high and lowest low over each ten days:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            candles = infosys.middle_price(days=60)
+            print(candles[["datetime", "close", "middle_price_10"]].tail())
+            ```
+
+            Print the twenty-day middle price of three IT shares, the base line of the Ichimoku cloud's kind:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "WIPRO",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                last_row = share.middle_price(window=20, days=90).iloc[-1]
+                middle = last_row["middle_price_20"]
+                print(f"{symbol}: close {last_row['close']}, middle {middle}")
+            ```
         """
         prices = self.prices(
             interval=interval,

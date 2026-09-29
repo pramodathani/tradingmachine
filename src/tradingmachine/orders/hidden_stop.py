@@ -123,6 +123,46 @@ class HiddenStopOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings of a hidden stop at 12 rupees protecting a long position:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import hidden_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = hidden_stop.HiddenStopOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a hidden stop with a real backstop at the broker and a wider exit buffer:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import hidden_stop
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = hidden_stop.HiddenStopOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                backstop_price=11.5,
+                backstop_limit_price=11.45,
+                buffer_ticks=5,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

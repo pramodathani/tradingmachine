@@ -119,6 +119,45 @@ class CloseOnTriggerOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the settings that close a long position when the price falls to 12 rupees:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import close_on_trigger
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = close_on_trigger.CloseOnTriggerOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Show a level that must hold on the bid for ten seconds before it fires:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import close_on_trigger
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = close_on_trigger.CloseOnTriggerOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                trigger_price=12.0,
+                trigger_on="held",
+                hold_seconds=10,
+            )
+            print(order.synthetic)
+            ```
         """
         return {
             "trigger_price": self.trigger_level,

@@ -91,7 +91,7 @@ The table below lists the members every basket has.
 | <span class="member method">method</span> | `overlap_with(other)` | The weight two baskets have in common, the standard test of whether two funds differ | none |
 | <span class="member method">method</span> | `add_member(member)`, `remove_member(instrument)` | Change the members in memory | none |
 
-Every basket also inherits the thirteen analysis classes an instrument does and the [performance measures](../analysis/performance.md), because its `prices` method gives candles for the whole basket. Each candle is the sum over members of a fixed quantity times the member's candle. A weighted basket takes those quantities from its weights at the first candle of the range, starting from 100, which is how a price index moves between rebalances. The open and close are exact. The high and low are an approximation, because the members do not all reach their highs at the same moment, and volume and open interest are left empty.
+Every basket also inherits the fourteen analysis classes an instrument does, the last of which is the [performance measures](../analysis/performance.md), because its `prices` method gives candles for the whole basket. Each candle is the sum over members of a fixed quantity times the member's candle. A weighted basket takes those quantities from its weights at the first candle of the range, starting from 100, which is how a price index moves between rebalances. The open and close are exact. The high and low are an approximation, because the members do not all reach their highs at the same moment, and volume and open interest are left empty.
 
 #### Example
 
@@ -141,7 +141,7 @@ The three contributions add up to the basket's cumulative return of −30.06 per
 
 | Exception | When |
 |---|---|
-| `BasketMemberError` | The members are empty, name an instrument twice, or give weights to only some members; or UBI answered an error for a member when candles were asked for |
+| [`BasketMemberError`](errors.md#basketmembererror) | The members are empty, name an instrument twice, or give weights to only some members; or UBI answered an error for a member when candles were asked for |
 | `ValueError` | `unmapped_weight` is not between 0 and 1 |
 
 ## Portfolio
@@ -248,9 +248,11 @@ The store saves and loads baskets in MongoDB. The table below lists its members.
 | <span class="member method">method</span> | `names(kind=None)`, `history(name)`, `delete(name, effective_date)` | List, inspect and remove stored versions |
 | <span class="member method">method</span> | `build(document, linked_instrument=None)` | Builds a basket from a document without storing it |
 
+`load` raises [`BasketNotFoundError`](errors.md#basketnotfounderror) when no version of the name is in effect on the day asked for, while `load_for_instrument` returns `None` instead. A CSV file the importer cannot use raises [`BasketCsvImportError`](errors.md#basketcsvimporterror), and every basket error is listed on [Errors](errors.md#the-asset-basket-errors).
+
 <div class="endpoint" markdown><span class="member class">class</span> `BasketCsvImporter(project_configuration=None, unified_broker_interface=None)`</div>
 
-The importer's one method, `import_file(path, name, kind="index", exchange="nse", segment="equities", linked_instrument=None, effective_date=None, unmapped_weight=0.0, source="csv")`, reads a CSV with a `symbol` column and optional `exchange`, `segment`, `weight`, `quantity` and `instrument_id` columns. Column names are read without regard to case, so the NSE's own constituent files, whose header has `Symbol`, import as they are. A file without weights makes an equally weighted index. Weights may be fractions or percentages, with or without a `%` sign.
+The importer's one method, `import_file(path, name, kind="index", exchange="nse", segment="equities", linked_instrument=None, effective_date=None, unmapped_weight=0.0, source="csv")`, reads a CSV with a `symbol` column and optional `exchange`, `segment`, `weight`, `quantity` and `instrument_id` columns. Column names are read without regard to case, so the NSE's own constituent files, whose header has `Symbol`, import as they are. A file without weights makes an equally weighted index. Weights may be fractions or percentages, with or without a `%` sign. The `kind` names the class the basket is stored and rebuilt as: `basket`, `portfolio`, `watchlist`, `index`, `exchange_traded_fund_constituents` or `mutual_fund_constituents`.
 
 #### Example
 

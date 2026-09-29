@@ -49,6 +49,40 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five days of Infosys's MACD line, signal line and histogram:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.moving_average_convergence_divergence(days=180)
+            columns = [
+                "datetime",
+                "macd_12_26_9",
+                "macd_12_26_9_signal",
+                "macd_12_26_9_hist",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            List the days on which a faster NIFTY MACD crossed above its signal line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.moving_average_convergence_divergence(
+                fast_period=8,
+                slow_period=21,
+                signal_period=5,
+                days=365,
+            )
+            histogram = frame["macd_8_21_5_hist"]
+            crossed_above = (histogram > 0) & (histogram.shift(1) <= 0)
+            print(frame["datetime"][crossed_above].dt.date.tolist())
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -95,6 +129,34 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day average directional movement index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.average_directional_movement_index(days=180)
+            print(frame.set_index("datetime")["adx_14"].tail())
+            ```
+
+            Say whether NIFTY is trending or moving sideways, using the common threshold of 25:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.average_directional_movement_index(
+                window=14,
+                days=180,
+            )
+            latest = frame["adx_14"].iloc[-1]
+            if latest > 25:
+                print(f"NIFTY is trending, ADX {latest:.1f}")
+            else:
+                print(f"NIFTY is moving sideways, ADX {latest:.1f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -139,6 +201,34 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Reliance's 10-day momentum of the close:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            frame = reliance.momentum(window=10, days=120)
+            print(frame.set_index("datetime")["momentum_10"].tail())
+            ```
+
+            Compare the 20-day momentum of the daily high across four shares:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.momentum(window=20, column="high", days=120)
+                print(symbol, round(frame["momentum_20"].iloc[-1], 2))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -176,6 +266,29 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 20-day commodity channel index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.commodity_channel_index(window=20, days=180)
+            print(frame.set_index("datetime")["cci_20"].tail())
+            ```
+
+            Count the days in the last year on which NIFTY's index was above 100 or below -100:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.commodity_channel_index(window=20, days=365)
+            above = (frame["cci_20"] > 100).sum()
+            below = (frame["cci_20"] < -100).sum()
+            print(f"Above 100 on {above} days, below -100 on {below} days")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -218,6 +331,38 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of HDFC Bank's 14-day rating:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            hdfc_bank = equities.Equity(exchange="nse", symbol="HDFCBANK")
+            frame = hdfc_bank.average_directional_movement_index_rating(
+                window=14,
+                days=180,
+            )
+            print(frame.set_index("datetime")["adxr_14"].tail())
+            ```
+
+            Compare Infosys's latest rating with its latest average directional movement index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            rating_frame = infosys.average_directional_movement_index_rating(
+                window=14,
+                days=180,
+            )
+            index_frame = infosys.average_directional_movement_index(
+                window=14,
+                days=180,
+            )
+            print("ADXR", round(rating_frame["adxr_14"].iloc[-1], 2))
+            print("ADX", round(index_frame["adx_14"].iloc[-1], 2))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -266,6 +411,36 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's absolute price oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.absolute_price_oscillator(days=180)
+            print(frame.set_index("datetime")["apo_12_26"].tail())
+            ```
+
+            Say whether NIFTY's 5-day exponential average is above its 20-day one:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.absolute_price_oscillator(
+                fast_period=5,
+                slow_period=20,
+                moving_average_type=1,
+                days=120,
+            )
+            gap = round(frame["apo_5_20"].iloc[-1], 2)
+            if gap > 0:
+                print(f"The fast average is {gap} points above the slow one")
+            else:
+                print(f"The fast average is {-gap} points below the slow one")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -308,6 +483,37 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five days of Infosys's 25-day Aroon down and Aroon up lines:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.aroon(window=25, days=180)
+            columns = [
+                "datetime",
+                "aroon_down_25",
+                "aroon_up_25",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Say whether new highs or new lows have been more recent on NIFTY:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.aroon(window=25, days=180)
+            aroon_up = int(frame["aroon_up_25"].iloc[-1])
+            aroon_down = int(frame["aroon_down_25"].iloc[-1])
+            if aroon_up > aroon_down:
+                print(f"New highs lead: up {aroon_up}, down {aroon_down}")
+            else:
+                print(f"New lows lead: up {aroon_up}, down {aroon_down}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -351,6 +557,29 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of TCS's 14-day Aroon oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            frame = tcs.aroon_oscillator(window=14, days=180)
+            print(frame.set_index("datetime")["aroon_osc_14"].tail())
+            ```
+
+            Count how many of NIFTY's last 60 days had a positive Aroon oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.aroon_oscillator(window=14, days=180)
+            last_sixty = frame["aroon_osc_14"].tail(60)
+            positive_days = (last_sixty > 0).sum()
+            print(f"Positive on {positive_days} of {len(last_sixty)} days")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -390,6 +619,31 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's balance of power:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.balance_of_power(days=60)
+            print(frame.set_index("datetime")["bop"].tail())
+            ```
+
+            Smooth Reliance's balance of power over ten days to see who has been in control:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            frame = reliance.balance_of_power(days=120)
+            smoothed = frame["bop"].rolling(10).mean().iloc[-1]
+            if smoothed > 0:
+                print(f"Buyers have been in control: {smoothed:.3f}")
+            else:
+                print(f"Sellers have been in control: {smoothed:.3f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -431,6 +685,34 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day Chande momentum oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.chande_momentum_oscillator(window=14, days=120)
+            print(frame.set_index("datetime")["cmo_14"].tail())
+            ```
+
+            Label NIFTY as overbought above 50, oversold below -50, or neutral:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.chande_momentum_oscillator(window=14, days=120)
+            latest = frame["cmo_14"].iloc[-1]
+            if latest > 50:
+                label = "overbought"
+            elif latest < -50:
+                label = "oversold"
+            else:
+                label = "neutral"
+            print(f"NIFTY CMO {latest:.1f}: {label}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -468,6 +750,34 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day directional movement index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.directional_movement_index(window=14, days=120)
+            print(frame.set_index("datetime")["dx_14"].tail())
+            ```
+
+            Average BANKNIFTY's directional movement index over the first quarter of 2026:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            bank_nifty = equities.EquityIndex(
+                exchange="nse",
+                symbol="BANKNIFTY",
+            )
+            frame = bank_nifty.directional_movement_index(
+                window=14,
+                from_date="2026-01-01",
+                to_date="2026-03-31",
+            )
+            print(f"Average DX: {frame['dx_14'].mean():.2f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -522,6 +832,46 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print Infosys's MACD built from exponential averages throughout:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.moving_average_convergence_divergence_extended(
+                fast_moving_average_type=1,
+                slow_moving_average_type=1,
+                signal_moving_average_type=1,
+                days=180,
+            )
+            columns = [
+                "datetime",
+                "macd_12_26_9",
+                "macd_signal_12_26_9",
+                "macd_hist_12_26_9",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Print NIFTY's latest histogram from weighted fast and slow averages and a simple signal line:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.moving_average_convergence_divergence_extended(
+                fast_period=10,
+                fast_moving_average_type=2,
+                slow_period=30,
+                slow_moving_average_type=2,
+                signal_period=7,
+                signal_moving_average_type=0,
+                days=240,
+            )
+            print(round(frame["macd_hist_10_30_7"].iloc[-1], 2))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -571,6 +921,41 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day money flow index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.money_flow_index(window=14, days=120)
+            print(frame.set_index("datetime")["mfi_14"].tail())
+            ```
+
+            Label each of four shares as overbought above 80, oversold below 20, or neutral:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.money_flow_index(window=14, days=120)
+                latest = frame["mfi_14"].iloc[-1]
+                if latest > 80:
+                    label = "overbought"
+                elif latest < 20:
+                    label = "oversold"
+                else:
+                    label = "neutral"
+                print(f"{symbol}: {latest:.1f} {label}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -614,6 +999,33 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day minus directional indicator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.minus_directional_indicator(window=14, days=120)
+            print(frame.set_index("datetime")["minus_di_14"].tail())
+            ```
+
+            Say whether sellers or buyers dominate NIFTY by comparing the minus and plus indicators:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            minus_frame = nifty.minus_directional_indicator(window=14, days=120)
+            plus_frame = nifty.plus_directional_indicator(window=14, days=120)
+            minus_value = round(minus_frame["minus_di_14"].iloc[-1], 1)
+            plus_value = round(plus_frame["plus_di_14"].iloc[-1], 1)
+            if minus_value > plus_value:
+                print(f"Sellers dominate: -DI {minus_value}, +DI {plus_value}")
+            else:
+                print(f"Buyers dominate: -DI {minus_value}, +DI {plus_value}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -656,6 +1068,33 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of TCS's 14-day minus directional movement:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            frame = tcs.minus_directional_movement(window=14, days=120)
+            print(frame.set_index("datetime")["minus_dm_14"].tail())
+            ```
+
+            Find the day on which NIFTY's 7-day minus directional movement peaked this year:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.minus_directional_movement(
+                window=7,
+                from_date="2026-01-01",
+                to_date="2026-09-28",
+            )
+            peak_row = frame["minus_dm_7"].idxmax()
+            peak_day = frame.loc[peak_row, "datetime"].date()
+            print(peak_day, round(frame.loc[peak_row, "minus_dm_7"], 2))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -697,6 +1136,27 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day plus directional indicator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.plus_directional_indicator(window=14, days=120)
+            print(frame.set_index("datetime")["plus_di_14"].tail())
+            ```
+
+            Count the days in the last half year on which HDFC Bank's indicator was above 25:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            hdfc_bank = equities.Equity(exchange="nse", symbol="HDFCBANK")
+            frame = hdfc_bank.plus_directional_indicator(window=14, days=180)
+            print(f"Above 25 on {(frame['plus_di_14'] > 25).sum()} days")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -739,6 +1199,27 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day plus directional movement:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.plus_directional_movement(window=14, days=120)
+            print(frame.set_index("datetime")["plus_dm_14"].tail())
+            ```
+
+            Print NIFTY's latest 7-day plus directional movement in index points:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.plus_directional_movement(window=7, days=60)
+            print(f"{frame['plus_dm_7'].iloc[-1]:.2f} points")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -786,6 +1267,37 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's percentage price oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.percentage_price_oscillator(days=180)
+            print(frame.set_index("datetime")["ppo12_26"].tail())
+            ```
+
+            Compare four shares by the percentage gap between their exponential averages:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.percentage_price_oscillator(
+                    moving_average_type=1,
+                    days=180,
+                )
+                print(f"{symbol}: {frame['ppo12_26'].iloc[-1]:.2f}%")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -830,6 +1342,32 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day rate of change in percent:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.rate_of_change(window=14, days=120)
+            print(frame.set_index("datetime")["roc_14"].tail())
+            ```
+
+            Find NIFTY's best and worst 20-day stretch in the first half of 2026:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.rate_of_change(
+                window=20,
+                from_date="2026-01-01",
+                to_date="2026-06-30",
+            )
+            print(f"Best 20 days: {frame['roc_20'].max():.2f}%")
+            print(f"Worst 20 days: {frame['roc_20'].min():.2f}%")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -869,6 +1407,27 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day rate of change as a fraction:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.rate_of_change_percent(window=14, days=120)
+            print(frame.set_index("datetime")["rocp_14"].tail())
+            ```
+
+            Print how far TCS's daily high has moved over the last five days, as a fraction:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            tcs = equities.Equity(exchange="nse", symbol="TCS")
+            frame = tcs.rate_of_change_percent(window=5, column="high", days=60)
+            print(round(frame["rocp_5"].iloc[-1], 4))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -908,6 +1467,31 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day rate of change as a ratio:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.rate_of_change_ratio(window=14, days=120)
+            print(frame.set_index("datetime")["rocr_14"].tail())
+            ```
+
+            Say whether NIFTY is higher or lower than ten days ago:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.rate_of_change_ratio(window=10, days=60)
+            ratio = frame["rocr_10"].iloc[-1]
+            if ratio > 1:
+                print(f"Higher than ten days ago, ratio {ratio:.4f}")
+            else:
+                print(f"Lower than ten days ago, ratio {ratio:.4f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -947,6 +1531,56 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day relative strength index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.relative_strength_index(window=14, days=120)
+            print(frame.set_index("datetime")["rsi_14"].tail())
+            ```
+
+            Label each of four shares as overbought above 70, oversold below 30, or neutral:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+                "RELIANCE",
+            ]
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                frame = share.relative_strength_index(window=14, days=120)
+                latest = frame["rsi_14"].iloc[-1]
+                if latest > 70:
+                    label = "overbought"
+                elif latest < 30:
+                    label = "oversold"
+                else:
+                    label = "neutral"
+                print(f"{symbol}: {latest:.1f} {label}")
+            ```
+
+            Print NIFTY's 9-day relative strength index of the daily high for a fixed quarter:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.relative_strength_index(
+                window=9,
+                column="high",
+                from_date="2026-04-01",
+                to_date="2026-06-30",
+            )
+            print(frame.set_index("datetime")["rsi_9"].dropna().round(1))
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -992,6 +1626,40 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five days of Infosys's slow %K and %D lines:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.stochastic_oscillator(days=90)
+            columns = [
+                "datetime",
+                "slowk_3",
+                "slowd_3",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Check whether NIFTY's 14-day slow %K has just crossed above %D:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.stochastic_oscillator(
+                fast_k_period=14,
+                slow_k_period=3,
+                slow_d_period=3,
+                days=120,
+            )
+            difference = frame["slowk_3"] - frame["slowd_3"]
+            crossed = difference.iloc[-1] > 0 and difference.iloc[-2] <= 0
+            print(f"%K {frame['slowk_3'].iloc[-1]:.1f}")
+            print(f"Crossed above %D: {crossed}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -1044,6 +1712,37 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five days of Infosys's fast %K and %D lines:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.stochastic_fast_oscillator(days=90)
+            columns = [
+                "datetime",
+                "stochf_fastk5",
+                "stochf_fastd3",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Print where NIFTY closed within its 14-day range, as fast %K:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.stochastic_fast_oscillator(
+                fast_k_period=14,
+                fast_d_period=3,
+                days=90,
+            )
+            fast_k = round(frame["stochf_fastk14"].iloc[-1], 1)
+            print(f"{fast_k}% of the 14-day range")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -1098,6 +1797,38 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five days of Infosys's stochastic relative strength index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.stochastic_relative_strength_index(days=120)
+            columns = [
+                "datetime",
+                "stochrsi_fastk5",
+                "stochrsi_fastd3",
+            ]
+            print(frame[columns].tail())
+            ```
+
+            Print NIFTY's latest 14-period stochastic relative strength index lines:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.stochastic_relative_strength_index(
+                window=14,
+                fast_k_period=14,
+                fast_d_period=3,
+                days=180,
+            )
+            print(f"%K {frame['stochrsi_fastk14'].iloc[-1]:.1f}")
+            print(f"%D {frame['stochrsi_fastd3'].iloc[-1]:.1f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -1145,6 +1876,32 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 15-day TRIX:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.trix(days=180)
+            print(frame.set_index("datetime")["trix_15"].tail())
+            ```
+
+            Say whether NIFTY's 9-day TRIX is rising or falling:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.trix(window=9, days=180)
+            latest = frame["trix_9"].iloc[-1]
+            previous = frame["trix_9"].iloc[-2]
+            if latest > previous:
+                print(f"TRIX is rising: {previous:.4f} to {latest:.4f}")
+            else:
+                print(f"TRIX is falling: {previous:.4f} to {latest:.4f}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -1186,6 +1943,34 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's ultimate oscillator:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.ultimate_oscillator(days=120)
+            print(frame.set_index("datetime")["ultosc_7_14_28"].tail())
+            ```
+
+            Label Reliance as overbought above 70, oversold below 30, or neutral:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            frame = reliance.ultimate_oscillator(days=120)
+            latest = frame["ultosc_7_14_28"].iloc[-1]
+            if latest > 70:
+                label = "overbought"
+            elif latest < 30:
+                label = "oversold"
+            else:
+                label = "neutral"
+            print(f"Reliance ultimate oscillator {latest:.1f}: {label}")
+            ```
         """
         prices = self.prices(
             interval=interval,
@@ -1230,6 +2015,27 @@ class MomentumIndicators(price_analysis.PriceAnalysis):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the last five values of Infosys's 14-day Williams %R:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            frame = infosys.williams_percent_r(window=14, days=90)
+            print(frame.set_index("datetime")["willr_14"].tail())
+            ```
+
+            Count the days in the last year on which NIFTY's Williams %R was below -80:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            frame = nifty.williams_percent_r(window=14, days=365)
+            print(f"Below -80 on {(frame['willr_14'] < -80).sum()} days")
+            ```
         """
         prices = self.prices(
             interval=interval,

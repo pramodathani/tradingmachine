@@ -112,6 +112,49 @@ class CoverOrder(synthetic_order.SyntheticOrder):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the compulsory stop of a cover order:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import cover
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = cover.CoverOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=13.0,
+                stop_price=12.5,
+                stop_limit_price=12.45,
+            )
+            print(order.synthetic_fields())
+            ```
+
+            Work out the most a cover order can lose per share on a short sale:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import cover
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = cover.CoverOrder(
+                share,
+                transaction_type="sell",
+                product="mis",
+                order_type="limit",
+                quantity=1,
+                price=14.0,
+                stop_price=14.5,
+                stop_limit_price=14.55,
+            )
+            fields = order.synthetic_fields()
+            risk = fields["stop_limit_price"] - order.price
+            print(f"At most {risk:.2f} rupees a share")
+            ```
         """
         return {
             "stop_price": self.stop_price,
