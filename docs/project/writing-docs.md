@@ -95,6 +95,31 @@ The mkdocstrings options in `mkdocs.yml` matter when you write docstrings. The t
 | `members_order` | `source` | Members appear in the order the code defines them |
 | `group_by_category` | `false` | Properties and methods are not gathered into separate groups, so `members_order: source` holds across both |
 
+### Examples in docstrings and example programs
+
+Every public property and method ends its docstring with an `Examples:` section holding two or three fenced `python` code blocks, each introduced by one sentence ending in a colon. Each block is complete on its own, with its own imports, because the runner described below runs every block by itself. The reference page renders the section under the member, as it does `Args:` and `Returns:`.
+
+Every public class also has at least two example programs under `examples/`, in a folder that mirrors the module path without the leading `tradingmachine` and is named after the class in snake case. The table below shows how the folder is found.
+
+| Class | Folder of its programs |
+|---|---|
+| `tradingmachine.accounts.account.Account` | `examples/accounts/account/account/` |
+| `tradingmachine.assets.equities.EquityIndexOption` | `examples/assets/equities/equity_index_option/` |
+| `tradingmachine.assets.exceptions.HoldingError` | `examples/assets/exceptions/holding_error/` |
+
+A program is a runnable script written in the project's own style: a module docstring whose first line is the program's title, one class with a `run` method, and an `if __name__ == "__main__":` guard that only creates the class and calls `run`. `scripts/gen_ref_pages.py` finds the programs by that folder, shows each one under its class with the title as a heading, and includes the file itself through `pymdownx.snippets`, so the page always shows the program exactly as it is on disk. Adding a program therefore needs no edit anywhere else.
+
+`scripts/run_examples.py` runs every docstring code block and every program against the live UBI, one at a time, and prints `passed`, `failed`, `timed out` or `held back` for each. The commands below run all of them, one module, or one class's programs.
+
+```bash
+.venv/bin/python scripts/run_examples.py
+.venv/bin/python scripts/run_examples.py --only tradingmachine.assets.equities
+.venv/bin/python scripts/run_examples.py --only examples/assets/equities/equity/ --show-output
+```
+
+!!! danger "The examples place real orders"
+    Many examples place, change and cancel real orders at real brokers, because the project's rule is that its examples are verified for real. Each one cleans up what it creates, but UBI chooses the broker for every order, so a round trip can leave one intraday share long at one broker and short at another, which the brokers square off at the close. Run the order examples during market hours only when that is acceptable. Any example that calls `flatten`, `liquidate_all_positions`, `add_to_holdings`, `reduce_holdings`, `liquidate_holdings` or `rebalance` is held back unless `--include-account-wide` is given, because it acts on positions or holdings that were there before it ran.
+
 ### What the build hook does
 
 `scripts/documentation_hooks.py` exists to stop one griffe warning from failing every strict build. Every docstring in this project has a `Raises:` section, and a member that raises nothing says so with the single word `Nothing.`, which griffe's Google parser does not recognise as an `exception: description` pair. It warns `Failed to get 'exception: description' pair from 'Nothing.'`, and `--strict` would turn each such warning into a failure.
