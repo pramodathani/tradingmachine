@@ -72,6 +72,60 @@ class MemberResolver:
         Raises:
             BasketMemberError: rows is empty, or UBI could not find one or more of the instruments, all of which the message lists.
             UnifiedBrokerInterfaceError: The whole request was refused by, or failed on the way to, UBI.
+
+        Examples:
+            Build weighted members for three shares in one request:
+
+            ```python
+            from tradingmachine.asset_baskets import member_resolver
+
+            rows = [
+                {
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "INFY",
+                    "weight": 0.5,
+                },
+                {
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "TCS",
+                    "weight": 0.3,
+                },
+                {
+                    "exchange": "nse",
+                    "segment": "equity_indices",
+                    "symbol": "NIFTY",
+                    "weight": 0.2,
+                },
+            ]
+            for member in member_resolver.MemberResolver().resolve(rows):
+                print(member, type(member.instrument).__name__)
+            ```
+
+            See every unknown symbol listed in one error:
+
+            ```python
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import member_resolver
+
+            rows = [
+                {
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "INFY",
+                },
+                {
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "NOSUCHSHARE",
+                },
+            ]
+            try:
+                member_resolver.MemberResolver().resolve(rows)
+            except exceptions.BasketMemberError as error:
+                print(error)
+            ```
         """
         if not rows:
             raise exceptions.BasketMemberError("There are no rows to resolve")
@@ -119,6 +173,39 @@ class MemberResolver:
         Raises:
             BasketMemberError: UBI could not find the instrument.
             UnifiedBrokerInterfaceError: The request was refused by, or failed on the way to, UBI.
+
+        Examples:
+            Look one share up by exchange, segment and symbol:
+
+            ```python
+            from tradingmachine.asset_baskets import member_resolver
+
+            resolver = member_resolver.MemberResolver()
+            idea = resolver.resolve_one(
+                {
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "IDEA",
+                }
+            )
+            print(idea.instrument_id, idea.last_price)
+            ```
+
+            Look an index up again by the instrument id another lookup gave:
+
+            ```python
+            from tradingmachine.asset_baskets import member_resolver
+            from tradingmachine.assets import equities
+
+            nifty = equities.EquityIndex(exchange="nse", symbol="NIFTY")
+            resolver = member_resolver.MemberResolver()
+            same_index = resolver.resolve_one(
+                {
+                    "instrument_id": nifty.instrument_id,
+                }
+            )
+            print(type(same_index).__name__, same_index.symbol)
+            ```
         """
         members = self.resolve(
             [

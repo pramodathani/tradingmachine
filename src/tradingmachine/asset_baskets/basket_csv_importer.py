@@ -98,6 +98,81 @@ class BasketCsvImporter:
             AssetBasketError: kind is not one the store knows.
             FileNotFoundError: The file does not exist.
             pymongo.errors.PyMongoError: MongoDB could not be reached or refused the write.
+
+        Examples:
+            Import a weighted index from a temporary CSV file, print it, and delete the stored copy:
+
+            ```python
+            import os
+            import tempfile
+
+            from tradingmachine.asset_baskets import basket_csv_importer
+
+            importer = basket_csv_importer.BasketCsvImporter()
+            with tempfile.TemporaryDirectory() as directory:
+                path = os.path.join(directory, "it.csv")
+                with open(path, "w") as csv_file:
+                    print("Symbol,Weight", file=csv_file)
+                    print("INFY,50", file=csv_file)
+                    print("TCS,30", file=csv_file)
+                    print("HCLTECH,20", file=csv_file)
+                basket = importer.import_file(
+                    path, name="example-index-csv", effective_date="2026-09-01"
+                )
+            try:
+                print(basket, basket.weighting)
+                print(basket.weights)
+            finally:
+                importer.store.delete("example-index-csv", "2026-09-01")
+            ```
+
+            Import a file without weights, which becomes an equally weighted index:
+
+            ```python
+            import os
+            import tempfile
+
+            from tradingmachine.asset_baskets import basket_csv_importer
+
+            importer = basket_csv_importer.BasketCsvImporter()
+            with tempfile.TemporaryDirectory() as directory:
+                path = os.path.join(directory, "banks.csv")
+                with open(path, "w") as csv_file:
+                    print("Symbol", file=csv_file)
+                    print("HDFCBANK", file=csv_file)
+                    print("ICICIBANK", file=csv_file)
+                basket = importer.import_file(
+                    path,
+                    name="example-index-csv-equal",
+                    effective_date="2026-09-01",
+                    source="example",
+                )
+            try:
+                print(basket.weighting, basket.weights.to_dict())
+            finally:
+                importer.store.delete("example-index-csv-equal", "2026-09-01")
+            ```
+
+            See a file without a symbol column refused before anything is stored:
+
+            ```python
+            import os
+            import tempfile
+
+            from tradingmachine.asset_baskets import basket_csv_importer
+            from tradingmachine.asset_baskets import exceptions
+
+            importer = basket_csv_importer.BasketCsvImporter()
+            with tempfile.TemporaryDirectory() as directory:
+                path = os.path.join(directory, "wrong.csv")
+                with open(path, "w") as csv_file:
+                    print("Company,Weight", file=csv_file)
+                    print("Infosys,100", file=csv_file)
+                try:
+                    importer.import_file(path, name="example-index-csv-wrong")
+                except exceptions.BasketCsvImportError as error:
+                    print(error)
+            ```
         """
         frame = pd.read_csv(path, dtype=str, skipinitialspace=True)
         frame.columns = [str(column).strip().lower() for column in frame.columns]

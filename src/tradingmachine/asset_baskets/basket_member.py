@@ -49,7 +49,33 @@ class BasketMember:
 
     @property
     def label(self) -> str:
-        """The str readable name of the member, such as `nse:INFY` or `nse:NIFTY 2026-10-27 25000.0CE`."""
+        """The str readable name of the member, such as `nse:INFY` or `nse:NIFTY 2026-10-27 25000.0CE`.
+
+        Examples:
+            Print the label of an NSE share:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            print(basket_member.BasketMember(infosys, weight=0.05).label)
+            ```
+
+            Print the labels of the same share on two exchanges, which differ:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            for exchange in [
+                "nse",
+                "bse",
+            ]:
+                share = equities.Equity(exchange=exchange, symbol="TCS")
+                print(basket_member.BasketMember(share).label)
+            ```
+        """
         instrument = self.instrument
         if instrument.symbol is not None:
             return f"{instrument.exchange}:{instrument.symbol}"
@@ -70,6 +96,29 @@ class BasketMember:
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the stored form of a weighted member:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            print(basket_member.BasketMember(infosys, weight=0.05).document())
+            ```
+
+            Print the quantity and average price a portfolio member stores:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            member = basket_member.BasketMember(idea, quantity=100, average_price=12.5)
+            document = member.document()
+            print(document["symbol"], document["quantity"], document["average_price"])
+            ```
         """
         instrument = self.instrument
         expiry_date = None

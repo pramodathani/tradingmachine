@@ -63,12 +63,135 @@ class ExchangeTradedFundConstituents(asset_basket.AssetBasket):
 
     @property
     def fund(self) -> instruments.Instrument | None:
-        """The tradingmachine.assets.instruments.Instrument of the fund these are the holdings of, or None when none is linked."""
+        """The tradingmachine.assets.instruments.Instrument of the fund these are the holdings of, or None when none is linked.
+
+        Examples:
+            Print the fund the holdings belong to and its price:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            print(holdings.fund.symbol, holdings.fund.last_price)
+            ```
+
+            See None when no fund is linked:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            unlinked = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="unlinked", members=members
+            )
+            print(unlinked.fund)
+            ```
+        """
         return self.linked_instrument
 
     @property
     def premium_or_discount(self) -> float | None:
-        """The float percent by which the fund's last price is above its indicative net asset value, negative for a discount, or None when the fund, the indicative value or either price is missing, read from UBI in one request on every access."""
+        """The float percent by which the fund's last price is above its indicative net asset value, negative for a discount, or None when the fund, the indicative value or either price is missing, read from UBI in one request on every access.
+
+        Examples:
+            See None when no indicative net asset value row is stored with the holdings, which is the case for every fund in UBI today:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            print(holdings.premium_or_discount)
+            ```
+
+            Print the premium only when an indicative value is known:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            premium = holdings.premium_or_discount
+            if premium is None:
+                print(f"No indicative value is known for {holdings.fund.symbol}.")
+            else:
+                print(f"{holdings.fund.symbol} trades at {premium:+.2f}% to its value")
+            ```
+        """
         if self.fund is None or self.indicative_net_asset_value is None:
             return None
         results = self._post_for_instruments(
@@ -111,6 +234,68 @@ class ExchangeTradedFundConstituents(asset_basket.AssetBasket):
         Raises:
             BasketMemberError: UBI answered an error for one or more members.
             UnifiedBrokerInterfaceError: UBI refused a request or could not be reached.
+
+        Examples:
+            Print the fund's return minus its holdings' over a year:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            difference = holdings.tracking_difference(days=365)
+            print(f"Tracking difference: {difference:+.4f}")
+            ```
+
+            Compare the tracking difference over three months and one year:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            for days in [
+                90,
+                365,
+            ]:
+                print(days, holdings.tracking_difference(days=days))
+            ```
         """
         if self.fund is None:
             return None
@@ -143,6 +328,66 @@ class ExchangeTradedFundConstituents(asset_basket.AssetBasket):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the stored form's link to the fund and its indicative value:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            document = holdings.document(effective_date="2026-09-01")
+            print(document["kind"], document["linked_instrument_id"])
+            print(document["indicative_net_asset_value_instrument_id"])
+            ```
+
+            Print the stored weight of each holding:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            weights = {
+                "HDFCBANK": 13.0,
+                "ICICIBANK": 9.0,
+                "RELIANCE": 8.5,
+                "INFY": 5.0,
+                "BHARTIARTL": 4.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            holdings = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="NIFTYBEES",
+                members=members,
+                fund=fund,
+            )
+            for member_document in holdings.document()["members"]:
+                print(member_document["symbol"], member_document["weight"])
+            ```
         """
         document = super().document(effective_date)
         if self.indicative_net_asset_value is None:

@@ -88,6 +88,31 @@ class Portfolio(asset_basket.AssetBasket):
         Raises:
             BasketMemberError: The account holds nothing, or UBI could not find a held instrument.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Build a portfolio of the account's holdings and print each quantity:
+
+            ```python
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import portfolio
+
+            try:
+                held = portfolio.Portfolio.from_holdings()
+            except exceptions.BasketMemberError as error:
+                print(error)
+            else:
+                print(held.quantities)
+            ```
+
+            Value the holdings and their profit over what was paid:
+
+            ```python
+            from tradingmachine.asset_baskets import portfolio
+
+            held = portfolio.Portfolio.from_holdings(name="demat holdings")
+            print(f"{held.size} holdings worth {held.value}")
+            print(f"Unrealised profit: {held.unrealized_pnl}")
+            ```
         """
         resolver = member_resolver.MemberResolver(unified_broker_interface)
         answer = resolver.unified_broker_interface.get(HOLDINGS_PATH)
@@ -136,6 +161,35 @@ class Portfolio(asset_basket.AssetBasket):
         Raises:
             BasketMemberError: No position is open, or UBI could not find a position's instrument.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Build a portfolio of the account's net positions, or say there are none:
+
+            ```python
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import portfolio
+
+            try:
+                positions = portfolio.Portfolio.from_positions()
+            except exceptions.BasketMemberError as error:
+                print(error)
+            else:
+                print(positions.quantities)
+            ```
+
+            Build a portfolio of today's positions only and print its value:
+
+            ```python
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import portfolio
+
+            try:
+                today = portfolio.Portfolio.from_positions(name="today", day=True)
+            except exceptions.BasketMemberError as error:
+                print(f"Nothing traded today: {error}")
+            else:
+                print(today.value)
+            ```
         """
         resolver = member_resolver.MemberResolver(unified_broker_interface)
         answer = resolver.unified_broker_interface.get(POSITIONS_PATH)
@@ -173,7 +227,58 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def quantities(self) -> pd.Series:
-        """A pandas.Series of each member's float quantity, indexed by member label."""
+        """A pandas.Series of each member's float quantity, indexed by member label.
+
+        Examples:
+            Print how many units of each member are held:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(held.quantities)
+            ```
+
+            See a short position as a negative quantity:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            print(held.quantities)
+            ```
+        """
         held = []
         for member in self.members:
             held.append(float(member.quantity))
@@ -181,7 +286,60 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def values(self) -> pd.Series | None:
-        """A pandas.Series of each member's float value in rupees at its last price, negative for a short position, indexed by member label, or None when any member has no last price; read from UBI in one request on every access."""
+        """A pandas.Series of each member's float value in rupees at its last price, negative for a short position, indexed by member label, or None when any member has no last price; read from UBI in one request on every access.
+
+        Examples:
+            Print what each holding is worth at its last price:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(held.values.round(2))
+            ```
+
+            Print the value of each side of a long and short pair:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            values = held.values
+            print(values.round(2))
+            print(f"Net: {values.sum():.2f}")
+            ```
+        """
         frame = self.last_prices
         if frame["last_price"].isna().any():
             return None
@@ -192,7 +350,58 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def value(self) -> float | None:
-        """The float value in rupees of the whole portfolio at last prices, or None when any member has no last price, read from UBI on every access."""
+        """The float value in rupees of the whole portfolio at last prices, or None when any member has no last price, read from UBI on every access.
+
+        Examples:
+            Print the whole portfolio's value at last prices:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(f"Portfolio value: Rs {held.value:,.2f}")
+            ```
+
+            Print the net value of a long and short pair, which can be small or negative:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            print(held.value)
+            ```
+        """
         values = self.values
         if values is None:
             return None
@@ -204,6 +413,58 @@ class Portfolio(asset_basket.AssetBasket):
 
         Raises:
             BasketMemberError: A member has no last price, so its share cannot be known.
+
+        Examples:
+            Print each holding's share of the portfolio's value:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(held.weights.round(3))
+            ```
+
+            See a short position's weight come out negative:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            weights = held.weights
+            print(weights.round(3))
+            print(f"Absolute weights add up to {weights.abs().sum()}")
+            ```
         """
         values = self.values
         if values is None:
@@ -214,7 +475,58 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def invested_value(self) -> float | None:
-        """The float amount in rupees paid for the portfolio, the sum of quantity times average price, or None when any member's average price is unknown."""
+        """The float amount in rupees paid for the portfolio, the sum of quantity times average price, or None when any member's average price is unknown.
+
+        Examples:
+            Print what the holdings cost:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(f"Invested: Rs {held.invested_value:,.2f}")
+            ```
+
+            See it be None when a member's average price is unknown:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            print(held.invested_value)
+            ```
+        """
         total = 0.0
         for member in self.members:
             if member.average_price is None:
@@ -224,7 +536,71 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def unrealized_pnl(self) -> float | None:
-        """The float profit in rupees of the portfolio's value over what was paid for it, or None when the value or any average price is unknown, read from UBI on every access."""
+        """The float profit in rupees of the portfolio's value over what was paid for it, or None when the value or any average price is unknown, read from UBI on every access.
+
+        Examples:
+            Print the profit of the holdings over what was paid for them:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(f"Unrealised profit: Rs {held.unrealized_pnl:,.2f}")
+            ```
+
+            Print the profit as a percentage of the amount invested:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            profit = held.unrealized_pnl
+            percent = profit / held.invested_value * 100
+            print(f"{percent:+.2f}%")
+            ```
+        """
         invested_value = self.invested_value
         if invested_value is None:
             return None
@@ -235,7 +611,58 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def day_pnl(self) -> float | None:
-        """The float profit in rupees since the previous close, the sum of quantity times the change from the previous close to the last price, or None when any member has no quote, read from UBI on every access."""
+        """The float profit in rupees since the previous close, the sum of quantity times the change from the previous close to the last price, or None when any member has no quote, read from UBI on every access.
+
+        Examples:
+            Print today's profit or loss on the holdings:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(f"Today: Rs {held.day_pnl:+,.2f}")
+            ```
+
+            Print today's profit on a long and short pair, where the short gains when its share falls:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            members = [
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="HDFCBANK"), quantity=10
+                ),
+                basket_member.BasketMember(
+                    equities.Equity(exchange="nse", symbol="ICICIBANK"), quantity=-8
+                ),
+            ]
+            held = portfolio.Portfolio(name="bank pair", members=members)
+            print(held.day_pnl)
+            ```
+        """
         frame = self.ohlc
         if frame["last_price"].isna().any() or frame["previous_close"].isna().any():
             return None
@@ -246,7 +673,70 @@ class Portfolio(asset_basket.AssetBasket):
 
     @property
     def day_change_percent(self) -> float | None:
-        """The float move of the portfolio's value since the previous close, in percent, or None when any member has no quote, read from UBI on every access."""
+        """The float move of the portfolio's value since the previous close, in percent, or None when any member has no quote, read from UBI on every access.
+
+        Examples:
+            Print the portfolio's move since the previous close:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(f"{held.day_change_percent:+.2f}%")
+            ```
+
+            Compare the portfolio's move with each holding's:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            print(held.ohlc[["label", "change_percent"]])
+            print(f"Portfolio: {held.day_change_percent:+.2f}%")
+            ```
+        """
         frame = self.ohlc
         if frame["last_price"].isna().any() or frame["previous_close"].isna().any():
             return None
@@ -285,6 +775,80 @@ class Portfolio(asset_basket.AssetBasket):
             BadRequestError: UBI refused the whole list, such as one longer than its limit of 500 orders.
             ServiceUnavailableError: UBI's order engine is not running, so nothing was placed.
             UnifiedBrokerInterfaceError: Any other failure of the whole request.
+
+        Examples:
+            Have UBI build the market orders for a portfolio without sending them:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            results = held.place_orders(product="cnc", dry_run=True)
+            print(results[["label", "transaction_type", "quantity", "status"]])
+            ```
+
+            Buy one IDEA share intraday with a market order and sell it straight back once it fills:
+
+            ```python
+            import time
+
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            one_share = portfolio.Portfolio(
+                name="one IDEA share",
+                members=[
+                    basket_member.BasketMember(idea, quantity=1),
+                ],
+            )
+            bought = one_share.place_orders(product="mis", tag="basketexample")
+            print(bought[["label", "transaction_type", "outcome", "order_id"]])
+            order_id = str(bought.loc[0, "order_id"])
+            status = None
+            for attempt in range(15):
+                time.sleep(2)
+                orders = idea.orders
+                if orders is None:
+                    continue
+                matching = orders[orders["order_id"].astype(str) == order_id]
+                if matching.empty:
+                    continue
+                status = matching["status"].iloc[0]
+                if status in ("COMPLETE", "REJECTED", "CANCELLED"):
+                    break
+            print(f"The buy order is {status}")
+            if status == "COMPLETE":
+                sold = one_share.place_orders(product="mis", transaction_type="sell")
+                print(sold[["label", "transaction_type", "outcome", "error"]])
+                if sold.loc[0, "outcome"] != "accepted":
+                    closed = idea.reduce_position(quantity=1, product="mis")
+                    print(f"Closed instead: {closed['outcome']}")
+            elif status in ("OPEN", "PENDING"):
+                print(idea.cancel_order(order_id)["outcome"])
+            ```
         """
         planned = []
         for member in self.members:
@@ -322,6 +886,97 @@ class Portfolio(asset_basket.AssetBasket):
         Raises:
             BasketMemberError: An instrument in either basket has no last price.
             UnifiedBrokerInterfaceError: UBI refused a request or could not be reached.
+
+        Examples:
+            Work out the trades that would move a portfolio to equal weights in two shares:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+
+            target_members = []
+            for symbol in [
+                "INFY",
+                "TCS",
+            ]:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                target_members.append(basket_member.BasketMember(share))
+            target = index.Index(
+                name="IT equal",
+                members=target_members,
+                weighting="equal",
+            )
+            trades = held.rebalance_trades(target=target)
+            print(trades[["label", "current_quantity", "target_quantity"]])
+            ```
+
+            Work out the trades for a fixed sum of money rather than the portfolio's value:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+
+            target_members = []
+            for symbol in [
+                "INFY",
+                "TCS",
+            ]:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                target_members.append(basket_member.BasketMember(share))
+            target = index.Index(
+                name="IT equal",
+                members=target_members,
+                weighting="equal",
+            )
+            trades = held.rebalance_trades(target=target, capital=50000)
+            print(trades[["label", "trade_quantity", "transaction_type"]])
+            ```
         """
         target_weights = target._weights_by_instrument_id()
         instruments_by_id = {}
@@ -405,6 +1060,103 @@ class Portfolio(asset_basket.AssetBasket):
             BasketMemberError: An instrument in either basket has no last price.
             ServiceUnavailableError: UBI's order engine is not running, so nothing was placed.
             UnifiedBrokerInterfaceError: Any other failure of a whole request.
+
+        Examples:
+            Have UBI build the rebalancing orders without sending them:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+
+            target_members = []
+            for symbol in [
+                "INFY",
+                "TCS",
+            ]:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                target_members.append(basket_member.BasketMember(share))
+            target = index.Index(
+                name="IT equal",
+                members=target_members,
+                weighting="equal",
+            )
+            results = held.rebalance(target=target, product="cnc", dry_run=True)
+            print(results[["label", "transaction_type", "quantity", "status"]])
+            ```
+
+            Build the orders for a fixed sum of money and a tag, still as a dry run:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+
+            target_members = []
+            for symbol in [
+                "INFY",
+                "TCS",
+            ]:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                target_members.append(basket_member.BasketMember(share))
+            target = index.Index(
+                name="IT equal",
+                members=target_members,
+                weighting="equal",
+            )
+            results = held.rebalance(
+                target=target,
+                product="cnc",
+                capital=50000,
+                tag="rebalance",
+                dry_run=True,
+            )
+            print(results[["label", "quantity", "status", "error"]])
+            ```
         """
         trades = self.rebalance_trades(target, capital)
         planned = []

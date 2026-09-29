@@ -100,6 +100,28 @@ class UnifiedBrokerInterface:
         Raises:
             AuthenticationError: The server refused the api key or secret.
             UnifiedBrokerInterfaceError: Any other failure, including an unreachable server.
+
+        Examples:
+            Connect and report the token's length and expiry without printing the token itself:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            access_token = unified_broker_interface.connect()
+            print(f"The token has {len(access_token)} characters.")
+            print(f"It expires at {unified_broker_interface.token_expires_at}.")
+            ```
+
+            Connect explicitly before the first request, then confirm the session:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            unified_broker_interface.connect()
+            print(unified_broker_interface.status())
+            ```
         """
         headers = {
             "api-key": self._api_key,
@@ -127,6 +149,34 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Revoke the token and then connect again, so that other clients can reconnect:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            unified_broker_interface.connect()
+            print(unified_broker_interface.disconnect())
+            unified_broker_interface.connect()
+            print(unified_broker_interface.status()["status"])
+            ```
+
+            Disconnect inside `try` and always reconnect in `finally`:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            unified_broker_interface.connect()
+            try:
+                answer = unified_broker_interface.disconnect()
+                print(f"UBI answered: {answer['status']}")
+                print(f"Token expiry now: {unified_broker_interface.token_expires_at}")
+            finally:
+                unified_broker_interface.connect()
+            ```
         """
         response_body = self._request("DELETE", "/api/session/disconnect")
         self._access_token = None
@@ -141,6 +191,30 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Print whether the session is connected and when its token expires:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            print(unified_broker_interface.status())
+            ```
+
+            Work out how long the current token has left:
+
+            ```python
+            import datetime
+
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            session = unified_broker_interface.status()
+            expires_at = datetime.datetime.fromisoformat(session["expires_at"])
+            remaining = expires_at - datetime.datetime.now()
+            print(f"{session['status']}, {remaining} left")
+            ```
         """
         return self._request("GET", "/api/session/status")
 
@@ -156,6 +230,46 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Read the last price of one share with query string parameters:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            answer = unified_broker_interface.get(
+                "/api/instruments/ltp",
+                params={
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "IDEA",
+                },
+            )
+            print(answer["symbol"], answer["last_price"])
+            ```
+
+            List the brokers UBI is connected to:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            brokers = unified_broker_interface.get("/api/brokers/details")
+            for broker in brokers:
+                print(broker["broker_name"])
+            ```
+
+            See how fresh each broker's funds are in UBI:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            funds = unified_broker_interface.get("/api/portfolio/funds")
+            for broker in funds["brokers"]:
+                print(broker["broker"], broker["status"], broker["as_of"])
+            ```
         """
         return self._request("GET", path, params=params)
 
@@ -179,6 +293,63 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Read the last prices of several shares in one list request:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            answer = unified_broker_interface.post(
+                "/api/instruments/ltp",
+                body={
+                    "instruments": [
+                        {
+                            "exchange": "nse",
+                            "segment": "equities",
+                            "symbol": "IDEA",
+                        },
+                        {
+                            "exchange": "nse",
+                            "segment": "equities",
+                            "symbol": "INFY",
+                        },
+                    ],
+                },
+            )
+            for result in answer["results"]:
+                print(result["data"]["symbol"], result["data"]["last_price"])
+            ```
+
+            Look up the lot and tick size of two instruments at once, with a longer timeout:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            answer = unified_broker_interface.post(
+                "/api/instruments/details",
+                body={
+                    "instruments": [
+                        {
+                            "exchange": "nse",
+                            "segment": "equities",
+                            "symbol": "TCS",
+                        },
+                        {
+                            "exchange": "nse",
+                            "segment": "equity_indices",
+                            "symbol": "NIFTY",
+                        },
+                    ],
+                },
+                timeout_seconds=60,
+            )
+            for result in answer["results"]:
+                details = result["data"]
+                print(details["symbol"], details["lot_size"], details["tick_size"])
+            ```
         """
         return self._request(
             "POST",
@@ -206,6 +377,48 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Change the price of a held limit order through `PUT /api/orders/modify`, then cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="mis")
+            try:
+                unified_broker_interface = idea.shared_unified_broker_interface()
+                changed = unified_broker_interface.put(
+                    "/api/orders/modify",
+                    body={
+                        "parent_id": answer["parent_id"],
+                        "price": round(price - 0.05, 2),
+                    },
+                )
+                print(changed["outcome"], changed["price"])
+            finally:
+                idea.cancel_parent(answer["parent_id"])
+            ```
+
+            Handle the error UBI answers for a parent id it does not hold:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+            from tradingmachine.unified_broker_interface import exceptions
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            try:
+                unified_broker_interface.put(
+                    "/api/orders/modify",
+                    body={
+                        "parent_id": "00000000-0000-0000-0000-000000000000",
+                        "price": 10.0,
+                    },
+                )
+            except exceptions.NotFoundError as error:
+                print(error.status_code, error.message)
+            ```
         """
         return self._request("PUT", path, params=params, body=body)
 
@@ -227,6 +440,39 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Handle the error for a route that does not take PATCH, since UBI has no PATCH route today:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+            from tradingmachine.unified_broker_interface import exceptions
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            try:
+                unified_broker_interface.patch("/api/session/status")
+            except exceptions.UnifiedBrokerInterfaceError as error:
+                print(type(error).__name__, error.status_code)
+            ```
+
+            Send a body with PATCH and report the status code UBI answers:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+            from tradingmachine.unified_broker_interface import exceptions
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            try:
+                answer = unified_broker_interface.patch(
+                    "/api/orders/modify",
+                    body={
+                        "parent_id": "00000000-0000-0000-0000-000000000000",
+                    },
+                )
+                print(answer)
+            except exceptions.UnifiedBrokerInterfaceError as error:
+                print(f"UBI answered HTTP {error.status_code}")
+            ```
         """
         return self._request("PATCH", path, params=params, body=body)
 
@@ -248,6 +494,44 @@ class UnifiedBrokerInterface:
 
         Raises:
             UnifiedBrokerInterfaceError: The server reported a failure or could not be reached.
+
+        Examples:
+            Cancel a held limit order with `DELETE /api/orders/parents`:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="mis")
+            unified_broker_interface = idea.shared_unified_broker_interface()
+            cancelled = unified_broker_interface.delete(
+                "/api/orders/parents",
+                body={
+                    "parent_id": answer["parent_id"],
+                },
+            )
+            print(cancelled["synthetic_type"], cancelled["state"])
+            ```
+
+            Handle the error for cancelling an order id no broker holds:
+
+            ```python
+            from tradingmachine.unified_broker_interface import client
+            from tradingmachine.unified_broker_interface import exceptions
+
+            unified_broker_interface = client.UnifiedBrokerInterface()
+            try:
+                unified_broker_interface.delete(
+                    "/api/orders/cancel",
+                    body={
+                        "order_id": "000000000000",
+                        "dry_run": True,
+                    },
+                )
+            except exceptions.NotFoundError as error:
+                print(error.status_code, error.message)
+            ```
         """
         return self._request("DELETE", path, params=params, body=body)
 

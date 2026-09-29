@@ -73,6 +73,45 @@ class Account:
             ServiceUnavailableError: UBI could not read the order books or positions.
             UnreachableError: No answer arrived within the timeout, so part of the flatten may have happened.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Preview what a flatten would cancel and close, without sending anything:
+
+            ```python
+            from tradingmachine.accounts import account
+
+            trading_account = account.Account()
+            preview = trading_account.flatten(confirm="FLATTEN", dry_run=True)
+            print(f"Would cancel: {preview['would_cancel']}")
+            print(f"Would close: {preview['would_close']}")
+            ```
+
+            See UBI refuse a flatten whose confirmation word is not typed exactly:
+
+            ```python
+            from tradingmachine.accounts import account
+            from tradingmachine.unified_broker_interface import exceptions
+
+            trading_account = account.Account()
+            try:
+                trading_account.flatten(confirm="flatten", dry_run=True)
+            except exceptions.BadRequestError as error:
+                print(f"Refused: {error.message}")
+            ```
+
+            Flatten the whole account for real and check that it ended flat, which closes every position and cancels every order:
+
+            ```python
+            from tradingmachine.accounts import account
+
+            trading_account = account.Account()
+            outcome = trading_account.flatten(confirm="FLATTEN")
+            if outcome["flat"]:
+                print(f"The account is flat after {outcome['timing_ms']} ms.")
+            else:
+                print(outcome["still_open_after_waiting"])
+                print(outcome["positions_still_open_after_waiting"])
+            ```
         """
         body = {
             "confirm": confirm,
@@ -96,6 +135,29 @@ class Account:
         Raises:
             ServiceUnavailableError: UBI's parents could not be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print every parent the order engine is still working, or None when there is none:
+
+            ```python
+            from tradingmachine.accounts import account
+
+            trading_account = account.Account()
+            print(trading_account.parents)
+            ```
+
+            Count the open parents of each synthetic order type:
+
+            ```python
+            from tradingmachine.accounts import account
+
+            trading_account = account.Account()
+            parents = trading_account.parents
+            if parents is None:
+                print("No parent is open.")
+            else:
+                print(parents["synthetic_type"].value_counts())
+            ```
         """
         rows = self.unified_broker_interface.get(PARENTS_PATH)["parents"]
         if not rows:
@@ -117,6 +179,37 @@ class Account:
             NotFoundError: The engine has not answered this intent yet, the id is not one, or its answer has expired.
             ServiceUnavailableError: UBI could not read its store.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Read the engine's stored answer to a held limit order by its `intent_id`, then cancel the order:
+
+            ```python
+            from tradingmachine.accounts import account
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="mis")
+            try:
+                trading_account = account.Account()
+                engine_answer = trading_account.intent(answer["intent_id"])
+                print(engine_answer["status"], engine_answer["response"]["outcome"])
+            finally:
+                idea.cancel_parent(answer["parent_id"])
+            ```
+
+            Handle an intent id the engine has no answer for:
+
+            ```python
+            from tradingmachine.accounts import account
+            from tradingmachine.unified_broker_interface import exceptions
+
+            trading_account = account.Account()
+            try:
+                trading_account.intent("00000000-0000-0000-0000-000000000000")
+            except exceptions.NotFoundError as error:
+                print(error.message)
+            ```
         """
         return self.unified_broker_interface.get(
             INTENT_PATH.format(intent_id=intent_id),

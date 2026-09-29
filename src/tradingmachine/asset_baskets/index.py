@@ -99,6 +99,51 @@ class Index(asset_basket.AssetBasket):
 
         Raises:
             BasketMemberError: The weighting is `price` and a member has no last price.
+
+        Examples:
+            Print the weights of an equal-weighted index:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(name="IT", members=members, weighting="equal")
+            print(it_index.weights)
+            ```
+
+            Print the weights of a price-weighted index, which follow the last prices:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(name="IT", members=members, weighting="price")
+            print(it_index.weights.round(3))
+            ```
         """
         if self.weighting == EQUAL_WEIGHTING:
             return pd.Series(1 / self.size, index=self.labels, dtype=float)
@@ -118,6 +163,62 @@ class Index(asset_basket.AssetBasket):
         Raises:
             AssetBasketError: No base_date is set.
             BasketMemberError: A member has no candle on or just after base_date, or no last price.
+
+        Examples:
+            Print today's level of an index that started at 1000 on the first trading day of the year:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(
+                name="IT",
+                members=members,
+                weighting="equal",
+                base_value=1000,
+                base_date="2026-01-01",
+            )
+            print(f"{it_index.name}: {it_index.level:.2f}")
+            ```
+
+            See an index without a base date refuse to give a level:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+
+            it_index = index.Index(name="IT", members=members, weighting="equal")
+            try:
+                print(it_index.level)
+            except exceptions.AssetBasketError as error:
+                print(error)
+            ```
         """
         if self.base_date is None:
             raise exceptions.AssetBasketError(
@@ -157,6 +258,58 @@ class Index(asset_basket.AssetBasket):
         Raises:
             BasketMemberError: A member has no last price, or the capital buys no unit of any member.
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Turn one lakh rupees into whole shares of each member:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(name="IT", members=members, weighting="equal")
+            holdings = it_index.to_portfolio(capital=100000)
+            print(holdings.quantities)
+            print(f"Worth Rs {holdings.value:,.2f} of the Rs 100,000")
+            ```
+
+            See a sum too small for one share of anything refused:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import exceptions
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+
+            it_index = index.Index(name="IT", members=members, weighting="equal")
+            try:
+                it_index.to_portfolio(capital=500, name="too small")
+            except exceptions.BasketMemberError as error:
+                print(error)
+            ```
         """
         weights = self.weights
         last_prices = self._last_prices_by_instrument_id(self.instruments)
@@ -192,6 +345,57 @@ class Index(asset_basket.AssetBasket):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the index settings a stored index keeps:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(
+                name="IT",
+                members=members,
+                weighting="equal",
+                base_date="2026-01-01",
+            )
+            document = it_index.document(effective_date="2026-10-01")
+            print(document["kind"], document["weighting"], document["base_date"])
+            ```
+
+            See that an index without a base date stores None for it:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import index
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HCLTECH",
+                "WIPRO",
+                "TECHM",
+            ]
+            members = []
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share))
+            it_index = index.Index(name="IT", members=members, weighting="price")
+            print(it_index.document()["base_date"])
+            ```
         """
         document = super().document(effective_date)
         document["weighting"] = self.weighting

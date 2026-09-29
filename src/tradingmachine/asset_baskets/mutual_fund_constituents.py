@@ -54,12 +54,131 @@ class MutualFundConstituents(asset_basket.AssetBasket):
 
     @property
     def fund(self) -> instruments.Instrument | None:
-        """The tradingmachine.assets.instruments.Instrument of the scheme these are the holdings of, or None when none is linked."""
+        """The tradingmachine.assets.instruments.Instrument of the scheme these are the holdings of, or None when none is linked.
+
+        Examples:
+            Print the scheme the holdings belong to:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            print(holdings.fund.symbol, holdings.fund.segment)
+            ```
+
+            See that the scheme has no price of its own, which is why its holdings are measured instead:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            print(holdings.fund.prices(days=30))
+            print(holdings.sharpe_ratio(risk_free_rate=0.065, days=365))
+            ```
+        """
         return self.linked_instrument
 
     @property
     def estimated_day_change_percent(self) -> float | None:
-        """The float estimated move of the fund's net asset value today, in percent: the holdings' weighted move scaled down by the share UBI cannot price, or None when any holding has no quote, read from UBI on every access."""
+        """The float estimated move of the fund's net asset value today, in percent: the holdings' weighted move scaled down by the share UBI cannot price, or None when any holding has no quote, read from UBI on every access.
+
+        Examples:
+            Print today's estimated move of the scheme's net asset value:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            change = holdings.estimated_day_change_percent
+            print(f"Estimated move: {change:+.3f}%")
+            ```
+
+            Compare the holdings' own move with the estimate scaled down for the unpriced share:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            print(holdings.day_change_percent)
+            print(holdings.estimated_day_change_percent)
+            ```
+        """
         holdings_change = self.day_change_percent
         if holdings_change is None:
             return None
@@ -78,6 +197,69 @@ class MutualFundConstituents(asset_basket.AssetBasket):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Estimate today's net asset value from yesterday's published one:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            estimate = holdings.estimated_net_asset_value(
+                previous_net_asset_value=45.62
+            )
+            print(f"Estimated net asset value: Rs {estimate:.4f}")
+            ```
+
+            Estimate what a holding of 1,000 units is worth today:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import mutual_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import mutual_funds
+
+            weights = {
+                "HDFCBANK": 9.0,
+                "ICICIBANK": 7.5,
+                "INFY": 6.0,
+                "RELIANCE": 5.5,
+            }
+            members = []
+            for symbol, weight in weights.items():
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                members.append(basket_member.BasketMember(share, weight=weight))
+            scheme = mutual_funds.MutualFund(exchange="nse", symbol="ABSLFTTIDG")
+            holdings = mutual_fund_constituents.MutualFundConstituents(
+                name="ABSLFTTIDG",
+                members=members,
+                fund=scheme,
+                unmapped_weight=0.05,
+            )
+            estimate = holdings.estimated_net_asset_value(
+                previous_net_asset_value=45.62
+            )
+            print(f"1,000 units: Rs {estimate * 1000:,.2f}")
+            ```
         """
         change = self.estimated_day_change_percent
         if change is None:
