@@ -110,11 +110,13 @@ An identity row carries `instrument_id`, `exchange`, `segment`, `shape`, `symbol
 
 `expiries` and `strikes` return plain lists rather than frames, because a single column of values is not a table.
 
-## Why a derivative does not hold its underlying
+## Why a derivative did not hold its underlying, until 2026-09-28
 
 The first plan had each futures and option contract build an object for its underlying share or index and keep it. The user removed that on 2026-09-20, and the module has no `underlying` attribute.
 
 Beyond the extra request per contract, which would double the cost of building an option chain, UBI gives no reliable way to make the link. There is no foreign key and no `underlying_instrument_id`: a derivative is joined to its underlying only by its `underlying_symbol` string matching a cash or index instrument's `symbol`. For shares that holds, because NSE equity symbols have their series suffix stripped during mapping. For indices it rests on an alias table. `NSE_INDEX_ALIASES` in UBI's `stock_brokers/instruments/mapping/zerodha.py` normalises the published spellings onto the derivative's underlying symbol, so Kite's `NIFTY 50` index row is stored as `NIFTY` and `NIFTYBANK` as `BANKNIFTY`, covering `NIFTY`, `BANKNIFTY`, `FINNIFTY`, `MIDCPNIFTY` and `NIFTYNXT50`. `NIFTYFPI` is not in that table and falls back to a secondary master lookup, and the BSE indices rely on the published spelling already matching. A caller that wants the underlying builds it itself and can decide what to do when it is not there.
+
+This section is history. On 2026-09-28 the user asked for the derivative base classes, and every futures and option constructor now takes an optional `underlying`, which the contract keeps. UBI also gained an `underlying_instrument_id` in its details answer, resolved from the brokers' own underlying codes, so a contract given no underlying tries that link first and falls back to its family's default after it. `UnderlyingError` is raised when neither works. The current mechanism is described in `.claude/notes/src/tradingmachine/assets/instruments.py.md`.
 
 ## Verified on 2026-09-20
 
