@@ -118,6 +118,50 @@ class Currency(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the pairs on the nse that involve the US dollar:
+
+            ```python
+            from tradingmachine.assets import currencies
+
+            matches = currencies.Currency.search(exchange="nse", term="USD")
+            print(matches["symbol"].tolist())
+            ```
+
+            Find the bse's over-the-counter variants of the pairs:
+
+            ```python
+            from tradingmachine.assets import currencies
+
+            matches = currencies.Currency.search(
+                exchange="bse",
+                term="OTC",
+                limit=200,
+            )
+            print(matches["symbol"].tolist())
+            ```
+
+            Count the pairs each exchange carries, since an empty term matches them all:
+
+            ```python
+            from tradingmachine.assets import currencies
+
+            exchanges = [
+                "nse",
+                "bse",
+            ]
+            for exchange in exchanges:
+                matches = currencies.Currency.search(
+                    exchange=exchange,
+                    term="",
+                    limit=200,
+                )
+                if matches is None:
+                    print(f"{exchange}: 0 pairs")
+                else:
+                    print(f"{exchange}: {len(matches)} pairs")
+            ```
         """
         return cls._search_catalogue(
             exchange,
@@ -290,6 +334,39 @@ class CurrencyIndex(instruments.NonTradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Search the nse for a currency index, which finds none today because UBI carries none:
+
+            ```python
+            from tradingmachine.assets import currencies
+
+            matches = currencies.CurrencyIndex.search(exchange="nse", term="")
+            if matches is None:
+                print("UBI carries no currency index on the nse.")
+            else:
+                print(matches["symbol"].tolist())
+            ```
+
+            Check both exchanges that trade currencies, so the answer changes the day UBI gains an index:
+
+            ```python
+            from tradingmachine.assets import currencies
+
+            exchanges = [
+                "nse",
+                "bse",
+            ]
+            for exchange in exchanges:
+                matches = currencies.CurrencyIndex.search(
+                    exchange=exchange,
+                    term="USD",
+                )
+                if matches is None:
+                    print(f"{exchange}: no currency index")
+                else:
+                    print(f"{exchange}: {len(matches)} indices")
+            ```
         """
         return cls._search_catalogue(
             exchange,

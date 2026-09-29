@@ -297,6 +297,50 @@ class Instrument(
 
         Raises:
             ValueError: The client's base url or MongoDB credentials are not configured.
+
+        Examples:
+            Show that every instrument built without a client of its own shares the one client, and ask it whether the session is connected:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            shared_client = instruments.Instrument.shared_unified_broker_interface()
+            again = instruments.Instrument.shared_unified_broker_interface()
+            print(shared_client is again)
+            print(shared_client.status())
+            ```
+
+            Send a raw request to a UBI route that has no method of its own, here the last price of Infosys, through the shared client:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            shared_client = instruments.Instrument.shared_unified_broker_interface()
+            answer = shared_client.get(
+                "/api/instruments/ltp",
+                params={
+                    "exchange": "nse",
+                    "segment": "equities",
+                    "symbol": "INFY",
+                },
+            )
+            print(answer["last_price"])
+            ```
+
+            Hand the shared client to an instrument explicitly, as code that manages its own clients would:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            shared_client = instruments.Instrument.shared_unified_broker_interface()
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+                unified_broker_interface=shared_client,
+            )
+            print(infosys, infosys.last_price)
+            ```
         """
         if Instrument._shared_unified_broker_interface is None:
             Instrument._shared_unified_broker_interface = (
@@ -654,6 +698,67 @@ class Instrument(
         Raises:
             BadRequestError: The range or interval is invalid, such as both days and from_date given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the last five daily candles of Infosys:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+            candles = infosys.prices(interval="day", days=10)
+            columns = [
+                "datetime",
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+            ]
+            print(candles[columns].tail(5))
+            ```
+
+            Work out the Nifty index's return over a fixed range of dates from its first and last close:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            nifty = instruments.NonTradeableInstrument(
+                exchange="nse",
+                segment="equity_indices",
+                symbol="NIFTY",
+            )
+            candles = nifty.prices(
+                interval="day",
+                from_date="2026-01-01",
+                to_date="2026-06-30",
+            )
+            first_close = candles["close"].iloc[0]
+            last_close = candles["close"].iloc[-1]
+            change_percent = (last_close - first_close) / first_close * 100
+            print(f"Nifty from {first_close} to {last_close}: {change_percent:.2f}%")
+            ```
+
+            Compare adjusted and unadjusted closes of Reliance over five years, where a split or bonus shows up as a price factor below 1:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+            adjusted = reliance.prices(days=1825, adjusted=True)
+            unadjusted = reliance.prices(days=1825, adjusted=False)
+            print("First adjusted close:", adjusted["close"].iloc[0])
+            print("First unadjusted close:", unadjusted["close"].iloc[0])
+            print("Smallest price factor:", adjusted["price_factor"].min())
+            ```
         """
         parameters = {
             "instrument_id": self.instrument_id,
@@ -695,6 +800,42 @@ class Instrument(
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the headline fields of the full quote for Infosys:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+            quote = infosys.quote
+            print("Last price:", quote["last_price"])
+            print("Previous close:", quote["previous_close"])
+            print("Change percent:", quote["change_percent"])
+            print("Volume:", quote["volume"])
+            print("Served by:", quote["broker"], "from", quote["source"])
+            ```
+
+            Check whether the quote is stale before trusting it, which UBI reports in the quote itself:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+            quote = reliance.quote
+            if quote["stale"]:
+                print("The quote has been stale since", quote["stale_since"])
+            else:
+                print("The quote is fresh:", quote["last_price"])
+            ```
         """
         return self._unified_broker_interface.get(
             "/api/instruments/quote",
@@ -713,6 +854,57 @@ class Instrument(
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the last traded price of Infosys:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+            print(infosys.last_price)
+            ```
+
+            Print the last price of three indices side by side:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            symbols = [
+                "NIFTY",
+                "BANKNIFTY",
+                "FINNIFTY",
+            ]
+            for symbol in symbols:
+                index = instruments.NonTradeableInstrument(
+                    exchange="nse",
+                    segment="equity_indices",
+                    symbol=symbol,
+                )
+                print(f"{symbol}: {index.last_price}")
+            ```
+
+            Value a hypothetical holding of 25 Infosys shares at the last price:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+            share_count = 25
+            last_price = infosys.last_price
+            if last_price is None:
+                print("UBI has no last price for Infosys.")
+            else:
+                print(f"{share_count} shares are worth Rs {share_count * last_price:.2f}")
+            ```
         """
         response = self._unified_broker_interface.get(
             "/api/instruments/ltp",
@@ -732,6 +924,45 @@ class Instrument(
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the day's range of the Nifty index so far:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            nifty = instruments.NonTradeableInstrument(
+                exchange="nse",
+                segment="equity_indices",
+                symbol="NIFTY",
+            )
+            day = nifty.ohlc
+            print("Open:", day["ohlc"]["open"])
+            print("High:", day["ohlc"]["high"])
+            print("Low:", day["ohlc"]["low"])
+            print("Last:", day["last_price"])
+            print("Previous close:", day["previous_close"])
+            ```
+
+            Say whether Infosys opened with a gap up or a gap down against the previous close:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+            day = infosys.ohlc
+            opening_price = day["ohlc"]["open"]
+            previous_close = day["previous_close"]
+            gap_percent = (opening_price - previous_close) / previous_close * 100
+            if gap_percent > 0:
+                print(f"Gap up of {gap_percent:.2f}%")
+            else:
+                print(f"Gap down of {-gap_percent:.2f}%")
+            ```
         """
         return self._unified_broker_interface.get(
             "/api/instruments/ohlc",
@@ -803,6 +1034,39 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print every level on the buy side of the Infosys order book, best first:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            for level in infosys.bids:
+                print(level["price"], level["quantity"], level["orders"])
+            ```
+
+            Add up how many shares are bid for across the visible levels of the Reliance book:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            total_quantity = 0
+            for level in reliance.bids:
+                total_quantity = total_quantity + level["quantity"]
+            print(f"{len(reliance.bids)} levels bid for {total_quantity} shares")
+            ```
         """
         return self.quote["depth"]["buy"]
 
@@ -815,6 +1079,42 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print every level on the sell side of the Infosys order book, best first:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            for level in infosys.asks:
+                print(level["price"], level["quantity"], level["orders"])
+            ```
+
+            Compare the quantity offered with the quantity bid in the visible book, a rough measure of selling pressure:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            offered = 0
+            for level in reliance.asks:
+                offered = offered + level["quantity"]
+            bid = 0
+            for level in reliance.bids:
+                bid = bid + level["quantity"]
+            print(f"Offered {offered} against bid {bid}")
+            ```
         """
         return self.quote["depth"]["sell"]
 
@@ -827,6 +1127,44 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the highest bid for Infosys, or say that nobody is bidding:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            best_bid = infosys.best_bid
+            if best_bid is None:
+                print("Nobody is bidding.")
+            else:
+                print(f"{best_bid['quantity']} shares bid at {best_bid['price']}")
+            ```
+
+            Measure how far the best bid is below the last traded price:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            best_bid = reliance.best_bid
+            last_price = reliance.last_price
+            if best_bid is None or last_price is None:
+                print("The book or the last price is empty.")
+            else:
+                print(f"The best bid is {last_price - best_bid['price']:.2f} below")
+            ```
         """
         return self._best_level(self.bids)
 
@@ -839,6 +1177,46 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the lowest offer for Infosys, or say that nobody is offering:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            best_offer = infosys.best_offer
+            if best_offer is None:
+                print("Nobody is offering.")
+            else:
+                print(f"{best_offer['quantity']} shares offered at {best_offer['price']}")
+            ```
+
+            Work out what buying 10 shares at the best offer would cost, when that level holds enough:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            wanted_quantity = 10
+            best_offer = reliance.best_offer
+            if best_offer is None:
+                print("Nobody is offering.")
+            elif best_offer["quantity"] < wanted_quantity:
+                print("The best offer is too small for 10 shares.")
+            else:
+                print(f"Cost: Rs {best_offer['price'] * wanted_quantity:.2f}")
+            ```
         """
         return self._best_level(self.asks)
 
@@ -851,6 +1229,64 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the spread of Infosys in rupees:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.bid_offer_spread)
+            ```
+
+            Express the spread in ticks, which says how liquid the book is:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            spread = reliance.bid_offer_spread
+            if spread is None:
+                print("One side of the book is empty.")
+            else:
+                ticks = round(spread / float(reliance.tick_size))
+                print(f"The spread is {spread:.2f} rupees, or {ticks} ticks")
+            ```
+
+            Rank three shares by their spread as a percentage of the last price:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            symbols = [
+                "INFY",
+                "TCS",
+                "HDFCBANK",
+            ]
+            for symbol in symbols:
+                share = instruments.TradeableInstrument(
+                    exchange="nse",
+                    segment="equities",
+                    symbol=symbol,
+                )
+                spread = share.bid_offer_spread
+                last_price = share.last_price
+                if spread is None or last_price is None:
+                    print(f"{symbol}: no two-sided book")
+                else:
+                    print(f"{symbol}: {spread / last_price * 100:.4f}%")
+            ```
         """
         depth = self.quote["depth"]
         best_bid = self._best_level(depth["buy"])
@@ -868,6 +1304,42 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the mid price of Infosys:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.mid_price)
+            ```
+
+            Compare the mid price with the last traded price to see which side traded last:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            mid_price = reliance.mid_price
+            last_price = reliance.last_price
+            if mid_price is None or last_price is None:
+                print("The book is one-sided or there is no last price.")
+            elif last_price >= mid_price:
+                print(f"Last {last_price} is at or above mid {mid_price}")
+            else:
+                print(f"Last {last_price} is below mid {mid_price}")
+            ```
         """
         depth = self.quote["depth"]
         best_bid = self._best_level(depth["buy"])
@@ -885,6 +1357,42 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print today's volume weighted average price of Infosys:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.volume_weighted_average_price)
+            ```
+
+            Say whether Reliance is trading above or below its average price for the day, a common intraday bias check:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            average_price = reliance.volume_weighted_average_price
+            last_price = reliance.last_price
+            if average_price is None or last_price is None:
+                print("The average price or the last price is unknown.")
+            elif last_price > average_price:
+                print(f"Above the average: {last_price} > {average_price}")
+            else:
+                print(f"At or below the average: {last_price} <= {average_price}")
+            ```
         """
         return self.quote["average_price"]
 
@@ -897,6 +1405,40 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the size of the last Infosys trade:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.last_quantity)
+            ```
+
+            Show the value of the last Reliance trade in rupees:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            last_quantity = reliance.last_quantity
+            last_price = reliance.last_price
+            if last_quantity is None or last_price is None:
+                print("The last trade is unknown.")
+            else:
+                print(f"Rs {last_quantity * last_price:.2f} changed hands last")
+            ```
         """
         return self.quote["last_quantity"]
 
@@ -909,6 +1451,41 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print how many Infosys shares have traded today:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.total_traded_volume)
+            ```
+
+            Compare today's volume with the average daily volume of the last month:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+
+            candles = reliance.prices(days=30)
+            average_volume = candles["volume"].mean()
+            today_volume = reliance.total_traded_volume
+            if today_volume is None:
+                print("Today's volume is unknown.")
+            else:
+                print(f"Today is {today_volume / average_volume:.2f} times average")
+            ```
         """
         return self.quote["volume"]
 
@@ -921,6 +1498,61 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print the open interest of the nearest Nifty future:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future, nifty_future.open_interest)
+            ```
+
+            Express the open interest of the nearest Nifty future in lots rather than units:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            open_interest = nifty_future.open_interest
+            if open_interest is None or nifty_future.lot_size is None:
+                print("The open interest or the lot size is unknown.")
+            else:
+                print(f"{open_interest // nifty_future.lot_size} lots are open")
+            ```
+
+            Show that a share has no open interest, so the property is None:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.open_interest)
+            ```
         """
         return self.quote["oi"]
 
@@ -933,6 +1565,42 @@ class TradeableInstrument(Instrument):
 
         Raises:
             UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
+
+        Examples:
+            Print when Infosys last traded, in India time:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            infosys = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="INFY",
+            )
+
+            print(infosys.last_trade_time)
+            ```
+
+            Work out how many seconds ago Reliance last traded, a quick check that the feed is alive:
+
+            ```python
+            import datetime
+
+            from tradingmachine.assets import instruments
+
+            reliance = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="RELIANCE",
+            )
+            last_trade_time = reliance.last_trade_time
+            if last_trade_time is None:
+                print("The broker does not report the last trade time.")
+            else:
+                now = datetime.datetime.now(last_trade_time.tzinfo)
+                seconds = (now - last_trade_time).total_seconds()
+                print(f"Last traded {seconds:.0f} seconds ago")
+            ```
         """
         epoch_seconds = self.quote["last_trade_time"]
         if epoch_seconds is None:
@@ -995,6 +1663,68 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: No broker could take the order, the order engine is not running, or a price reference could not be resolved.
             OrderOutcomeUnknownError: The order was sent but its outcome is unknown, so read the order book, or `Account.intent` with the detail's `intent_id`, before sending it again.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Have UBI build a limit buy for one Vodafone Idea share without sending it, and print the request it would send:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.place_order(
+                transaction_type="buy",
+                order_type="limit",
+                quantity=1,
+                product="cnc",
+                price=price,
+                dry_run=True,
+            )
+            print(answer)
+            ```
+
+            Place a plain limit buy 3 per cent below the market, which the order engine holds until a seller reaches the price, and cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.place_order(
+                transaction_type="buy",
+                order_type="limit",
+                quantity=1,
+                product="cnc",
+                price=price,
+            )
+            try:
+                print(answer["outcome"], answer["parent_id"], answer["order_id"])
+            finally:
+                print(idea.cancel_parent(answer["parent_id"])["state"])
+            ```
+
+            Describe the price rather than state it, here the third best bid, and see the price UBI works out in a dry run:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            answer = idea.place_order(
+                transaction_type="buy",
+                order_type="limit",
+                quantity=1,
+                product="mis",
+                price_reference={
+                    "kind": "bid_level",
+                    "level": 3,
+                },
+                dry_run=True,
+            )
+            print(answer)
+            ```
         """
         body = {
             "instrument_id": self.instrument_id,
@@ -1066,6 +1796,123 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: The broker's order rate budget was full, so the change was not sent.
             OrderOutcomeUnknownError: The change was sent but its outcome is unknown.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Lower the price of a held limit buy from 3 to 4 per cent below the market, naming it by its parent id, then cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            try:
+                new_price = round(idea.last_price * 0.96, 2)
+                changed = idea.modify_order(parent_id=parent_id, price=new_price)
+                print(changed["outcome"], changed["price"], changed["held"])
+            finally:
+                print(idea.cancel_parent(parent_id)["state"])
+            ```
+
+            Send a limit buy 3 per cent below the market to the broker at once, wait for it to reach the order book, lower its price by a tick, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 0.97, 2)
+                answer = idea.buy_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], answer["broker"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                changed = idea.modify_order(
+                    order_id=order_id,
+                    price=round(price - 0.01, 2),
+                )
+                print(changed["broker"], changed["outcome"])
+                print(idea.cancel_order(order_id)["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         body = {
             "dry_run": dry_run,
@@ -1116,6 +1963,194 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: The broker's order rate budget was full, so the cancellation was not sent.
             OrderOutcomeUnknownError: The cancellation was sent but its outcome is unknown.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Send a limit buy 3 per cent below the market to the broker at once, wait for it to reach the order book, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 0.97, 2)
+                answer = idea.buy_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], answer["broker"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                cancelled = idea.cancel_order(order_id)
+                print(cancelled["broker"], cancelled["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Look at the cancel request UBI would send in a dry run first, then cancel a resting sell 3 per cent above the market for real:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 1.03, 2)
+                answer = idea.sell_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                print(idea.cancel_order(order_id, dry_run=True))
+                print(idea.cancel_order(order_id)["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         body = {
             "order_id": order_id,
@@ -1137,6 +2172,130 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve, or UBI's parents could not be read.
             UnifiedBrokerInterfaceError: The order book or the parents could not be read for any other reason, or the list of cancels was refused whole. A failure to cancel one order or parent is reported in the frame instead.
+
+        Examples:
+            Place a held limit buy and a limit buy sent to the broker, then cancel everything still waiting in Vodafone Idea in one call:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                held = idea.buy_at_limit_price(
+                    price=round(idea.last_price * 0.97, 2),
+                    quantity=1,
+                    product="cnc",
+                )
+                answers.append(held)
+                price = round(idea.last_price * 0.96, 2)
+                answer = idea.buy_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], answer["broker"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                outcomes = idea.cancel_open_orders()
+                print(outcomes[["parent_id", "order_id", "cancelled", "error"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Place two held limit orders on either side of the market, cancel them together, and check that no parent is left open:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            last_price = idea.last_price
+            idea.buy_at_limit_price(
+                price=round(last_price * 0.97, 2),
+                quantity=1,
+                product="mis",
+            )
+            idea.sell_at_limit_price(
+                price=round(last_price * 1.03, 2),
+                quantity=1,
+                product="mis",
+            )
+            outcomes = idea.cancel_open_orders()
+            print(len(outcomes), "cancelled:", list(outcomes["cancelled"]))
+            print("Open parents left:", idea.parents)
+            ```
         """
         outcomes = []
         cancelled_parent_ids = []
@@ -1247,6 +2406,38 @@ class TradeableInstrument(Instrument):
         Raises:
             ServiceUnavailableError: UBI's parents could not be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the parents UBI's order engine is still working in Vodafone Idea:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            parents = idea.parents
+            if parents is None:
+                print("No parent is open in IDEA.")
+            else:
+                print(parents[["parent_order_id", "synthetic_type", "state"]])
+            ```
+
+            Hold a buy limit order 3 per cent below the market, find it among the parents, and cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            try:
+                parents = idea.parents
+                mine = parents[parents["parent_order_id"] == answer["parent_id"]]
+                print(mine[["parent_order_id", "synthetic_type", "state"]])
+            finally:
+                print(idea.cancel_parent(answer["parent_id"])["state"])
+            ```
         """
         rows = self._unified_broker_interface.get(ORDER_PARENTS_PATH)["parents"]
         return self._frame_for_this_instrument(rows)
@@ -1266,6 +2457,39 @@ class TradeableInstrument(Instrument):
             NotFoundError: The order engine holds no parent with this id.
             ServiceUnavailableError: UBI's parents could not be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Read a held limit buy back from the order engine, then cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            try:
+                held = idea.parent(parent_id)
+                print(held["synthetic_type"], held["state"])
+                print(held["body"])
+            finally:
+                idea.cancel_parent(parent_id)
+            ```
+
+            Read a parent again after cancelling it, which works because the engine keeps finished parents too:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            idea.cancel_parent(parent_id)
+            print(idea.parent(parent_id)["state"])
+            ```
         """
         return self._unified_broker_interface.get(
             ORDER_PARENTS_PATH,
@@ -1294,6 +2518,41 @@ class TradeableInstrument(Instrument):
             ServiceUnavailableError: The order engine is not running.
             OrderOutcomeUnknownError: The engine did not answer in time.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Cancel a held limit buy and print the cancelled parent's state and legs:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            cancelled = idea.cancel_parent(parent_id)
+            print(cancelled["state"], cancelled["synthetic_type"])
+            print(cancelled["cancelled_legs"])
+            ```
+
+            Show that a parent that has already finished cannot be cancelled a second time:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea.cancel_parent(parent_id)
+            try:
+                idea.cancel_parent(parent_id)
+            except exceptions.ConflictError as error:
+                print("Refused:", error)
+            ```
         """
         return self._unified_broker_interface.delete(
             ORDER_PARENTS_PATH,
@@ -1315,6 +2574,117 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Show that a held limit buy has placed no broker order yet, then cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            try:
+                print(idea.parent_orders(parent_id))
+            finally:
+                idea.cancel_parent(parent_id)
+            ```
+
+            Send a limit buy to the broker at once and list the broker order its parent placed, then cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 0.97, 2)
+                answer = idea.buy_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], answer["broker"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                legs = idea.parent_orders(answer["parent_id"])
+                print(legs[["order_id", "leg_role", "status", "price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         rows = self._unified_broker_interface.get(
             ORDER_DETAILS_PATH,
@@ -1339,6 +2709,103 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's trade book could be read.
             ServiceUnavailableError: UBI's trade book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Show that a held limit buy has no trades, then cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            try:
+                print(idea.parent_trades(parent_id))
+            finally:
+                idea.cancel_parent(parent_id)
+            ```
+
+            Buy one Vodafone Idea share at once with a marketable limit as an intraday order, list the trades its parent made, which is None until the broker's trade book links them to the parent, and close the position again:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                bought = idea.buy_at_marketable_price(quantity=1, product="mis")
+                answers.append(bought)
+                time.sleep(3)
+                print(idea.parent_trades(bought["parent_id"]))
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         rows = self._unified_broker_interface.get(
             ORDER_TRADES_PATH,
@@ -1365,6 +2832,60 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print today's Vodafone Idea orders with their status, or None when there are none:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            orders = idea.orders
+            if orders is None:
+                print("No orders in IDEA today.")
+            else:
+                columns = [
+                    "order_id",
+                    "status",
+                    "transaction_type",
+                    "quantity",
+                    "price",
+                ]
+                print(orders[columns])
+            ```
+
+            Count today's orders in Vodafone Idea by status, which is how an order whose status has no property of its own, such as `EXPIRED`, is found:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            orders = idea.orders
+            if orders is None:
+                print("No orders in IDEA today.")
+            else:
+                print(orders["status"].value_counts())
+                expired = orders[orders["status"] == "EXPIRED"]
+                print(len(expired), "expired")
+            ```
+
+            Split today's Vodafone Idea orders by whether UBI's order engine placed them for a parent:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            orders = idea.orders
+            if orders is None:
+                print("No orders in IDEA today.")
+            else:
+                from_engine = orders[orders["engine_parent_id"].notna()]
+                print(len(from_engine), "of", len(orders), "orders came from a parent")
+                print(from_engine["leg_role"].value_counts())
+            ```
         """
         return self._orders_with_status(None)
 
@@ -1381,6 +2902,34 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the Vodafone Idea orders still waiting in the market:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            print(idea.open_orders)
+            ```
+
+            Add up the quantity still waiting to fill on each side of the Infosys book from this account's open orders:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            open_orders = infosys.open_orders
+            if open_orders is None:
+                print("Nothing is waiting in the market for INFY.")
+            else:
+                open_orders = open_orders.copy()
+                open_orders["remaining"] = (
+                    open_orders["quantity"] - open_orders["filled_quantity"]
+                )
+                print(open_orders.groupby("transaction_type")["remaining"].sum())
+            ```
         """
         return self._orders_with_status(OPEN_ORDER_STATUSES)
 
@@ -1395,6 +2944,44 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the Vodafone Idea orders that filled in full today:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            completed = idea.completed_orders
+            if completed is None:
+                print("Nothing filled in IDEA today.")
+            else:
+                print(completed[["order_id", "transaction_type", "average_price"]])
+            ```
+
+            Work out the average buying and selling prices of today's filled Vodafone Idea orders:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            completed = idea.completed_orders
+            if completed is None:
+                print("Nothing filled in IDEA today.")
+            else:
+                for side in [
+                    "BUY",
+                    "SELL",
+                ]:
+                    rows = completed[completed["transaction_type"].str.upper() == side]
+                    if rows.empty:
+                        continue
+                    spent = (rows["average_price"] * rows["filled_quantity"]).sum()
+                    quantity = rows["filled_quantity"].sum()
+                    print(side, quantity, "at", round(spent / quantity, 4))
+            ```
         """
         return self._orders_with_status(COMPLETED_ORDER_STATUSES)
 
@@ -1411,6 +2998,36 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print why each of today's refused Vodafone Idea orders was refused:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            rejected = idea.rejected_orders
+            if rejected is None:
+                print("Nothing was refused in IDEA today.")
+            else:
+                for row in rejected.to_dict("records"):
+                    print(row["order_id"], row["broker"], row["status_message"])
+            ```
+
+            Count today's refusals in Vodafone Idea by broker:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            rejected = idea.rejected_orders
+            if rejected is None:
+                print("Nothing was refused in IDEA today.")
+            else:
+                print(rejected["broker"].value_counts())
+            ```
         """
         return self._orders_with_status(REJECTED_ORDER_STATUSES)
 
@@ -1425,6 +3042,36 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's order book could be read.
             ServiceUnavailableError: UBI's order book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print today's cancelled Vodafone Idea orders:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            cancelled = idea.cancelled_orders
+            if cancelled is None:
+                print("Nothing was cancelled in IDEA today.")
+            else:
+                print(cancelled[["order_id", "broker", "price", "order_timestamp"]])
+            ```
+
+            Count how many of today's cancelled Vodafone Idea orders had partly filled first:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            cancelled = idea.cancelled_orders
+            if cancelled is None:
+                print("Nothing was cancelled in IDEA today.")
+            else:
+                partly_filled = cancelled[cancelled["filled_quantity"] > 0]
+                print(len(partly_filled), "of", len(cancelled), "had partly filled")
+            ```
         """
         return self._orders_with_status(CANCELLED_ORDER_STATUSES)
 
@@ -1467,6 +3114,43 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's trade book could be read.
             ServiceUnavailableError: UBI's trade book document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print today's Vodafone Idea trades:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            trades = idea.trades
+            if trades is None:
+                print("No trades in IDEA today.")
+            else:
+                columns = [
+                    "trade_id",
+                    "order_id",
+                    "transaction_type",
+                    "quantity",
+                    "price",
+                ]
+                print(trades[columns])
+            ```
+
+            Add up the value bought and sold in Vodafone Idea today from its trades:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            trades = idea.trades
+            if trades is None:
+                print("No trades in IDEA today.")
+            else:
+                totals = trades.groupby("transaction_type")["value"].sum()
+                print(totals)
+            ```
         """
         rows = self._unified_broker_interface.get(ORDER_TRADES_PATH)["trades"]
         return self._frame_for_this_instrument(rows)
@@ -1488,6 +3172,40 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's positions could be read.
             ServiceUnavailableError: UBI's positions document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the positions open in Vodafone Idea, or None when nothing is held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            positions = idea.net_positions
+            if positions is None:
+                print("Nothing is held in IDEA.")
+            else:
+                print(positions[["product", "quantity", "average_price", "last_price"]])
+            ```
+
+            Say whether each Reliance position is long or short, and under which product:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            positions = reliance.net_positions
+            if positions is None:
+                print("Nothing is held in RELIANCE.")
+            else:
+                for row in positions.to_dict("records"):
+                    if row["quantity"] > 0:
+                        print(row["product"], "long", row["quantity"])
+                    elif row["quantity"] < 0:
+                        print(row["product"], "short", -row["quantity"])
+                    else:
+                        print(row["product"], "flat, closed today")
+            ```
         """
         rows = self._unified_broker_interface.get(POSITIONS_PATH)["net"]
         return self._frame_for_this_instrument(rows)
@@ -1505,6 +3223,35 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's positions could be read.
             ServiceUnavailableError: UBI's positions document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print today's own positions in Vodafone Idea:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            print(idea.day_positions)
+            ```
+
+            Compare how many rows the day bucket and the net bucket report for Vodafone Idea:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            day_positions = idea.day_positions
+            net_positions = idea.net_positions
+            day_count = 0
+            if day_positions is not None:
+                day_count = len(day_positions)
+            net_count = 0
+            if net_positions is not None:
+                net_count = len(net_positions)
+            print(f"{day_count} day rows and {net_count} net rows")
+            ```
         """
         rows = self._unified_broker_interface.get(POSITIONS_PATH)["day"]
         return self._frame_for_this_instrument(rows)
@@ -1535,6 +3282,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at the market as an intraday order, print the price it filled at, and close it again through reduce_position, which UBI routes against the broker holding the position, until the position is back where it started:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opening = idea.buy_at_market_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(opening)
+                print("Opened:", opening["outcome"], opening["broker"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == opening["order_id"]]
+                print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Do the same round trip with a tag on the buy, so the order can be picked out of the order book later:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opening = idea.buy_at_market_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(opening)
+                print("Opened:", opening["outcome"], opening["broker"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == opening["order_id"]]
+                print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -1572,6 +3493,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at the market as an intraday order, print the price it filled at, and buy it back through reduce_position until the position is back where it started:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opening = idea.sell_at_market_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(opening)
+                print("Opened:", opening["outcome"], opening["broker"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == opening["order_id"]]
+                print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Do the same round trip with a tag on the sale:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opening = idea.sell_at_market_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(opening)
+                print("Opened:", opening["outcome"], opening["broker"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == opening["order_id"]]
+                print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -1615,6 +3710,116 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share 3 per cent below the market, which the order engine holds until a seller reaches the price, and cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            price = round(idea.last_price * 0.97, 2)
+            answer = idea.buy_at_limit_price(price=price, quantity=1, product="cnc")
+            parent_id = answer["parent_id"]
+
+            try:
+                print(answer["outcome"], "at", price, "as parent", parent_id)
+            finally:
+                print(idea.cancel_parent(parent_id)["state"])
+            ```
+
+            Send the bid to the broker at once instead of letting the engine hold it, wait for it to rest in the order book, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 0.97, 2)
+                answer = idea.buy_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], answer["broker"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                print(idea.cancel_order(order_id)["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         synthetic = None
         if not hold:
@@ -1665,6 +3870,116 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share 3 per cent above the market as an intraday order, which the order engine holds until a buyer reaches the price, and cancel it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            price = round(idea.last_price * 1.03, 2)
+            answer = idea.sell_at_limit_price(price=price, quantity=1, product="mis")
+            try:
+                print(answer["outcome"], "at", price, "as parent", answer["parent_id"])
+            finally:
+                print(idea.cancel_parent(answer["parent_id"])["state"])
+            ```
+
+            Send the offer to the broker at once with a tag, wait for it to rest in the order book, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                price = round(idea.last_price * 1.03, 2)
+                answer = idea.sell_at_limit_price(
+                    price=price,
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                    hold=False,
+                )
+                answers.append(answer)
+                order_id = answer["order_id"]
+                print(answer["outcome"], order_id)
+                for attempt in range(30):
+                    time.sleep(1)
+                    open_orders = idea.open_orders
+                    if open_orders is not None:
+                        if order_id in list(open_orders["order_id"]):
+                            break
+                print(idea.cancel_order(order_id)["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         synthetic = None
         if not hold:
@@ -1710,6 +4025,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the best bid as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the best bid as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -1752,6 +4241,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Buy one share with a limit at the best offer as an ordinary day order with a tag, cancel it if it is still resting, and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -1794,6 +4458,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the best offer as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the best offer with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -1836,6 +4674,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short with a limit at the best bid as an ordinary day order with a tag, cancel it if it is still resting, and buy back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -1878,6 +4891,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the mid price as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_mid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the mid price as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_mid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -1919,6 +5106,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the mid price as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_mid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the mid price with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_mid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -1960,6 +5321,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at today's volume weighted average price as an intraday order, which may fill or rest, then cancel whatever rests and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_volume_weighted_average_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at today's volume weighted average price as an immediate-or-cancel order, so nothing is left resting, and sell back anything that filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_volume_weighted_average_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2001,6 +5536,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share short at today's volume weighted average price as an intraday order, which may fill or rest, then cancel whatever rests and buy back whatever sold:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_volume_weighted_average_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at today's volume weighted average price as an immediate-or-cancel order, so nothing is left resting, and buy back anything that sold:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_volume_weighted_average_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2044,6 +5753,182 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_marketable_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Reach half a per cent past the best offer, which still fills at the best price available but tolerates the book moving, and sell back what filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_marketable_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                    buffer_percent=0.5,
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         price_reference = {
             "kind": "marketable",
@@ -2090,6 +5975,182 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_marketable_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Reach half a per cent below the best bid, which still fills at the best price available but tolerates the book moving, and buy back what sold:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_marketable_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                    buffer_percent=0.5,
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         price_reference = {
             "kind": "marketable",
@@ -2134,6 +6195,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the last traded price as an intraday order, which may fill or rest, then cancel whatever rests and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_last_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the last traded price as an immediate-or-cancel order, so nothing is left resting, and sell back anything that filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_last_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2175,6 +6410,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share short at the last traded price as an intraday order, which may fill or rest, then cancel whatever rests and buy back whatever sold:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_last_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the last traded price as an immediate-or-cancel order, so nothing is left resting, and buy back anything that sold:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_last_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2216,6 +6625,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the second best bid as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_second_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the second best bid as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_second_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2258,6 +6841,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the third best bid as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_third_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the third best bid as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_third_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2300,6 +7057,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the fourth best bid as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fourth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the fourth best bid as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fourth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2342,6 +7273,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one Vodafone Idea share at the fifth best bid as an intraday order, then cancel it, closing any share that filled in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fifth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same bid at the fifth best bid as an immediate-or-cancel order, which the exchange cancels at once unless a seller is already there:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fifth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2384,6 +7489,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the second best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_second_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short with a limit at the second best bid as an ordinary day order with a tag, cancel it if it is still resting, and buy back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_second_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2426,6 +7706,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the third best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_third_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short with a limit at the third best bid as an ordinary day order with a tag, cancel it if it is still resting, and buy back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_third_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2468,6 +7923,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the fourth best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fourth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short with a limit at the fourth best bid as an ordinary day order with a tag, cancel it if it is still resting, and buy back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fourth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2510,6 +8140,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Sell one Vodafone Idea share short at once with a limit at the fifth best bid as an immediate-or-cancel intraday order, then buy it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fifth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short with a limit at the fifth best bid as an ordinary day order with a tag, cancel it if it is still resting, and buy back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fifth_best_bid_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2552,6 +8357,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the second best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_second_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Buy one share with a limit at the second best offer as an ordinary day order with a tag, cancel it if it is still resting, and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_second_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2594,6 +8574,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the third best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_third_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Buy one share with a limit at the third best offer as an ordinary day order with a tag, cancel it if it is still resting, and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_third_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2636,6 +8791,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the fourth best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fourth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Buy one share with a limit at the fourth best offer as an ordinary day order with a tag, cancel it if it is still resting, and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fourth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2678,6 +9008,181 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share at once with a limit at the fifth best offer as an immediate-or-cancel intraday order, then sell it straight back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fifth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Buy one share with a limit at the fifth best offer as an ordinary day order with a tag, cancel it if it is still resting, and sell back whatever filled:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.buy_at_fifth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="buy",
@@ -2720,6 +9225,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the second best offer as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_second_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the second best offer with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_second_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2762,6 +9441,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the third best offer as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_third_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the third best offer with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_third_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2804,6 +9657,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the fourth best offer as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fourth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the fourth best offer with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fourth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2846,6 +9873,180 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid.
             OrderRejectedError: The broker refused the order.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one Vodafone Idea share at the fifth best offer as an intraday short sale, then cancel it, buying back any share that sold in the meantime:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fifth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Send the same offer at the fifth best offer with a tag, so it can be picked out of the order book later, and cancel it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                answer = idea.sell_at_fifth_best_offer_price(
+                    quantity=1,
+                    product="mis",
+                    tag="examples",
+                )
+                answers.append(answer)
+                print(answer["outcome"], answer["broker"], answer["order_id"])
+                time.sleep(3)
+                orders = idea.orders
+                mine = orders[orders["order_id"] == answer["order_id"]]
+                print(mine[["status", "price", "filled_quantity"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self.place_order(
             transaction_type="sell",
@@ -2878,6 +10079,37 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's positions could be read.
             ServiceUnavailableError: UBI's positions document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the Vodafone Idea positions are worth now, or None when nothing is held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            print(idea.positions_value)
+            ```
+
+            Add up the value of the positions in three shares, counting a short as negative:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            symbols = [
+                "IDEA",
+                "RELIANCE",
+                "INFY",
+            ]
+            total = 0.0
+            for symbol in symbols:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                value = share.positions_value
+                print(symbol, value)
+                if value is not None:
+                    total = total + value
+            print(f"Total: Rs {total:.2f}")
+            ```
         """
         frame = self.net_positions
         if frame is None:
@@ -2905,6 +10137,32 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's positions could be read.
             ServiceUnavailableError: UBI's positions document is missing or too old to serve.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the profit or loss on the Vodafone Idea positions, or None when nothing is held:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+
+            print(idea.positions_pnl)
+            ```
+
+            Say whether the Reliance positions are making or losing money overall:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            pnl = reliance.positions_pnl
+            if pnl is None:
+                print("Nothing is held in RELIANCE.")
+            elif pnl["total"] >= 0:
+                print(f"Up Rs {pnl['total']}, of which Rs {pnl['realized']} is booked")
+            else:
+                print(f"Down Rs {-pnl['total']}, of which Rs {pnl['realized']} is booked")
+            ```
         """
         frame = self.net_positions
         if frame is None:
@@ -2951,6 +10209,203 @@ class TradeableInstrument(Instrument):
         Raises:
             PositionError: Several positions are held and none was named, or the direction given contradicts the position held, or nothing is held and no direction and product were given.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Add one Vodafone Idea share to the intraday position with a limit a per cent above the market, so it fills at once even at a broker that refuses market orders, then add a second without naming a side, and sell both back until the position is where it started:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opened = idea.add_to_position(
+                    quantity=1,
+                    product="mis",
+                    transaction_type="buy",
+                    price=round(idea.last_price * 1.01, 2),
+                )
+                answers.append(opened)
+                print("Opened:", opened["outcome"])
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                added = idea.add_to_position(
+                    quantity=1,
+                    product="mis",
+                    price=round(idea.last_price * 1.01, 2),
+                )
+                answers.append(added)
+                print("Added:", added["outcome"])
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 2:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Show that naming a side against the position held is refused, because a sell would reduce a long position rather than add to it:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opened = idea.buy_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                from tradingmachine.assets import exceptions as asset_exceptions
+
+                try:
+                    idea.add_to_position(quantity=1, product="mis", transaction_type="sell")
+                except asset_exceptions.PositionError as error:
+                    print("Refused:", error)
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         frame = self._tradeable_positions()
         if frame is None:
@@ -3013,6 +10468,200 @@ class TradeableInstrument(Instrument):
             PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
             ConflictError: The product named is not held in this instrument.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy two Vodafone Idea shares intraday, reduce the position by one with a limit a per cent below the market, and sell the other back:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                opened = idea.buy_at_marketable_price(quantity=2, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 2:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                reduced = idea.reduce_position(
+                    quantity=1,
+                    product="mis",
+                    price=round(idea.last_price * 0.99, 2),
+                )
+                answers.append(reduced)
+                print("Reduced:", reduced["outcome"])
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Ask to reduce a one-share intraday position by five, which UBI caps at what is held, so the position closes and never turns short:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            if start != 0:
+                raise SystemExit("An intraday IDEA position is already open.")
+            answers = []
+            try:
+                opened = idea.buy_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                reduced = idea.reduce_position(
+                    quantity=5,
+                    product="mis",
+                    price=round(idea.last_price * 0.99, 2),
+                )
+                answers.append(reduced)
+                print("Reduced:", reduced["outcome"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self._place_to_close_position(
             kind="reduce_position",
@@ -3052,6 +10701,194 @@ class TradeableInstrument(Instrument):
             PositionError: No product was named and nothing is held, or several positions are held, or the product named is not `cnc`, `mis` or `nrml`.
             ConflictError: The product named is not held in this instrument.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Buy one Vodafone Idea share intraday and close the whole position, with a limit a per cent below the market because some brokers refuse market orders from an API:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            if start != 0:
+                raise SystemExit("An intraday IDEA position is already open.")
+            answers = []
+            try:
+                opened = idea.buy_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                closed = idea.liquidate_position(
+                    product="mis",
+                    price=round(idea.last_price * 0.99, 2),
+                )
+                answers.append(closed)
+                print("Closed:", closed["outcome"], closed["order_id"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Close a short intraday position by buying it back, which UBI works out from the position, with a tag on the closing order:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            if start != 0:
+                raise SystemExit("An intraday IDEA position is already open.")
+            answers = []
+            try:
+                opened = idea.sell_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start - 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                closed = idea.liquidate_position(
+                    product="mis",
+                    price=round(idea.last_price * 1.01, 2),
+                    tag="examples",
+                )
+                answers.append(closed)
+                print("Bought back:", closed["outcome"], closed["order_id"])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         return self._place_to_close_position(
             kind="liquidate_position",
@@ -3148,6 +10985,191 @@ class TradeableInstrument(Instrument):
             BrokerError: No broker's positions could be read.
             ServiceUnavailableError: UBI's positions document is missing or too old to serve.
             UnifiedBrokerInterfaceError: The positions could not be read for any other reason. A failure to close one position is reported in the frame instead.
+
+        Examples:
+            Buy one Vodafone Idea share intraday, then close every position the share holds, under every product, and print what was done:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            if start != 0:
+                raise SystemExit("An intraday IDEA position is already open.")
+            answers = []
+            try:
+                opened = idea.buy_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start + 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                outcomes = idea.liquidate_all_positions(
+                    price=round(idea.last_price * 0.99, 2),
+                )
+                print(outcomes)
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
+
+            Sell one share short intraday, close every position the share holds with tagged orders, and list any that could not be closed through UBI:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            if start != 0:
+                raise SystemExit("An intraday IDEA position is already open.")
+            answers = []
+            try:
+                opened = idea.sell_at_marketable_price(quantity=1, product="mis")
+                answers.append(opened)
+                for attempt in range(30):
+                    time.sleep(1)
+                    positions = idea.net_positions
+                    intraday = positions[positions["product"] == "intraday"]
+                    if intraday["quantity"].sum() == start - 1:
+                        break
+                print("Intraday quantity:", intraday["quantity"].sum())
+                outcomes = idea.liquidate_all_positions(
+                    price=round(idea.last_price * 1.01, 2),
+                    tag="examples",
+                )
+                print(outcomes[["product", "quantity", "closed", "order_id"]])
+                print(outcomes[~outcomes["closed"]][["product", "error"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
         frame = self.net_positions
         if frame is None:
@@ -3458,6 +11480,43 @@ class NonTradeableInstrument(Instrument):
         Raises:
             BasketMemberError: UBI could not find one or more of the stored members.
             pymongo.errors.PyMongoError: MongoDB could not be reached.
+
+        Examples:
+            Print the stored members of the Nifty 50, or say that none are stored:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            nifty = instruments.NonTradeableInstrument(
+                exchange="nse",
+                segment="equity_indices",
+                symbol="NIFTY",
+            )
+            basket = nifty.constituents
+            if basket is None:
+                print("No constituents are stored for NIFTY today.")
+            else:
+                print(basket)
+            ```
+
+            Compare the index's own day change with the day change of its stored members, when a basket is stored:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            nifty = instruments.NonTradeableInstrument(
+                exchange="nse",
+                segment="equity_indices",
+                symbol="NIFTY",
+            )
+            basket = nifty.constituents
+            print("Index day change:", nifty.ohlc["change_percent"])
+            if basket is None:
+                print("No constituents are stored, so there is nothing to compare.")
+            else:
+                print("Members stored:", basket.size)
+                print("Basket day change:", basket.day_change_percent)
+            ```
         """
         from tradingmachine.asset_baskets import basket_store
 
@@ -3674,6 +11733,43 @@ class Derivative(TradeableInstrument):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print how many days the nearest Nifty future has left:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future, nifty_future.days_to_expiry)
+            ```
+
+            Print the days left on every listed Reliance future:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            for expiry_date in expiries:
+                future = equities.EquityFutures(
+                    exchange="nse",
+                    underlying_symbol="RELIANCE",
+                    expiry_date=expiry_date,
+                )
+                print(expiry_date, future.days_to_expiry)
+            ```
         """
         today = datetime.datetime.now(INDIA_TIME_ZONE).date()
         return (self.expiry_date - today).days
@@ -3689,6 +11785,44 @@ class Derivative(TradeableInstrument):
 
         Raises:
             Nothing.
+
+        Examples:
+            Show that a listed Nifty future has not expired:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future, "expired:", nifty_future.expired)
+            ```
+
+            Build the oldest Nifty future UBI still knows, which has expired, and check it:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                include_expired=True,
+            )
+            oldest_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+            print(oldest_future, "expired:", oldest_future.expired)
+            print("Days since expiry:", -oldest_future.days_to_expiry)
+            ```
         """
         return self.days_to_expiry < 0
 
@@ -3704,6 +11838,48 @@ class Derivative(TradeableInstrument):
         Raises:
             BadRequestError: The exchange or segment is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Say whether each of the next four Nifty option expiries is a weekly or a monthly one:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import instruments
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            for expiry_date in expiries[:4]:
+                chain = equities.EquityIndexOption.chain(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                )
+                first_row = chain.iloc[0]
+                option = instruments.IndexOption(
+                    instrument_id=first_row["instrument_id"],
+                )
+                print(expiry_date, option.expiry_kind)
+            ```
+
+            Show that a stock future is always monthly, since stocks have no weekly expiries:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            print(reliance_future, reliance_future.expiry_kind)
+            ```
         """
         expiry_dates = self._expiry_dates(
             self.exchange,
@@ -3733,6 +11909,55 @@ class Derivative(TradeableInstrument):
         Raises:
             BadRequestError: The exchange or segment is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the expiry a position in the nearest Nifty future would roll to:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future.expiry_date, "rolls to", nifty_future.next_expiry)
+            ```
+
+            Build the next Reliance future from the nearest one and compare their prices, which is the roll's cost:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            next_expiry = reliance_future.next_expiry
+            if next_expiry is None:
+                print("There is no later expiry listed.")
+            else:
+                next_future = equities.EquityFutures(
+                    exchange="nse",
+                    underlying_symbol="RELIANCE",
+                    expiry_date=next_expiry,
+                )
+                near_price = reliance_future.last_price
+                far_price = next_future.last_price
+                print(f"Near {near_price}, next {far_price}")
+                print(f"Rolling costs {far_price - near_price:.2f} per share")
+            ```
         """
         expiry_dates = self._expiry_dates(
             self.exchange,
@@ -3758,6 +11983,65 @@ class Derivative(TradeableInstrument):
         Raises:
             UnderlyingError: No underlying was given, UBI gives no link, and the family's default finds none.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the nearest Reliance future is written on, which is looked up in UBI:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            underlying = reliance_future.underlying
+            print(underlying, underlying.last_price)
+            ```
+
+            Give the underlying when building the contract, so the contract keeps that very object and makes no lookup:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+                underlying=reliance,
+            )
+            print(reliance_future.underlying is reliance)
+            print(type(reliance_future.underlying).__name__)
+            ```
+
+            Print the index a Nifty future is written on:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            index = nifty_future.underlying
+            print(type(index).__name__, index.symbol, index.last_price)
+            ```
         """
         if self._given_underlying is not None:
             return self._given_underlying
@@ -3776,6 +12060,48 @@ class Derivative(TradeableInstrument):
             UnderlyingError: No underlying was given, UBI gives no link, and the family's default finds none, which is the case for every future outside equities.
             ServiceUnavailableError: UBI has no recent quote for the underlying and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the Nifty index level beside the price of its nearest future:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print("Index:", nifty_future.underlying_price)
+            print("Future:", nifty_future.last_price)
+            ```
+
+            Print the share price under a Reliance future, read once for a report:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            share_price = reliance_future.underlying_price
+            if share_price is None:
+                print("UBI has no price for the share.")
+            else:
+                print(f"Reliance shares at {share_price}")
+            ```
         """
         if self._given_underlying is not None:
             return self._given_underlying.last_price
@@ -3816,6 +12142,48 @@ class Derivative(TradeableInstrument):
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the highest open interest the nearest Nifty future reached today:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future.open_interest_day_high)
+            ```
+
+            Say how far today's open interest is below its high for the day, which shows positions being closed:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            day_high = nifty_future.open_interest_day_high
+            now = nifty_future.open_interest
+            if day_high is None or now is None:
+                print("The broker does not report the open interest range.")
+            else:
+                print(f"Open interest is {day_high - now} below today's high")
+            ```
         """
         return self.quote["oi_day_high"]
 
@@ -3829,6 +12197,45 @@ class Derivative(TradeableInstrument):
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the lowest open interest the nearest Nifty future reached today:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future.open_interest_day_low)
+            ```
+
+            Print today's open interest range of the nearest Reliance future:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            day_low = reliance_future.open_interest_day_low
+            day_high = reliance_future.open_interest_day_high
+            print(f"Open interest ranged from {day_low} to {day_high}")
+            ```
         """
         return self.quote["oi_day_low"]
 
@@ -3844,6 +12251,55 @@ class Derivative(TradeableInstrument):
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what one lot of the nearest Nifty future is worth:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(nifty_future.lot_size, "units worth Rs", nifty_future.contract_value)
+            ```
+
+            Compare the exposure of one lot of the nearest Nifty and Reliance futures:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            nifty_expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=nifty_expiries[0],
+            )
+            reliance_expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=reliance_expiries[0],
+            )
+            for future in [
+                nifty_future,
+                reliance_future,
+            ]:
+                print(f"{future.underlying_symbol}: Rs {future.contract_value:,.0f}")
+            ```
         """
         last_price = self.last_price
         if last_price is None or self.lot_size is None:
@@ -3935,6 +12391,52 @@ class Futures(Derivative):
             FuturesError: The class names no segment, which is true of `Futures` and `IndexFutures` themselves.
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the live expiries of Nifty futures:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            for expiry_date in expiries:
+                print(expiry_date)
+            ```
+
+            Count how many Reliance futures expiries UBI remembers, including those that have passed:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            all_expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                include_expired=True,
+            )
+            live_expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            print(f"{len(all_expiries)} expiries known, {len(live_expiries)} live")
+            ```
+
+            Show that the base class names no segment, so the family class is the one to call:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import instruments
+
+            try:
+                instruments.Futures.expiries(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                )
+            except exceptions.FuturesError as error:
+                print("Refused:", error)
+            ```
         """
         if cls.SEGMENT is None:
             raise exceptions.FuturesError(
@@ -3973,6 +12475,45 @@ class Futures(Derivative):
             FuturesError: The class names no segment, which is true of `Futures` and `IndexFutures` themselves.
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the live Reliance futures with their instrument ids:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            contracts = equities.EquityFutures.contracts(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            print(contracts[["underlying_symbol", "expiry_date", "instrument_id"]])
+            ```
+
+            Count the stock futures listed for the nearest expiry, which is the size of the futures universe:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            contracts = equities.EquityFutures.contracts(exchange="nse")
+            nearest_expiry = contracts["expiry_date"].min()
+            nearest = contracts[contracts["expiry_date"] == nearest_expiry]
+            print(f"{len(nearest)} stock futures expire on {nearest_expiry}")
+            ```
+
+            Build a contract object from one row, using its instrument id:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import instruments
+
+            contracts = equities.EquityIndexFutures.contracts(
+                exchange="nse",
+                underlying_symbol="BANKNIFTY",
+            )
+            first_row = contracts.iloc[0]
+            future = instruments.IndexFutures(instrument_id=first_row["instrument_id"])
+            print(future, future.last_price)
+            ```
         """
         if cls.SEGMENT is None:
             raise exceptions.FuturesError(
@@ -4000,6 +12541,45 @@ class Futures(Derivative):
             UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
             ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the basis of the nearest Nifty future over the index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(f"Basis: {nifty_future.basis:.2f} points")
+            ```
+
+            Print the basis of every live Reliance future, which normally grows with the time to expiry:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            for expiry_date in expiries:
+                future = equities.EquityFutures(
+                    exchange="nse",
+                    underlying_symbol="RELIANCE",
+                    expiry_date=expiry_date,
+                    underlying=reliance,
+                )
+                print(expiry_date, future.days_to_expiry, future.basis)
+            ```
         """
         last_price = self.last_price
         underlying_price = self.underlying_price
@@ -4018,6 +12598,49 @@ class Futures(Derivative):
             UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
             ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the basis of the nearest Nifty future as a percentage of the index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+
+            print(f"{nifty_future.basis_percent:.3f}%")
+            ```
+
+            Say whether the nearest Reliance future trades at a premium or a discount to the share:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            reliance_future = equities.EquityFutures(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+
+            basis_percent = reliance_future.basis_percent
+            if basis_percent is None:
+                print("A last price is missing.")
+            elif basis_percent >= 0:
+                print(f"Premium of {basis_percent:.3f}%")
+            else:
+                print(f"Discount of {-basis_percent:.3f}%")
+            ```
         """
         last_price = self.last_price
         underlying_price = self.underlying_price
@@ -4040,6 +12663,52 @@ class Futures(Derivative):
             UnderlyingError: The future's underlying cannot be found, which is the case for every future outside equities unless one is given.
             ServiceUnavailableError: UBI has no recent quote for the future or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the annual rate implied by the next month's Nifty future, which has enough days left to mean something:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexFutures.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            nifty_future = equities.EquityIndexFutures(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[1],
+            )
+            print(nifty_future.days_to_expiry, "days left")
+            print(f"Cost of carry: {nifty_future.cost_of_carry:.2f}% a year")
+            ```
+
+            Compare the implied carry of Reliance's futures with a 6.5 per cent risk-free rate:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            risk_free_percent = 6.5
+            reliance = equities.Equity(exchange="nse", symbol="RELIANCE")
+            expiries = equities.EquityFutures.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            for expiry_date in expiries:
+                future = equities.EquityFutures(
+                    exchange="nse",
+                    underlying_symbol="RELIANCE",
+                    expiry_date=expiry_date,
+                    underlying=reliance,
+                )
+                carry = future.cost_of_carry
+                if carry is None:
+                    print(expiry_date, "expires today or a price is missing")
+                elif carry > risk_free_percent:
+                    print(expiry_date, f"{carry:.2f}%: rich")
+                else:
+                    print(expiry_date, f"{carry:.2f}%: cheap")
+            ```
         """
         days_to_expiry = self.days_to_expiry
         if days_to_expiry <= 0:
@@ -4140,6 +12809,37 @@ class Option(Derivative):
             OptionError: The class names no segment, which is true of `Option` and `IndexOption` themselves.
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the next five Nifty option expiries:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            for expiry_date in expiries[:5]:
+                print(expiry_date)
+            ```
+
+            Compare how many option expiries are listed on an index and on a share:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            index_expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            share_expiries = equities.EquityOption.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            print("NIFTY:", len(index_expiries))
+            print("RELIANCE:", len(share_expiries))
+            ```
         """
         if cls.SEGMENT is None:
             raise exceptions.OptionError(
@@ -4181,6 +12881,46 @@ class Option(Derivative):
             BadRequestError: The exchange is not one UBI knows.
             ValueError: expiry_date is a str that is not a valid ISO date.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the lowest and highest strikes and how many there are for the nearest Reliance option expiry:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityOption.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            strikes = equities.EquityOption.strikes(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+            print(len(strikes), "strikes from", strikes[0], "to", strikes[-1])
+            ```
+
+            Find the at-the-money strike, the listed strike nearest the Nifty level:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            print(f"Nifty at {level}, at-the-money strike {nearest_strike}")
+            ```
         """
         frame = cls.chain(
             exchange,
@@ -4221,6 +12961,66 @@ class Option(Derivative):
             BadRequestError: The exchange is not one UBI knows.
             ValueError: expiry_date is a str that is not a valid ISO date.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the first rows of the nearest Nifty option chain:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            chain = equities.EquityIndexOption.chain(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[0],
+            )
+            print(len(chain), "contracts")
+            print(chain[["strike_price", "option_type", "instrument_id"]].head())
+            ```
+
+            Count the calls and the puts in a Reliance option chain:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityOption.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            chain = equities.EquityOption.chain(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+            print(chain["option_type"].value_counts())
+            ```
+
+            Build the three calls nearest the money from the chain's instrument ids and print their prices:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import instruments
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            chain = equities.EquityIndexOption.chain(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[1],
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            calls = chain[chain["option_type"] == "CE"].copy()
+            calls["distance"] = (calls["strike_price"] - level).abs()
+            nearest_calls = calls.sort_values("distance").head(3)
+            for instrument_id in nearest_calls["instrument_id"]:
+                option = instruments.IndexOption(instrument_id=instrument_id)
+                print(option.strike_price, option.last_price)
+            ```
         """
         if cls.SEGMENT is None:
             raise exceptions.OptionError(
@@ -4244,6 +13044,79 @@ class Option(Derivative):
 
         Raises:
             Nothing.
+
+        Examples:
+            Check the kind of an at-the-money Nifty option:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print(call, "is a call:", call.is_call)
+            ```
+
+            Split a list of options into calls and puts:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                if option.is_call:
+                    print("Call:", option)
+                else:
+                    print("Put:", option)
+            ```
         """
         return self.option_type == CALL_OPTION_TYPE
 
@@ -4256,6 +13129,76 @@ class Option(Derivative):
 
         Raises:
             Nothing.
+
+        Examples:
+            Check that a contract built with the `PE` option type is a put:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            put = options[1]
+            print(put, "is a put:", put.is_put)
+            ```
+
+            Show that a call is not a put:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print(call.is_put)
+            ```
         """
         return self.option_type == PUT_OPTION_TYPE
 
@@ -4272,6 +13215,71 @@ class Option(Derivative):
             UnderlyingError: The option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the intrinsic value of the at-the-money call and put:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                print(option.option_type, option.intrinsic_value)
+            ```
+
+            Compare the intrinsic value of a deep in-the-money Reliance call with its premium:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityOption.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            strikes = equities.EquityOption.strikes(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+            call = equities.EquityOption(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+                strike_price=strikes[0],
+                option_type="CE",
+            )
+            print("Strike:", call.strike_price)
+            print("Intrinsic value:", call.intrinsic_value)
+            print("Premium:", call.last_price)
+            ```
         """
         underlying_price = self.underlying_price
         if underlying_price is None:
@@ -4289,6 +13297,77 @@ class Option(Derivative):
             UnderlyingError: The option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the option or its underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print how much of the at-the-money Nifty call's premium is time value:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print("Premium:", call.last_price)
+            print("Time value:", call.time_value)
+            ```
+
+            Compare the time value of the call and the put at the same strike:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                print(option.option_type, option.time_value)
+            ```
         """
         last_price = self.last_price
         intrinsic_value = self.intrinsic_value
@@ -4307,6 +13386,78 @@ class Option(Derivative):
             UnderlyingError: The option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Say whether the at-the-money call and put are in the money right now:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                print(option.option_type, option.strike_price, option.in_the_money)
+            ```
+
+            Count the in-the-money calls among five strikes around the money:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiries[1],
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_index = 0
+            for index in range(len(strikes)):
+                if abs(strikes[index] - level) < abs(strikes[nearest_index] - level):
+                    nearest_index = index
+            in_the_money_count = 0
+            for strike in strikes[nearest_index - 2 : nearest_index + 3]:
+                call = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiries[1],
+                    strike_price=strike,
+                    option_type="CE",
+                )
+                if call.in_the_money:
+                    in_the_money_count = in_the_money_count + 1
+            print(f"{in_the_money_count} of 5 calls are in the money")
+            ```
         """
         intrinsic_value = self.intrinsic_value
         if intrinsic_value is None:
@@ -4326,6 +13477,73 @@ class Option(Derivative):
             UnderlyingError: The option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the underlying.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print how far the at-the-money call and put are from the money:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                print(option.option_type, f"{option.moneyness_percent:.3f}%")
+            ```
+
+            Print the moneyness of the lowest and highest Reliance call strikes, one deep in and one far out of the money:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityOption.expiries(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+            )
+            strikes = equities.EquityOption.strikes(
+                exchange="nse",
+                underlying_symbol="RELIANCE",
+                expiry_date=expiries[0],
+            )
+            for strike in [
+                strikes[0],
+                strikes[-1],
+            ]:
+                call = equities.EquityOption(
+                    exchange="nse",
+                    underlying_symbol="RELIANCE",
+                    expiry_date=expiries[0],
+                    strike_price=strike,
+                    option_type="CE",
+                )
+                print(strike, f"{call.moneyness_percent:.2f}%")
+            ```
         """
         underlying_price = self.underlying_price
         if underlying_price is None or underlying_price == 0:
@@ -4345,6 +13563,78 @@ class Option(Derivative):
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the level the Nifty must reach by expiry for a buyer of the at-the-money call to break even:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print(call.strike_price, "+", call.last_price, "=", call.breakeven_price)
+            ```
+
+            Print the move needed to break even for the call and the put, as a percentage of the index:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                breakeven = option.breakeven_price
+                move = (breakeven - level) / level * 100
+                print(option.option_type, breakeven, f"{move:+.2f}%")
+            ```
         """
         last_price = self.last_price
         if last_price is None:
@@ -4363,6 +13653,78 @@ class Option(Derivative):
         Raises:
             ServiceUnavailableError: UBI has no recent quote and no broker could supply one.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what one lot of the at-the-money Nifty call costs:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print(call.lot_size, "units cost Rs", call.premium_per_lot)
+            ```
+
+            Work out how many lots of the call and the put a budget of Rs 50,000 buys:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            budget = 50000
+            for option in options:
+                premium = option.premium_per_lot
+                print(option.option_type, int(budget // premium), "lots")
+            ```
         """
         return self.contract_value
 
@@ -4375,6 +13737,70 @@ class Option(Derivative):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the value of the index one lot of the at-the-money call controls:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            print(f"Rs {call.notional_value:,.0f}")
+            ```
+
+            Compare the premium with the notional value, which is the leverage an option gives:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            leverage = call.notional_value / call.premium_per_lot
+            print(f"One rupee of premium controls Rs {leverage:.1f} of index")
+            ```
         """
         if self.lot_size is None:
             return None
@@ -4401,6 +13827,113 @@ class Option(Derivative):
             UnderlyingError: No underlying price is given and the option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the implied volatility of the at-the-money Nifty call:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            volatility = call.implied_volatility()
+            if volatility is None:
+                print("No implied volatility could be found.")
+            else:
+                print(f"{volatility * 100:.2f}% a year")
+            ```
+
+            Compare the call's and the put's implied volatility at the same strike with a 6 per cent rate:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            for option in options:
+                volatility = option.implied_volatility(risk_free_rate=0.06)
+                print(option.option_type, volatility)
+            ```
+
+            Ask what the implied volatility would be if the index were one per cent higher at today's premium:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            volatility = call.implied_volatility(underlying_price=level * 1.01)
+            print("At an index 1% higher:", volatility)
+            ```
         """
         years_to_expiry = self._years_to_expiry()
         if years_to_expiry <= 0:
@@ -4442,6 +13975,119 @@ class Option(Derivative):
             UnderlyingError: No underlying price is given and the option's underlying cannot be found.
             ServiceUnavailableError: UBI has no recent quote for the option, or for the underlying when no price is given.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the greeks of the at-the-money Nifty call at its implied volatility:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            greeks = call.greeks()
+            if greeks is None:
+                print("The greeks could not be worked out.")
+            else:
+                for name, value in greeks.items():
+                    print(name, value)
+            ```
+
+            Work out the fair value of the call at a volatility of 15 per cent and compare it with its premium:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            call = equities.EquityIndexOption(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+                strike_price=nearest_strike,
+                option_type="CE",
+            )
+
+            greeks = call.greeks(volatility=0.15)
+            print("Model:", greeks["model"])
+            print("Fair value:", round(greeks["price"], 2))
+            print("Premium:", call.last_price)
+            ```
+
+            Add up the delta of a straddle, one call and one put at the same strike, which is close to zero at the money:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            expiries = equities.EquityIndexOption.expiries(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+            )
+            expiry_date = expiries[1]
+            strikes = equities.EquityIndexOption.strikes(
+                exchange="nse",
+                underlying_symbol="NIFTY",
+                expiry_date=expiry_date,
+            )
+            level = equities.EquityIndex(exchange="nse", symbol="NIFTY").last_price
+            nearest_strike = strikes[0]
+            for strike in strikes:
+                if abs(strike - level) < abs(nearest_strike - level):
+                    nearest_strike = strike
+            options = []
+            for option_type in [
+                "CE",
+                "PE",
+            ]:
+                option = equities.EquityIndexOption(
+                    exchange="nse",
+                    underlying_symbol="NIFTY",
+                    expiry_date=expiry_date,
+                    strike_price=nearest_strike,
+                    option_type=option_type,
+                )
+                options.append(option)
+
+            total_delta = 0.0
+            for option in options:
+                greeks = option.greeks()
+                print(option.option_type, round(greeks["delta"], 3))
+                total_delta = total_delta + greeks["delta"]
+            print("Straddle delta:", round(total_delta, 3))
+            ```
         """
         years_to_expiry = self._years_to_expiry()
         if years_to_expiry <= 0:

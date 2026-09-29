@@ -113,6 +113,35 @@ class FixedIncome(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the holding of a government bond named by its rate code, or say that none is held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            holding = bond.holdings
+            if holding is None:
+                print("No 633GS2035 units are held.")
+            else:
+                print(holding["quantity"], "units at", holding["average_price"])
+            ```
+
+            Look up a bond by the start of its ISIN and report whether it is held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            matches = fixed_income.FixedIncome.search(exchange="nse", term="IN0001")
+            for isin in matches["symbol"]:
+                bond = fixed_income.FixedIncome(exchange="nse", symbol=isin)
+                holding = bond.holdings
+                if holding is None:
+                    print(f"{isin}: not held")
+                else:
+                    print(f"{isin}: {holding['quantity']} units held")
+            ```
         """
         rows = self._unified_broker_interface.get(HOLDINGS_PATH)["holdings"]
         for row in rows:
@@ -136,6 +165,35 @@ class FixedIncome(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the units held of a government bond are worth, which is None when none are held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            print(bond.holdings_value)
+            ```
+
+            Add up the value held across a few government bonds, skipping any that are not held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            symbols = [
+                "633GS2035",
+                "610GS2031",
+                "IN000126C010",
+            ]
+            total_value = 0.0
+            for symbol in symbols:
+                bond = fixed_income.FixedIncome(exchange="nse", symbol=symbol)
+                value = bond.holdings_value
+                if value is not None:
+                    total_value = total_value + value
+            print(f"Held in these bonds: {total_value:.2f} rupees")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -155,6 +213,29 @@ class FixedIncome(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the profit and loss of the units held of a government bond, which is None when none are held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            print(bond.holdings_pnl)
+            ```
+
+            Print the unrealised profit of a bond held, or say that it is not held:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="IN000126C010")
+            profit_and_loss = bond.holdings_pnl
+            if profit_and_loss is None:
+                print("IN000126C010 is not held.")
+            else:
+                print("Unrealised:", profit_and_loss["unrealized"])
+            ```
         """
         row = self.holdings
         if row is None:
@@ -185,6 +266,35 @@ class FixedIncome(instruments.TradeableInstrument):
 
         Raises:
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one unit of a government bond at 90 rupees, well below where a bond near its face value of 100 trades, and cancel the order at once:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            answer = bond.add_to_holdings(quantity=1, price=90.0)
+            print(answer["outcome"], answer.get("order_id"))
+            if answer.get("parent_id") is not None:
+                bond.cancel_parent(answer["parent_id"])
+            ```
+
+            Send the same bid as an immediate-or-cancel order, which the exchange cancels itself when nothing matches:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+            from tradingmachine.unified_broker_interface import exceptions
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            answer = bond.add_to_holdings(quantity=1, price=90.0, validity="ioc")
+            print(answer["outcome"], answer["status_message"])
+            if answer.get("parent_id") is not None:
+                try:
+                    bond.cancel_parent(answer["parent_id"])
+                except exceptions.ConflictError:
+                    print("The order had already finished.")
+            ```
         """
         if price is None:
             return self.buy_at_market_price(
@@ -229,6 +339,35 @@ class FixedIncome(instruments.TradeableInstrument):
         Raises:
             HoldingError: This bond is not held, or the quantity is more than the free units.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one unit of a bond held at 150 rupees, far above where it trades, and cancel the order at once:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            if bond.holdings is None:
+                print("No 633GS2035 units are held, so there is nothing to offer.")
+            else:
+                answer = bond.reduce_holdings(quantity=1, price=150.0)
+                print(answer["outcome"], answer.get("order_id"))
+                if answer.get("parent_id") is not None:
+                    bond.cancel_parent(answer["parent_id"])
+            ```
+
+            Catch the error raised for a bond that is not held, which sends no order:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="IN000126C010")
+            try:
+                bond.reduce_holdings(quantity=1, price=150.0)
+            except exceptions.HoldingError as error:
+                print(f"Refused: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -267,6 +406,35 @@ class FixedIncome(instruments.TradeableInstrument):
         Raises:
             HoldingError: This bond is not held, or every unit held is pledged as collateral.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer every free unit of a bond held at 150 rupees, far above where it trades, and cancel the order at once:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="633GS2035")
+            if bond.holdings is None:
+                print("No 633GS2035 units are held, so there is nothing to sell.")
+            else:
+                answer = bond.liquidate_holdings(price=150.0)
+                print(answer["outcome"], answer.get("order_id"))
+                if answer.get("parent_id") is not None:
+                    bond.cancel_parent(answer["parent_id"])
+            ```
+
+            Catch the error raised for a bond that is not held, which sends no order:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import fixed_income
+
+            bond = fixed_income.FixedIncome(exchange="nse", symbol="IN000126C010")
+            try:
+                bond.liquidate_holdings(price=150.0)
+            except exceptions.HoldingError as error:
+                print(f"Nothing sold: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -379,6 +547,40 @@ class FixedIncome(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find the bonds whose ISIN starts with `IN0001`:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            matches = fixed_income.FixedIncome.search(exchange="nse", term="IN0001")
+            print(matches[["symbol", "instrument_id"]])
+            ```
+
+            List the interest rate underlyings on government securities maturing in 2035, which are named by rate code:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            matches = fixed_income.FixedIncome.search(
+                exchange="nse",
+                term="GS2035",
+                limit=20,
+            )
+            print(matches["symbol"].tolist())
+            ```
+
+            Search for a treasury bill underlying and build it from the match:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            matches = fixed_income.FixedIncome.search(exchange="nse", term="91DTB")
+            symbol = matches["symbol"].iloc[0]
+            bill = fixed_income.FixedIncome(exchange="nse", symbol=symbol)
+            print(bill.symbol, bill.segment, bill.lot_size)
+            ```
         """
         return cls._search_catalogue(
             exchange,
@@ -547,6 +749,34 @@ class FixedIncomeIndex(instruments.NonTradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List every fixed income index on the nse, since an empty term matches them all:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+
+            matches = fixed_income.FixedIncomeIndex.search(exchange="nse", term="")
+            print(matches["symbol"].tolist())
+            ```
+
+            Find the overnight MIBOR index and build it, then show that it has no quote:
+
+            ```python
+            from tradingmachine.assets import fixed_income
+            from tradingmachine.unified_broker_interface import exceptions
+
+            matches = fixed_income.FixedIncomeIndex.search(
+                exchange="nse",
+                term="MIBOR",
+            )
+            symbol = matches["symbol"].iloc[0]
+            index = fixed_income.FixedIncomeIndex(exchange="nse", symbol=symbol)
+            try:
+                print(index.last_price)
+            except exceptions.ServiceUnavailableError:
+                print(f"{symbol} is carried by UBI but no broker quotes it.")
+            ```
         """
         return cls._search_catalogue(
             exchange,

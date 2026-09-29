@@ -85,6 +85,63 @@ class OptionPricingModel:
 
         Raises:
             ValueError: The reference price, strike price or years to expiry is not above zero.
+
+        Examples:
+            Find the volatility at which Black-Scholes prices a NIFTY call at the premium it trades at:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            volatility = option_pricing.BlackScholes.implied_volatility(
+                premium=150.0,
+                reference_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                is_call=True,
+            )
+            print(f"Implied volatility: {volatility:.4f}")
+            ```
+
+            Price a put on a future with Black-76 at 25 per cent volatility, then recover that volatility from the price:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9000.0,
+                years_to_expiry=30 / 365,
+                risk_free_rate=0.065,
+                volatility=0.25,
+                is_call=False,
+            )
+            volatility = option_pricing.Black76.implied_volatility(
+                premium=model.price,
+                reference_price=9125.0,
+                strike_price=9000.0,
+                years_to_expiry=30 / 365,
+                risk_free_rate=0.065,
+                is_call=False,
+            )
+            print(f"Premium {model.price:.2f} implies {volatility:.6f}")
+            ```
+
+            Show that a premium below the option's discounted intrinsic value has no volatility to find:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            volatility = option_pricing.BlackScholes.implied_volatility(
+                premium=50.0,
+                reference_price=24000.0,
+                strike_price=23800.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                is_call=True,
+            )
+            print(volatility)
+            ```
         """
         if premium <= 0:
             return None
@@ -217,6 +274,67 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Price a NIFTY call a hundred points out of the money with a week to go:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"Fair price: {model.price:.2f}")
+            ```
+
+            Check put-call parity, which says a call less a put equals the underlying less the discounted strike:
+
+            ```python
+            import math
+
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "underlying_price": 24000.0,
+                "strike_price": 24100.0,
+                "years_to_expiry": 7 / 365,
+                "risk_free_rate": 0.065,
+                "volatility": 0.12,
+            }
+            call = option_pricing.BlackScholes(**inputs, is_call=True)
+            put = option_pricing.BlackScholes(**inputs, is_call=False)
+            discounted_strike = 24100.0 * math.exp(-0.065 * 7 / 365)
+            print(f"Call less put: {call.price - put.price:.4f}")
+            print(f"Underlying less discounted strike: {24000.0 - discounted_strike:.4f}")
+            ```
+
+            Price calls across five strikes to see the premium fall as the strike rises:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for strike_price in [
+                23800.0,
+                23900.0,
+                24000.0,
+                24100.0,
+                24200.0,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=strike_price,
+                    years_to_expiry=7 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=True,
+                )
+                print(f"{strike_price:.0f}: {model.price:.2f}")
+            ```
         """
         first_distance = self._first_distance()
         second_distance = self._second_distance()
@@ -238,6 +356,44 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the delta of a NIFTY call and of the put at the same strike:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for is_call in [
+                True,
+                False,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=24100.0,
+                    years_to_expiry=7 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=is_call,
+                )
+                print(f"Call: {is_call}, delta: {model.delta:.4f}")
+            ```
+
+            Work out how many index units hedge two lots of 65 calls, which is the delta times the quantity:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            quantity = 2 * 65
+            print(f"Sell {model.delta * quantity:.1f} units of the index to hedge")
+            ```
         """
         cumulative = self._normal_cumulative(self._first_distance())
         if self.is_call:
@@ -253,6 +409,69 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the gamma of a NIFTY call a hundred points out of the money:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"Gamma: {model.gamma:.6f}")
+            ```
+
+            Estimate the delta after a 50-point rise from the gamma, and compare it with the delta worked out again at the new price:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            before = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            after = option_pricing.BlackScholes(
+                underlying_price=24050.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            estimate = before.delta + before.gamma * 50
+            print(f"Estimated delta: {estimate:.4f}, actual delta: {after.delta:.4f}")
+            ```
+
+            Show that gamma is highest at the money and falls away on either side:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for strike_price in [
+                23600.0,
+                24000.0,
+                24400.0,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=strike_price,
+                    years_to_expiry=7 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=True,
+                )
+                print(f"{strike_price:.0f}: {model.gamma:.6f}")
+            ```
         """
         density = self._normal_density(self._first_distance())
         return density / (
@@ -268,6 +487,61 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print how much a NIFTY call loses in a day with the market standing still:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"Theta per day: {model.theta:.2f}")
+            ```
+
+            Show time decay speeding up as expiry nears, for the same at-the-money call:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for days_to_expiry in [
+                30,
+                14,
+                7,
+                2,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=24000.0,
+                    years_to_expiry=days_to_expiry / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=True,
+                )
+                print(f"{days_to_expiry} days: {model.theta:.2f} per day")
+            ```
+
+            Work out the daily decay of a position of two lots of 65 calls:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"The position changes by {model.theta * 2 * 65:.2f} rupees a day")
+            ```
         """
         density = self._normal_density(self._first_distance())
         time_decay = -(self.underlying_price * density * self.volatility) / (
@@ -300,6 +574,62 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print how much a NIFTY call gains when volatility rises by one percentage point:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.BlackScholes(
+                underlying_price=24000.0,
+                strike_price=24100.0,
+                years_to_expiry=7 / 365,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"Vega: {model.vega:.2f}")
+            ```
+
+            Check the vega against the price change from pricing again at 13 per cent volatility:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "underlying_price": 24000.0,
+                "strike_price": 24100.0,
+                "years_to_expiry": 7 / 365,
+                "risk_free_rate": 0.065,
+                "is_call": True,
+            }
+            at_twelve = option_pricing.BlackScholes(**inputs, volatility=0.12)
+            at_thirteen = option_pricing.BlackScholes(**inputs, volatility=0.13)
+            print(f"Vega: {at_twelve.vega:.2f}")
+            print(f"Repriced change: {at_thirteen.price - at_twelve.price:.2f}")
+            ```
+
+            Show that a longer-dated option is more sensitive to volatility:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for days_to_expiry in [
+                7,
+                30,
+                90,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=24000.0,
+                    years_to_expiry=days_to_expiry / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=True,
+                )
+                print(f"{days_to_expiry} days: vega {model.vega:.2f}")
+            ```
         """
         density = self._normal_density(self._first_distance())
         annual_vega = self.underlying_price * density * math.sqrt(self.years_to_expiry)
@@ -314,6 +644,45 @@ class BlackScholes(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the rho of a NIFTY call and of the put at the same strike:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for is_call in [
+                True,
+                False,
+            ]:
+                model = option_pricing.BlackScholes(
+                    underlying_price=24000.0,
+                    strike_price=24100.0,
+                    years_to_expiry=30 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.12,
+                    is_call=is_call,
+                )
+                print(f"Call: {is_call}, rho: {model.rho:.2f}")
+            ```
+
+            Check the rho against the price change from pricing again at a rate one point higher:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "underlying_price": 24000.0,
+                "strike_price": 24100.0,
+                "years_to_expiry": 30 / 365,
+                "volatility": 0.12,
+                "is_call": True,
+            }
+            lower = option_pricing.BlackScholes(**inputs, risk_free_rate=0.065)
+            higher = option_pricing.BlackScholes(**inputs, risk_free_rate=0.075)
+            print(f"Rho: {lower.rho:.2f}")
+            print(f"Repriced change: {higher.price - lower.price:.2f}")
+            ```
         """
         second_distance = self._second_distance()
         discounted_strike = self._discounted_strike()
@@ -433,6 +802,73 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Price a call on a commodity future trading at 9125 with seventeen days to go:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9100.0,
+                years_to_expiry=17 / 365,
+                risk_free_rate=0.065,
+                volatility=0.59,
+                is_call=True,
+            )
+            print(f"Fair price: {model.price:.2f}")
+            ```
+
+            Show that Black-76 on a forward equals Black-Scholes on the spot price that forward implies:
+
+            ```python
+            import math
+
+            from tradingmachine.assets import option_pricing
+
+            spot_price = 24000.0
+            years_to_expiry = 30 / 365
+            forward_price = spot_price * math.exp(0.065 * years_to_expiry)
+            on_forward = option_pricing.Black76(
+                forward_price=forward_price,
+                strike_price=24100.0,
+                years_to_expiry=years_to_expiry,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            on_spot = option_pricing.BlackScholes(
+                underlying_price=spot_price,
+                strike_price=24100.0,
+                years_to_expiry=years_to_expiry,
+                risk_free_rate=0.065,
+                volatility=0.12,
+                is_call=True,
+            )
+            print(f"Black-76: {on_forward.price:.4f}, Black-Scholes: {on_spot.price:.4f}")
+            ```
+
+            Check put-call parity on a future, where a call less a put is the discounted forward less the discounted strike:
+
+            ```python
+            import math
+
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "forward_price": 9125.0,
+                "strike_price": 9100.0,
+                "years_to_expiry": 17 / 365,
+                "risk_free_rate": 0.065,
+                "volatility": 0.59,
+            }
+            call = option_pricing.Black76(**inputs, is_call=True)
+            put = option_pricing.Black76(**inputs, is_call=False)
+            discount = math.exp(-0.065 * 17 / 365)
+            print(f"Call less put: {call.price - put.price:.4f}")
+            print(f"Discounted difference: {discount * (9125.0 - 9100.0):.4f}")
+            ```
         """
         first_distance = self._first_distance()
         second_distance = self._second_distance()
@@ -455,6 +891,43 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the delta of a call and of the put on the same future and strike:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for is_call in [
+                True,
+                False,
+            ]:
+                model = option_pricing.Black76(
+                    forward_price=9125.0,
+                    strike_price=9100.0,
+                    years_to_expiry=17 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.59,
+                    is_call=is_call,
+                )
+                print(f"Call: {is_call}, delta: {model.delta:.4f}")
+            ```
+
+            Work out how many lots of the future hedge ten lots of calls, when the option and the future have the same lot size:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9100.0,
+                years_to_expiry=17 / 365,
+                risk_free_rate=0.065,
+                volatility=0.59,
+                is_call=True,
+            )
+            print(f"Sell {model.delta * 10:.2f} lots of the future to hedge")
+            ```
         """
         first_distance = self._first_distance()
         if self.is_call:
@@ -470,6 +943,41 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the gamma of a call on a future:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9100.0,
+                years_to_expiry=17 / 365,
+                risk_free_rate=0.065,
+                volatility=0.59,
+                is_call=True,
+            )
+            print(f"Gamma: {model.gamma:.6f}")
+            ```
+
+            Estimate the delta after the future rises by 50 from the gamma, and compare it with the delta worked out again:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "strike_price": 9100.0,
+                "years_to_expiry": 17 / 365,
+                "risk_free_rate": 0.065,
+                "volatility": 0.59,
+                "is_call": True,
+            }
+            before = option_pricing.Black76(forward_price=9125.0, **inputs)
+            after = option_pricing.Black76(forward_price=9175.0, **inputs)
+            estimate = before.delta + before.gamma * 50
+            print(f"Estimated delta: {estimate:.4f}, actual delta: {after.delta:.4f}")
+            ```
         """
         density = self._normal_density(self._first_distance())
         spread = self.forward_price * self.volatility * math.sqrt(self.years_to_expiry)
@@ -484,6 +992,41 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print how much a call on a future loses in a day with the future standing still:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9100.0,
+                years_to_expiry=17 / 365,
+                risk_free_rate=0.065,
+                volatility=0.59,
+                is_call=True,
+            )
+            print(f"Theta per day: {model.theta:.2f}")
+            ```
+
+            Check the theta against pricing the same option again with one day less to run:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "forward_price": 9125.0,
+                "strike_price": 9100.0,
+                "risk_free_rate": 0.065,
+                "volatility": 0.59,
+                "is_call": True,
+            }
+            today = option_pricing.Black76(**inputs, years_to_expiry=17 / 365)
+            tomorrow = option_pricing.Black76(**inputs, years_to_expiry=16 / 365)
+            print(f"Theta: {today.theta:.2f}")
+            print(f"Repriced change: {tomorrow.price - today.price:.2f}")
+            ```
         """
         density = self._normal_density(self._first_distance())
         time_decay = -(
@@ -501,6 +1044,43 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print how much a call on a future gains when volatility rises by one percentage point:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            model = option_pricing.Black76(
+                forward_price=9125.0,
+                strike_price=9100.0,
+                years_to_expiry=17 / 365,
+                risk_free_rate=0.065,
+                volatility=0.59,
+                is_call=True,
+            )
+            print(f"Vega: {model.vega:.2f}")
+            ```
+
+            Show that vega is the same for a call and a put on the same future and strike:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for is_call in [
+                True,
+                False,
+            ]:
+                model = option_pricing.Black76(
+                    forward_price=9125.0,
+                    strike_price=9100.0,
+                    years_to_expiry=17 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.59,
+                    is_call=is_call,
+                )
+                print(f"Call: {is_call}, vega: {model.vega:.4f}")
+            ```
         """
         density = self._normal_density(self._first_distance())
         annual_vega = (
@@ -520,6 +1100,45 @@ class Black76(OptionPricingModel):
 
         Raises:
             Nothing.
+
+        Examples:
+            Print the rho of a call and of a put on a future, which are both negative because the rate only discounts:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            for is_call in [
+                True,
+                False,
+            ]:
+                model = option_pricing.Black76(
+                    forward_price=9125.0,
+                    strike_price=9100.0,
+                    years_to_expiry=17 / 365,
+                    risk_free_rate=0.065,
+                    volatility=0.59,
+                    is_call=is_call,
+                )
+                print(f"Call: {is_call}, rho: {model.rho:.4f}")
+            ```
+
+            Check the rho against pricing again at a rate one point higher with the forward held still:
+
+            ```python
+            from tradingmachine.assets import option_pricing
+
+            inputs = {
+                "forward_price": 9125.0,
+                "strike_price": 9100.0,
+                "years_to_expiry": 17 / 365,
+                "volatility": 0.59,
+                "is_call": True,
+            }
+            lower = option_pricing.Black76(**inputs, risk_free_rate=0.065)
+            higher = option_pricing.Black76(**inputs, risk_free_rate=0.075)
+            print(f"Rho: {lower.rho:.4f}")
+            print(f"Repriced change: {higher.price - lower.price:.4f}")
+            ```
         """
         return -self.years_to_expiry * self.price / PERCENT
 

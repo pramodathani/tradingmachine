@@ -86,6 +86,51 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
         Raises:
             BasketMemberError: UBI could not find one or more of the stored members.
             pymongo.errors.PyMongoError: MongoDB could not be reached.
+
+        Examples:
+            Print the stored contents of NIFTYBEES, or None when no basket is stored for it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            print(fund.constituents)
+            ```
+
+            Store a small two-member basket linked to NIFTYBEES, read it back through the fund, and delete it again:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import basket_store
+            from tradingmachine.asset_baskets import exchange_traded_fund_constituents
+            from tradingmachine.assets import equities
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            members = [
+                basket_member.BasketMember(
+                    instrument=equities.Equity(exchange="nse", symbol="RELIANCE"),
+                    weight=0.6,
+                ),
+                basket_member.BasketMember(
+                    instrument=equities.Equity(exchange="nse", symbol="HDFCBANK"),
+                    weight=0.4,
+                ),
+            ]
+            basket = exchange_traded_fund_constituents.ExchangeTradedFundConstituents(
+                name="EXAMPLE_NIFTYBEES_CONTENTS",
+                members=members,
+                fund=fund,
+            )
+            store = basket_store.BasketStore()
+            saved = store.save(basket)
+            try:
+                contents = fund.constituents
+                print(contents)
+                print(contents.weights)
+            finally:
+                store.delete("EXAMPLE_NIFTYBEES_CONTENTS", saved["effective_date"])
+            ```
         """
         from tradingmachine.asset_baskets import basket_store
 
@@ -107,6 +152,43 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print this account's holding of NIFTYBEES, or None when no broker holds it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            print(fund.holdings)
+            ```
+
+            Report how many units are held and what they cost on average:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            row = fund.holdings
+            if row is None:
+                print("No NIFTYBEES units are held.")
+            else:
+                print(f"{row['quantity']} units at an average of {row['average_price']}")
+            ```
+
+            Work out how many units of GOLDBEES are free to sell, which excludes any pledged as collateral:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="GOLDBEES")
+            row = fund.holdings
+            if row is None:
+                print("No GOLDBEES units are held, so none are free to sell.")
+            else:
+                free_quantity = row["quantity"] - row["collateral_quantity"]
+                print(f"{free_quantity} of {row['quantity']} units are free to sell")
+            ```
         """
         rows = self._unified_broker_interface.get(HOLDINGS_PATH)["holdings"]
         for row in rows:
@@ -130,6 +212,51 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the NIFTYBEES units held are worth, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            print(fund.holdings_value)
+            ```
+
+            Compare the holding's value today with what was paid for it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            row = fund.holdings
+            if row is None:
+                print("No NIFTYBEES units are held.")
+            else:
+                value = fund.holdings_value
+                print(f"Worth {value:.2f} against {row['invested_value']:.2f} paid")
+            ```
+
+            Add up the value held across three funds, counting one that is not held as nothing:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            total_value = 0.0
+            for symbol in [
+                "NIFTYBEES",
+                "GOLDBEES",
+                "BANKBEES",
+            ]:
+                fund = funds.ExchangeTradedFund(exchange="nse", symbol=symbol)
+                value = fund.holdings_value
+                if value is None:
+                    print(f"{symbol}: not held")
+                else:
+                    print(f"{symbol}: {value:.2f}")
+                    total_value += value
+            print(f"Total: {total_value:.2f}")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -149,6 +276,47 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the NIFTYBEES units held have made or lost, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            print(fund.holdings_pnl)
+            ```
+
+            Print the holding's move since the previous close in per cent:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            pnl = fund.holdings_pnl
+            if pnl is None:
+                print("No NIFTYBEES units are held.")
+            else:
+                print(f"Today: {pnl['day_change_percentage']:.2f} per cent")
+            ```
+
+            List the unrealised profit or loss of each of three funds:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            for symbol in [
+                "NIFTYBEES",
+                "GOLDBEES",
+                "BANKBEES",
+            ]:
+                fund = funds.ExchangeTradedFund(exchange="nse", symbol=symbol)
+                pnl = fund.holdings_pnl
+                if pnl is None:
+                    print(f"{symbol}: not held")
+                else:
+                    print(f"{symbol}: {pnl['unrealized']:.2f} unrealised")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -179,6 +347,40 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
 
         Raises:
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one unit of NIFTYBEES at a limit 3 per cent below the last price, which the order engine holds, and cancel it at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            limit_price = round(fund.last_price * 0.97, 2)
+            answer = fund.add_to_holdings(quantity=1, price=limit_price)
+            try:
+                print(answer)
+            finally:
+                print(fund.cancel_parent(answer["parent_id"]))
+            ```
+
+            Bid for one unit of GOLDBEES with a tag, find the held order among the fund's parents, and cancel it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="GOLDBEES")
+            limit_price = round(fund.last_price * 0.97, 2)
+            answer = fund.add_to_holdings(
+                quantity=1,
+                price=limit_price,
+                tag="examplebid",
+            )
+            try:
+                parents = fund.parents
+                print(parents[["parent_order_id", "synthetic_type", "state"]])
+            finally:
+                print(fund.cancel_parent(answer["parent_id"]))
+            ```
         """
         if price is None:
             return self.buy_at_market_price(
@@ -222,6 +424,38 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
         Raises:
             HoldingError: This fund is not held, or the quantity is more than the free units.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one held unit of NIFTYBEES at a limit 3 per cent above the last price, and cancel the held order at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            if fund.holdings is None:
+                print("No NIFTYBEES units are held, so there is nothing to reduce.")
+            else:
+                limit_price = round(fund.last_price * 1.03, 2)
+                answer = fund.reduce_holdings(quantity=1, price=limit_price)
+                try:
+                    print(answer)
+                finally:
+                    print(fund.cancel_parent(answer["parent_id"]))
+            ```
+
+            Ask to sell far more units than are free, and handle the refusal, which comes before any order is sent:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            limit_price = round(fund.last_price * 1.03, 2)
+            try:
+                fund.reduce_holdings(quantity=10000000, price=limit_price)
+            except exceptions.HoldingError as error:
+                print(f"Refused: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -260,6 +494,43 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
         Raises:
             HoldingError: This fund is not held, or every unit held is pledged as collateral.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer every free unit of NIFTYBEES at a limit 3 per cent above the last price, and cancel the held order at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="NIFTYBEES")
+            if fund.holdings is None:
+                print("No NIFTYBEES units are held, so there is nothing to sell.")
+            else:
+                limit_price = round(fund.last_price * 1.03, 2)
+                answer = fund.liquidate_holdings(price=limit_price)
+                try:
+                    print(answer)
+                finally:
+                    print(fund.cancel_parent(answer["parent_id"]))
+            ```
+
+            Try to empty a holding of GOLDBEES and handle the refusal when none is held or every unit is pledged:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import funds
+
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol="GOLDBEES")
+            limit_price = round(fund.last_price * 1.03, 2)
+            try:
+                answer = fund.liquidate_holdings(price=limit_price)
+            except exceptions.HoldingError as error:
+                print(f"Nothing to sell: {error}")
+            else:
+                try:
+                    print(answer)
+                finally:
+                    print(fund.cancel_parent(answer["parent_id"]))
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -371,6 +642,43 @@ class ExchangeTradedFund(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find funds on the nse whose symbol contains `NIFTYBEE`:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.ExchangeTradedFund.search(exchange="nse", term="NIFTYBEE")
+            print(matches[["symbol", "exchange", "segment"]])
+            ```
+
+            List up to ten gold funds on the bse:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.ExchangeTradedFund.search(
+                exchange="bse",
+                term="GOLD",
+                limit=10,
+            )
+            if matches is None:
+                print("No gold fund was found on the bse.")
+            else:
+                print(matches["symbol"].tolist())
+            ```
+
+            Build the best match for a partial name and print its last price:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.ExchangeTradedFund.search(exchange="nse", term="BANKBEE")
+            first_symbol = matches.iloc[0]["symbol"]
+            fund = funds.ExchangeTradedFund(exchange="nse", symbol=first_symbol)
+            print(f"{fund.symbol}: {fund.last_price}")
+            ```
         """
         return cls._search_catalogue(
             exchange,
@@ -432,6 +740,43 @@ class InvestmentTrust(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print this account's holding of EMBASSY, or None when no broker holds it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            print(trust.holdings)
+            ```
+
+            Report how many units are held and what they cost on average:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            row = trust.holdings
+            if row is None:
+                print("No EMBASSY units are held.")
+            else:
+                print(f"{row['quantity']} units at an average of {row['average_price']}")
+            ```
+
+            Work out how many units of PGINVIT are free to sell, which excludes any pledged as collateral:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="PGINVIT")
+            row = trust.holdings
+            if row is None:
+                print("No PGINVIT units are held, so none are free to sell.")
+            else:
+                free_quantity = row["quantity"] - row["collateral_quantity"]
+                print(f"{free_quantity} of {row['quantity']} units are free to sell")
+            ```
         """
         rows = self._unified_broker_interface.get(HOLDINGS_PATH)["holdings"]
         for row in rows:
@@ -455,6 +800,51 @@ class InvestmentTrust(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the EMBASSY units held are worth, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            print(trust.holdings_value)
+            ```
+
+            Compare the holding's value today with what was paid for it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            row = trust.holdings
+            if row is None:
+                print("No EMBASSY units are held.")
+            else:
+                value = trust.holdings_value
+                print(f"Worth {value:.2f} against {row['invested_value']:.2f} paid")
+            ```
+
+            Add up the value held across three trusts, counting one that is not held as nothing:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            total_value = 0.0
+            for symbol in [
+                "EMBASSY",
+                "PGINVIT",
+                "IRBINVIT",
+            ]:
+                trust = funds.InvestmentTrust(exchange="nse", symbol=symbol)
+                value = trust.holdings_value
+                if value is None:
+                    print(f"{symbol}: not held")
+                else:
+                    print(f"{symbol}: {value:.2f}")
+                    total_value += value
+            print(f"Total: {total_value:.2f}")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -474,6 +864,47 @@ class InvestmentTrust(instruments.TradeableInstrument):
             ServiceUnavailableError: UBI's holdings document is missing or too old to serve.
             BrokerError: No broker's holdings could be read.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print what the EMBASSY units held have made or lost, or None when none are held:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            print(trust.holdings_pnl)
+            ```
+
+            Print the holding's move since the previous close in per cent:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            pnl = trust.holdings_pnl
+            if pnl is None:
+                print("No EMBASSY units are held.")
+            else:
+                print(f"Today: {pnl['day_change_percentage']:.2f} per cent")
+            ```
+
+            List the unrealised profit or loss of each of three trusts:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            for symbol in [
+                "EMBASSY",
+                "PGINVIT",
+                "IRBINVIT",
+            ]:
+                trust = funds.InvestmentTrust(exchange="nse", symbol=symbol)
+                pnl = trust.holdings_pnl
+                if pnl is None:
+                    print(f"{symbol}: not held")
+                else:
+                    print(f"{symbol}: {pnl['unrealized']:.2f} unrealised")
+            ```
         """
         row = self.holdings
         if row is None:
@@ -504,6 +935,40 @@ class InvestmentTrust(instruments.TradeableInstrument):
 
         Raises:
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Bid for one unit of EMBASSY at a limit 3 per cent below the last price, which the order engine holds, and cancel it at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            limit_price = round(trust.last_price * 0.97, 2)
+            answer = trust.add_to_holdings(quantity=1, price=limit_price)
+            try:
+                print(answer)
+            finally:
+                print(trust.cancel_parent(answer["parent_id"]))
+            ```
+
+            Bid for one unit of PGINVIT with a tag, find the held order among the trust's parents, and cancel it:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="PGINVIT")
+            limit_price = round(trust.last_price * 0.97, 2)
+            answer = trust.add_to_holdings(
+                quantity=1,
+                price=limit_price,
+                tag="examplebid",
+            )
+            try:
+                parents = trust.parents
+                print(parents[["parent_order_id", "synthetic_type", "state"]])
+            finally:
+                print(trust.cancel_parent(answer["parent_id"]))
+            ```
         """
         if price is None:
             return self.buy_at_market_price(
@@ -547,6 +1012,38 @@ class InvestmentTrust(instruments.TradeableInstrument):
         Raises:
             HoldingError: This trust is not held, or the quantity is more than the free units.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer one held unit of EMBASSY at a limit 3 per cent above the last price, and cancel the held order at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            if trust.holdings is None:
+                print("No EMBASSY units are held, so there is nothing to reduce.")
+            else:
+                limit_price = round(trust.last_price * 1.03, 2)
+                answer = trust.reduce_holdings(quantity=1, price=limit_price)
+                try:
+                    print(answer)
+                finally:
+                    print(trust.cancel_parent(answer["parent_id"]))
+            ```
+
+            Ask to sell far more units than are free, and handle the refusal, which comes before any order is sent:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            limit_price = round(trust.last_price * 1.03, 2)
+            try:
+                trust.reduce_holdings(quantity=10000000, price=limit_price)
+            except exceptions.HoldingError as error:
+                print(f"Refused: {error}")
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -585,6 +1082,43 @@ class InvestmentTrust(instruments.TradeableInstrument):
         Raises:
             HoldingError: This trust is not held, or every unit held is pledged as collateral.
             UnifiedBrokerInterfaceError: Any failure reported by, or on the way to, UBI.
+
+        Examples:
+            Offer every free unit of EMBASSY at a limit 3 per cent above the last price, and cancel the held order at once:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="EMBASSY")
+            if trust.holdings is None:
+                print("No EMBASSY units are held, so there is nothing to sell.")
+            else:
+                limit_price = round(trust.last_price * 1.03, 2)
+                answer = trust.liquidate_holdings(price=limit_price)
+                try:
+                    print(answer)
+                finally:
+                    print(trust.cancel_parent(answer["parent_id"]))
+            ```
+
+            Try to empty a holding of PGINVIT and handle the refusal when none is held or every unit is pledged:
+
+            ```python
+            from tradingmachine.assets import exceptions
+            from tradingmachine.assets import funds
+
+            trust = funds.InvestmentTrust(exchange="nse", symbol="PGINVIT")
+            limit_price = round(trust.last_price * 1.03, 2)
+            try:
+                answer = trust.liquidate_holdings(price=limit_price)
+            except exceptions.HoldingError as error:
+                print(f"Nothing to sell: {error}")
+            else:
+                try:
+                    print(answer)
+                finally:
+                    print(trust.cancel_parent(answer["parent_id"]))
+            ```
         """
         row = self._held_row()
         free_quantity = self._free_quantity(row)
@@ -696,6 +1230,39 @@ class InvestmentTrust(instruments.TradeableInstrument):
         Raises:
             BadRequestError: The exchange is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Find trusts on the nse whose symbol contains `EMBAS`:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.InvestmentTrust.search(exchange="nse", term="EMBAS")
+            print(matches[["symbol", "exchange", "segment"]])
+            ```
+
+            Count the infrastructure investment trusts on the nse, whose symbols mostly contain `INVIT`:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.InvestmentTrust.search(exchange="nse", term="INVIT")
+            if matches is None:
+                print("No trust matched.")
+            else:
+                print(f"{len(matches)} trusts: {matches['symbol'].tolist()}")
+            ```
+
+            Build the best match for a partial name and print its last price:
+
+            ```python
+            from tradingmachine.assets import funds
+
+            matches = funds.InvestmentTrust.search(exchange="nse", term="PGINV")
+            first_symbol = matches.iloc[0]["symbol"]
+            trust = funds.InvestmentTrust(exchange="nse", symbol=first_symbol)
+            print(f"{trust.symbol}: {trust.last_price}")
+            ```
         """
         return cls._search_catalogue(
             exchange,
