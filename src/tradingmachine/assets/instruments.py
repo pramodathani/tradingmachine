@@ -790,6 +790,144 @@ class Instrument(
         frame.insert(0, "exchange", self.exchange)
         return frame.sort_values("datetime").reset_index(drop=True)
 
+    def ticks(
+        self,
+        start: datetime.datetime | str,
+        end: datetime.datetime | str,
+        adjusted: bool = True,
+    ) -> pd.DataFrame | None:
+        """Fetches every tick UBI's unified live feed recorded for the instrument in a period.
+
+        The period includes start and leaves out end. A value without an offset is read as India time, and a bare date means midnight at the start of that day. A busy instrument records many ticks a second, so ask for short periods.
+
+        Args:
+            start: The first instant to include, as a datetime.datetime or a str such as `2026-09-29 10:00`.
+            end: The first instant to leave out, as a datetime.datetime or a str such as `2026-09-29 15:30`.
+            adjusted: A bool that is True for prices adjusted for splits and bonuses.
+
+        Returns:
+            A pandas.DataFrame sorted by time, with `exchange`, `segment`, `datetime` (when the tick was received), `exchange_time` and `last_trade_time`, all in India time, then `broker`, `last_price`, `last_quantity`, `average_price`, `volume`, `buy_quantity`, `sell_quantity`, `oi` and the order book flattened into `bid1_price` to `bid5_orders` and `ask1_price` to `ask5_orders`, or None when no tick was recorded in the period.
+
+        Raises:
+            BadRequestError: The period is invalid, such as an end that is not after the start.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the best bid and offer of Vodafone Idea for the first minute of a session:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            vodafone_idea = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="IDEA",
+            )
+            ticks = vodafone_idea.ticks(
+                start="2026-09-29 09:15",
+                end="2026-09-29 09:16",
+            )
+            columns = [
+                "datetime",
+                "bid1_price",
+                "ask1_price",
+            ]
+            print(ticks[columns].head(10))
+            ```
+
+            Work out the share of ticks in an hour at which the spread was a single tick:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            vodafone_idea = instruments.TradeableInstrument(
+                exchange="nse",
+                segment="equities",
+                symbol="IDEA",
+            )
+            ticks = vodafone_idea.ticks(
+                start="2026-09-29 10:00",
+                end="2026-09-29 11:00",
+            )
+            spread = ticks["ask1_price"] - ticks["bid1_price"]
+            tick_size = float(vodafone_idea.tick_size)
+            one_tick = (spread - tick_size).abs() < 1e-9
+            print(f"{len(ticks)} ticks, {one_tick.mean() * 100:.1f}% at one tick")
+            ```
+        """
+        parameters = {
+            "instrument_id": self.instrument_id,
+            "start": str(start),
+            "end": str(end),
+        }
+        if adjusted:
+            parameters["adjusted"] = "true"
+        else:
+            parameters["adjusted"] = "false"
+        response = self._unified_broker_interface.get(
+            "/api/instruments/ticks",
+            params=parameters,
+        )
+        if not response:
+            return None
+        rows = []
+        for tick in response:
+            rows.append(self._flatten_tick(tick))
+        frame = pd.DataFrame(rows)
+        for column in [
+            "datetime",
+            "exchange_time",
+            "last_trade_time",
+        ]:
+            frame[column] = pd.to_datetime(
+                frame[column],
+                utc=True,
+                format="ISO8601",
+            ).dt.tz_convert(INDIA_TIME_ZONE)
+        frame.insert(0, "segment", self.segment)
+        frame.insert(0, "exchange", self.exchange)
+        frame = frame.sort_values("datetime", kind="stable")
+        return frame.reset_index(drop=True)
+
+    @staticmethod
+    def _flatten_tick(tick: dict) -> dict:
+        """Turns one recorded tick from UBI into one flat row.
+
+        Args:
+            tick: The dict of one tick as UBI's ticks route serves it.
+
+        Returns:
+            A dict with the tick's scalar fields and five numbered levels of `price`, `quantity` and `orders` on each side, with None for an empty level.
+        """
+        row = {
+            "datetime": tick.get("time"),
+            "exchange_time": tick.get("exchange_time"),
+            "last_trade_time": tick.get("last_trade_time"),
+            "broker": tick.get("broker"),
+            "last_price": tick.get("last_price"),
+            "last_quantity": tick.get("last_quantity"),
+            "average_price": tick.get("average_price"),
+            "volume": tick.get("volume"),
+            "buy_quantity": tick.get("buy_quantity"),
+            "sell_quantity": tick.get("sell_quantity"),
+            "oi": tick.get("oi"),
+        }
+        depth = tick.get("depth") or {}
+        sides = {
+            "bid": depth.get("buy") or [],
+            "ask": depth.get("sell") or [],
+        }
+        for side_name, levels in sides.items():
+            for level_number in range(1, 6):
+                level = {}
+                if level_number <= len(levels):
+                    level = levels[level_number - 1]
+                prefix = f"{side_name}{level_number}"
+                row[f"{prefix}_price"] = level.get("price")
+                row[f"{prefix}_quantity"] = level.get("quantity")
+                row[f"{prefix}_orders"] = level.get("orders")
+        return row
+
     @property
     def quote(self) -> dict:
         """The instrument's full unified quote, read from UBI on every access.

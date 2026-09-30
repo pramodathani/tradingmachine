@@ -753,3 +753,24 @@ Three things changed here for the new `tradingmachine.asset_baskets` package.
 ### Why `constituents` imports the store inside the property
 
 `constituents` imports `tradingmachine.asset_baskets.basket_store` inside its body rather than at the top of the file. The basket modules import this module, and this module importing the store at the top made a real cycle: importing `tradingmachine.asset_baskets.asset_basket` first started this module, which started the store, which imported `exchange_traded_fund_constituents`, which needed `AssetBasket` before `asset_basket.py` had defined it, and the import failed with `partially initialized module`. Importing at call time breaks the cycle in the simplest visible way. The return annotation comes from an `if TYPE_CHECKING:` import, which the style guide allows for imports needed only by type checkers. Every module of both packages was imported first in a fresh interpreter to check the fix.
+
+## ticks, added on 2026-09-30
+
+`Instrument.ticks(start, end, adjusted=True)` wraps UBI's `GET /api/instruments/ticks`, which streams every tick the unified live feed recorded for one instrument. It was added for a research replication in the sibling `aryabhata` project, which models best bid and best ask movements and needs the recorded order book rather than candles.
+
+It is a method rather than a property because it takes arguments, following the rule from 2026-09-22. Like `prices`, it is not cached and does not split a long period, because UBI is local; UBI's documentation asks callers to request short periods, and the replication fetches an hour at a time.
+
+The order book comes back from UBI as a `depth` object with up to five `buy` and five `sell` levels, and empty levels are left out. `_flatten_tick` turns it into the same `bid1_price` to `ask5_orders` columns that UBI's own tables use, with None for a missing level, so a DataFrame of ticks has a fixed set of columns whatever the depth. It is a `staticmethod` because it needs no instrument state.
+
+### Timestamps come in two shapes
+
+UBI serves `time`, `exchange_time` and `last_trade_time` as ISO 8601 strings, but only some carry fractions of a second, such as `2026-09-16T09:09:52+00:00` beside `2026-09-16T09:09:52.412000+00:00`. Pandas infers one format from the first value and failed on the other, so `pd.to_datetime` is given `format="ISO8601"`, which accepts both. This failure only showed up on 2026-09-16 data, after the docstring examples, which use 2026-09-29, had passed.
+
+### What the recorded ticks are, and are not
+
+Measured on 2026-09-30 for NSE shares:
+
+- `datetime` is when UBI's script received the tick, with microseconds. `exchange_time` is the exchange's time, but only to the whole second.
+- Zerodha's full-mode feed is a snapshot of the book about once a second, not every change, so moves between snapshots are merged. For Vodafone Idea over 16 to 30 September, 88% of best-quote changes had both the bid and the ask move between two snapshots.
+- The recording has outages that hit every instrument at once. On 2026-09-29 the feed for NSE shares stopped at about 11:24 and did not return, and on other days whole stretches of 30 seconds or more are missing. A silence in the ticks is therefore not evidence that nothing traded.
+- The unified feed holds 2026-09-16 onwards, although the broker tables start on 2026-09-11.
