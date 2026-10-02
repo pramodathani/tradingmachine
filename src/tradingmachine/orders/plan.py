@@ -2,7 +2,7 @@
 
 A plan combines the existing synthetic order types and their building blocks in one order. Its orders can wait for a trigger, protect a position, trail the market and be priced by one pricing rule, set either by presets named after the existing types or by slot values, and they are joined with `ThenPart` and `EitherPart`. The parts live in `tradingmachine.orders.plan_parts`, and the order template, the instrument, side, quantity, product and validity, is the same as every other type's.
 
-UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the path of the part it is in. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`. UBI's other joins, `together`, `using`, `repeat` and `sequence`, are not built yet.
+UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the path of the part it is in. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`. UBI has also built the joins `together`, `using`, `repeat` and `sequence`, which have no class here yet.
 
 Typical usage example:
 

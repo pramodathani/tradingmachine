@@ -693,8 +693,8 @@ answer = order.place()
 
 UBI checks the whole plan before recording or sending anything, and a plan with any problem is refused with HTTP 400 listing every problem with the path of the part it is in, such as `root.each_fill.children.1`. A dry run answers with the plan as it would run, every default written out, under `plan`. A plan that sends nothing at once answers HTTP 202 with an `outcome` of `armed`.
 
-!!! info "Plans are still being built in UBI"
-    UBI has built the `then` and `either` joins and thirteen presets so far. Its other joins, `together`, `using`, `repeat` and `sequence`, are refused as not built yet, and the other types become presets as UBI adds them. Because `Preset` takes any name, a new preset works here as soon as UBI offers it.
+!!! info "UBI's plan offers more than these classes yet"
+    UBI has built every join, `then`, `either`, `together`, `using`, `repeat` and `sequence`, and a preset for every other type, along with executions, pricings, triggers, lifetimes and venues that have no class here yet. Because `Preset` takes any name, every preset already works here.
 
 ## The Atlas rows that need no class
 
