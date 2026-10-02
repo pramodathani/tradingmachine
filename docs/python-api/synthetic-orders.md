@@ -640,10 +640,17 @@ The table below lists the parts by kind.
 
 | Kind | Classes | What they decide |
 |---|---|---|
-| Nodes | `OrderPart`, `ThenPart`, `EitherPart` | The shape of the tree: one order, an order that starts another when it fills, or several run at once where a fill on one acts on the others. |
+| Node | `OrderPart` | One order, and every setting below that shapes it. It can also give its own `instrument`, `quantity`, `transaction_type`, `product`, `validity` and `tag`, which is how one plan trades several instruments. |
+| Joins | `ThenPart`, `EitherPart`, `TogetherPart`, `SequencePart`, `RepeatPart`, `UsingPart` | The shape of the tree: an order that starts another when it fills; several at once where a fill on one acts on the others; several sent together, or one after another; one order sent again on a schedule; and one order split into pieces, each run as a plan of its own. |
 | Presets | `Preset` | An existing type used as an ingredient, such as `Preset("bracket", stop_price=990.0, stop_limit_price=988.0, target_price=1010.0)`. |
-| Triggers | `PriceCrosses`, `Trails`, `TimeAt`, `TimeAfter`, `TimeBefore`, `AllConditions`, `AnyCondition` | When an order is sent. |
-| Pricing | `FixedPricing`, `MarketablePricing`, `NativeStopPricing`, `TrailPricing` | The price it is sent at, and whether that price follows the market. |
+| Triggers | `PriceCrosses`, `Trails`, `CandleCloses`, `AccountCondition`, `LimitMarketable`, `TimeAt`, `TimeAfter`, `TimeBefore`, `TimeFrom`, `AllConditions`, `AnyCondition` | When an order is sent. |
+| Pricing | `FixedPricing`, `MarketablePricing`, `NativeStopPricing`, `TrailPricing`, `PegPricing`, `ChasePricing`, `FollowInstrumentPricing`, `OptionModelPricing`, `StagesPricing` with `StageRule`, `FromFillPricing`, `FromParentFillPricing` | The price it is sent at, and whether that price follows the market, another instrument or an earlier fill. |
+| Pricing modifiers | `CapModifier`, `DiscretionModifier` | A worst price the rule may not pass, and a little room to trade past the price. They go beside the pricing rule. |
+| Executions | `AllAtOnceExecution`, `IcebergExecution`, `TwapExecution`, `VwapExecution`, `FrontLoadedExecution`, `ParticipationExecution`, `BookDepthExecution`, `TopUpExecution`, `DailyExecution`, `LadderExecution`, `FreezeLimitExecution` | How the order is sent: whole, or in pieces over time, by volume or by price. One execution can work each piece of another, such as TWAP slices each shown as an iceberg. |
+| Guard | `PostOnlyGuard` | Keeps an order from trading at once, so it only ever rests in the book. |
+| Lifetime | `Lifetime` | When an order ends by itself, at a time, after a while or when a condition holds, and what it does then. |
+| Venues | `PreOpenVenue`, `PaperVenue` | Sends the order in the pre-open session, or fills it on paper only. |
+| Quantities | `PositionQuantity`, `ParentFillQuantity`, `ParentFillDeltaQuantity` | Sizes the order from a position, from what an earlier order filled, or from the delta of an option the plan traded. |
 
 An `OrderPart` can also take `side="protect"`, which trades against the position the template's side opened, so a buy's protecting order is a sell. Presets are merged first and the order's own values after them: triggers from several sources must all hold, and a later pricing rule replaces an earlier one.
 
@@ -693,8 +700,49 @@ answer = order.place()
 
 UBI checks the whole plan before recording or sending anything, and a plan with any problem is refused with HTTP 400 listing every problem with the path of the part it is in, such as `root.each_fill.children.1`. A dry run answers with the plan as it would run, every default written out, under `plan`. A plan that sends nothing at once answers HTTP 202 with an `outcome` of `armed`.
 
-!!! info "UBI's plan offers more than these classes yet"
-    UBI has built every join, `then`, `either`, `together`, `using`, `repeat` and `sequence`, and a preset for every other type, along with executions, pricings, triggers, lifetimes and venues that have no class here yet. Because `Preset` takes any name, every preset already works here.
+The example below buys in six slices over an hour, each slice shown to the market ten shares at a time, pegged to the bid but never above 1010, and ends whatever is left at 14:30.
+
+```python
+from tradingmachine.orders import plan
+from tradingmachine.orders.plan_parts import cap_modifier
+from tradingmachine.orders.plan_parts import iceberg_execution
+from tradingmachine.orders.plan_parts import lifetime
+from tradingmachine.orders.plan_parts import order_part
+from tradingmachine.orders.plan_parts import peg_pricing
+from tradingmachine.orders.plan_parts import twap_execution
+
+order = plan.PlanOrder(
+    share,
+    transaction_type="buy",
+    product="mis",
+    order_type="limit",
+    quantity=120,
+    price=1000.0,
+    plan=order_part.OrderPart(
+        pricing=peg_pricing.PegPricing(reference="own_touch"),
+        cap=cap_modifier.CapModifier(worst_price=1010.0),
+        execution=twap_execution.TwapExecution(slices=6, over_minutes=60),
+        inner_execution=iceberg_execution.IcebergExecution(visible_quantity=10),
+        lifetime=lifetime.Lifetime(at_time="14:30"),
+    ),
+    dry_run=True,
+)
+answer = order.place()
+```
+
+Because `Preset` takes any name, every preset UBI offers works here as soon as UBI adds it.
+
+### Acting on one part
+
+Once a plan is placed, each of its parts is named by a path, such as `root.first` for a bracket's entry and `root.each_fill.children.0` and `root.each_fill.children.1` for its stop and target. The table below lists the three members that work with those paths.
+
+| Member | What it does |
+|---|---|
+| `parts` | A table of the plan's parts, one row per path, with each part's `state`: `pending`, `waiting`, `working` or `done`. |
+| `cancel_part(part, dry_run=False)` | Cancels one part while the rest of the plan carries on. A part whose turn has not come is never sent, and a part that has sent orders sends no more and has its resting orders cancelled. |
+| `modify_part(part, price=None, trigger_price=None, quantity=None, dry_run=False)` | Changes a part that has not sent anything yet, such as a bracket's stop before the entry fills. Nothing is sent to a broker until the part's turn comes. |
+
+They call `TradeableInstrument.cancel_parent` and `modify_order` with the plan's `parent_id` and the part's path, which can also be used directly.
 
 ## The Atlas rows that need no class
 
