@@ -93,6 +93,8 @@ UBI holds one access token for the whole application, and it expires after a day
 
 Every order UBI places goes through its order engine, `bin/unified/orders/order_engine`, since UBI removed direct placement on 2026-09-27. When the engine is not running, `POST /api/orders/place` answers HTTP 503 and nothing is placed. `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT` no longer exists in UBI.
 
+Since 21:43 on 2026-10-02 UBI runs every fixed synthetic type as a plan of its preset, at the user's choice: `UNIFIED_BROKER_INTERFACE_API_ORDER_PLAN_TYPES` in UBI's own `.env` names all fifty-two types that have a preset, everything except `simple` and `plan`, and the order engine service `unified-orders@order_engine.service` was restarted to read it. The requests this library sends do not change, but the answers do: a dry run answers with a `plan` tree, a parent shows `working` rather than a type's own states such as `protecting`, its legs carry plan paths such as `root.each_fill.children.0` as their roles, and its parameters carry `routed_from`. A plain held limit order is a `virtual_limit` and so is routed too. UBI's own guidance was to switch one type at a time after its preset had traded live, and none had when all were switched, so a misbehaving type is moved back by removing its name from that setting and restarting the engine with `systemctl --user restart unified-orders@order_engine.service`.
+
 ## Environment and commands
 
 Use the interpreter and tools inside `.venv/` directly rather than any system-wide installation.
