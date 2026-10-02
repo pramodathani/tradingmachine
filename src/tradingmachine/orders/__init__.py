@@ -59,10 +59,11 @@ The module names spell out the abbreviations UBI uses for the type names:
 | `scale_with_profit_taker` | `scale_with_profit_taker` | `ScaleWithProfitTakerOrder` |
 | `two_sided_quote` | `two_sided_quote` | `TwoSidedQuoteOrder` |
 | `account_conditional` | `account_conditional` | `AccountConditionalOrder` |
+| `plan` | `plan` | `PlanOrder` |
 
 Every class also takes `reduce_only`, which has UBI refuse any leg that would not reduce the position held. Once `place()` has sent an order, the object keeps its `parent_id`, and its `cancel()`, `parent`, `orders` and `trades` members act on or read that parent in UBI's order engine.
 
-`synthetic_order` holds the shared base, `SyntheticOrder`, and `order_candidate` and `exposure_watch` hold the two small classes the multi-instrument types take as arguments.
+`synthetic_order` holds the shared base, `SyntheticOrder`, and `order_candidate` and `exposure_watch` hold the two small classes the multi-instrument types take as arguments. The package `plan_parts` holds the parts a `PlanOrder` is built from, which let one order combine several of the other types.
 
 Nothing is imported here, so import the module you need.
 

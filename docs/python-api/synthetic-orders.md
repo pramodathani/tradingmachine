@@ -20,6 +20,7 @@ The table below lists the three classes every synthetic order is built from, and
 | <span class="member property">property</span> | [`orders`, `trades`](#after-place-the-parent) | Today's broker orders the order placed, and their trades. |
 | <span class="member class">class</span> | [`OrderCandidate`](#ordercandidate) | One leg of an order that spans several instruments. |
 | <span class="member class">class</span> | [`ExposureWatch`](#exposurewatch) | One watched instrument of an exposure hedge. |
+| <span class="member class">class</span> | [`PlanOrder`](#plans-combining-the-types) | An order described as a tree of parts, which can combine the other types in one order. |
 
 ## All fifty-three types
 
@@ -630,6 +631,70 @@ The tabs below group the fifty-three classes into UBI's eight families, which UB
     )
     answer = order.place()
     ```
+
+## Plans: combining the types
+
+A plan is UBI's fifty-fourth type, and it describes an order as a tree of parts rather than naming one fixed type. That lets several of the types above be combined in one order, such as a bracket whose entry waits for the price to touch a level, or an entry whose fills are protected by a stop and a trailing stop at once. `PlanOrder`, in `tradingmachine.orders.plan`, takes the same order template as every other class plus a `plan` argument, and the parts of the tree come from the package `tradingmachine.orders.plan_parts`, one class per part.
+
+The table below lists the parts by kind.
+
+| Kind | Classes | What they decide |
+|---|---|---|
+| Nodes | `OrderPart`, `ThenPart`, `EitherPart` | The shape of the tree: one order, an order that starts another when it fills, or several run at once where a fill on one acts on the others. |
+| Presets | `Preset` | An existing type used as an ingredient, such as `Preset("bracket", stop_price=990.0, stop_limit_price=988.0, target_price=1010.0)`. |
+| Triggers | `PriceCrosses`, `Trails`, `TimeAt`, `TimeAfter`, `TimeBefore`, `AllConditions`, `AnyCondition` | When an order is sent. |
+| Pricing | `FixedPricing`, `MarketablePricing`, `NativeStopPricing`, `TrailPricing` | The price it is sent at, and whether that price follows the market. |
+
+An `OrderPart` can also take `side="protect"`, which trades against the position the template's side opened, so a buy's protecting order is a sell. Presets are merged first and the order's own values after them: triggers from several sources must all hold, and a later pricing rule replaces an earlier one.
+
+The example below is a limit buy whose every fill is protected by a stop resting at the broker and by a stop that trails five rupees behind the market. The two stops share one quantity, so as one fills the other shrinks.
+
+```python
+from tradingmachine.orders import plan
+from tradingmachine.orders.plan_parts import either_part
+from tradingmachine.orders.plan_parts import native_stop_pricing
+from tradingmachine.orders.plan_parts import order_part
+from tradingmachine.orders.plan_parts import then_part
+from tradingmachine.orders.plan_parts import trail_pricing
+
+order = plan.PlanOrder(
+    share,
+    transaction_type="buy",
+    product="mis",
+    order_type="limit",
+    quantity=10,
+    price=1000.0,
+    plan=then_part.ThenPart(
+        first=order_part.OrderPart(),
+        each_fill=either_part.EitherPart(
+            children=[
+                order_part.OrderPart(
+                    side="protect",
+                    pricing=native_stop_pricing.NativeStopPricing(
+                        trigger_price=980.0,
+                        limit_price=978.0,
+                    ),
+                ),
+                order_part.OrderPart(
+                    side="protect",
+                    pricing=trail_pricing.TrailPricing(
+                        points=5.0,
+                        limit_offset=1.0,
+                    ),
+                ),
+            ],
+            sibling_rule="reduce",
+        ),
+    ),
+    dry_run=True,
+)
+answer = order.place()
+```
+
+UBI checks the whole plan before recording or sending anything, and a plan with any problem is refused with HTTP 400 listing every problem with the path of the part it is in, such as `root.each_fill.children.1`. A dry run answers with the plan as it would run, every default written out, under `plan`. A plan that sends nothing at once answers HTTP 202 with an `outcome` of `armed`.
+
+!!! info "Plans are still being built in UBI"
+    UBI has built the `then` and `either` joins and thirteen presets so far. Its other joins, `together`, `using`, `repeat` and `sequence`, are refused as not built yet, and the other types become presets as UBI adds them. Because `Preset` takes any name, a new preset works here as soon as UBI offers it.
 
 ## The Atlas rows that need no class
 
