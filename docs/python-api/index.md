@@ -138,7 +138,7 @@ These members place, change and cancel orders in one instrument, read that instr
 | <span class="member writes">places orders</span> | [`modify_order`](orders.md#modify_order) | Changes one pending order through UBI. |
 | <span class="member writes">places orders</span> | [`cancel_order`](orders.md#cancel_order) | Cancels one pending order through UBI. |
 | <span class="member writes">places orders</span> | [`cancel_open_orders`](orders.md#cancel_open_orders) | Cancels every order in this instrument that is still waiting, whether at a broker or held in UBI's order engine. |
-| <span class="member writes">places orders</span> | [`cancel_parent`](orders.md#cancel_parent) | Cancels one of the order engine's parents, with every leg it still has resting at a broker. |
+| <span class="member writes">places orders</span> | [`cancel_parent`](orders.md#cancel_parent) | Cancels one of the order engine's parents, with every leg it still has resting at a broker, or one part of a plan. |
 | <span class="member property">property</span> | [`orders`](orders.md#orders) | Every one of today's orders in this instrument, whatever its status. |
 | <span class="member property">property</span> | [`open_orders`](orders.md#open_orders) | Today's orders in this instrument that can still be changed. |
 | <span class="member property">property</span> | [`completed_orders`](orders.md#completed_orders) | Today's orders in this instrument that filled in full. |

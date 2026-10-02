@@ -780,3 +780,11 @@ Measured on 2026-09-30 for NSE shares:
 The user asked that the sell side of the order book be called the offer everywhere in the library's own names, to match `best_offer`, `bid_offer_spread` and the `*_offer_price` order wrappers, which already used that word. So the `asks` property became `offers`, and the `ticks` columns `ask1_price` to `ask5_orders` became `offer1_price` to `offer5_orders`. The ticks columns therefore no longer match the `ask1_price` columns in UBI's broker tick tables, which is deliberate.
 
 Two uses of "ask" were left alone because they are UBI's vocabulary rather than the library's names: the `ask` value of `trigger_on` on the price-trigger order types, which UBI validates, and the history above, which records the old project's `asks`.
+
+## Naming one part of a plan, on 2026-10-02
+
+UBI's commits `2ea9e57`, `ae01763` and `102433f` of 2026-10-02 let a caller act on one part of a `plan` order rather than the whole parent, naming it by the plan's `parent_id` and the part's path, such as `root.each_fill.children.0` for a bracket's stop, as `GET /api/orders/parents` lists it under `parameters.parts`. `PUT /api/orders/modify` with `part` changes the `price`, `trigger_price` or `quantity` of a part that has not been sent, and `DELETE /api/orders/cancel` with `parent_id` and `part` cancels one part while the rest of the plan carries on. So `modify_order` gained `part`, and `cancel_parent` gained `part` and `dry_run`.
+
+`cancel_parent` sends a whole-parent cancel to `DELETE /api/orders/parents` as before, and only a part or a dry run to `DELETE /api/orders/cancel`, which UBI added `parent_id` to on the same day and which is the only route that takes them. UBI documents both routes as giving the same answer for a whole parent, and keeps `/api/orders/parents` for the programs that already call it. The whole-parent cancel was left on its old route because every example program's clean-up depends on it and it had been run live, while the new route had not been run live from here when this was written; moving it is a one-line change once it has been.
+
+UBI's cancel route also takes `parent_id` without `part`, so `cancel_order` could have taken a `parent_id` too. It was not given one, because `cancel_parent` already names a parent and two methods doing the same thing would only invite the question of which to use.
