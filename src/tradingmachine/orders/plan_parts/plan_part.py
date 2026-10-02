@@ -17,7 +17,7 @@ class PlanPart:
         """Builds the object UBI reads for this part.
 
         Returns:
-            A dict holding exactly one key, the part's UBI name, whose value is the part's settings.
+            A dict holding exactly one key, the part's UBI name, whose value is the part's settings. The few parts that are entries of a list rather than named values, `Lifetime`, `PreOpenVenue`, `PaperVenue` and `StageRule`, hold their settings directly instead.
 
         Raises:
             NotImplementedError: The part is the base class itself, which stands for no part of a plan.
