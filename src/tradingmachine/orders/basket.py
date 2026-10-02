@@ -31,6 +31,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
 
     Attributes:
         candidates: The list of order_candidate.OrderCandidate, one per instrument.
+        hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs.
     """
 
     SYNTHETIC_TYPE = "basket"
@@ -51,6 +52,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
         closes_position: bool = False,
         reduce_only: bool = False,
         dry_run: bool = False,
+        hedge_benefit: bool = False,
     ):
         """Initialises the candidates, the template they default to and this type's own settings.
 
@@ -68,6 +70,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs, rather than adding every leg's margin up.
 
         Raises:
             ValueError: No candidate was given, so there is no instrument to anchor the request.
@@ -92,6 +95,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
             dry_run=dry_run,
         )
         self.candidates = list(candidates)
+        self.hedge_benefit = hedge_benefit
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -158,6 +162,9 @@ class BasketOrder(synthetic_order.SyntheticOrder):
         documents = []
         for candidate in self.candidates:
             documents.append(candidate.document())
-        return {
+        fields = {
             "candidates": documents,
         }
+        if self.hedge_benefit:
+            fields["hedge_benefit"] = True
+        return fields

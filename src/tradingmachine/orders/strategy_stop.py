@@ -32,6 +32,7 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
 
     Attributes:
         candidates: The list of order_candidate.OrderCandidate, one per instrument.
+        hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs.
         loss_limit: The float loss in rupees for the whole strategy at which every leg is closed, below zero, or None.
         profit_target: The float profit in rupees for the whole strategy at which every leg is closed, above zero, or None.
     """
@@ -56,6 +57,7 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
         dry_run: bool = False,
         loss_limit: float | None = None,
         profit_target: float | None = None,
+        hedge_benefit: bool = False,
     ):
         """Initialises the candidates, the template they default to and this type's own settings.
 
@@ -75,6 +77,7 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
             loss_limit: The float loss in rupees for the whole strategy at which every leg is closed, below zero, or None.
             profit_target: The float profit in rupees for the whole strategy at which every leg is closed, above zero, or None.
+            hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs, rather than adding every leg's margin up.
 
         Raises:
             ValueError: No candidate was given, so there is no instrument to anchor the request.
@@ -101,6 +104,7 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
         self.candidates = list(candidates)
         self.loss_limit = loss_limit
         self.profit_target = profit_target
+        self.hedge_benefit = hedge_benefit
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -114,8 +118,11 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
         documents = []
         for candidate in self.candidates:
             documents.append(candidate.document())
-        return {
+        fields = {
             "candidates": documents,
             "loss_limit": self.loss_limit,
             "profit_target": self.profit_target,
         }
+        if self.hedge_benefit:
+            fields["hedge_benefit"] = True
+        return fields

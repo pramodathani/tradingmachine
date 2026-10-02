@@ -36,6 +36,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
         periods: The int number of bars averaged, at least 2, or None to let UBI use 14.
         average_true_range_multiple: The float multiple of the average true range to trail by, or None to let UBI use 2.
         step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+        activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
     """
 
     SYNTHETIC_TYPE = "atr_trail"
@@ -65,6 +66,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
         periods: int | None = None,
         average_true_range_multiple: float | None = None,
         step_ticks: int | None = None,
+        activate_at: float | None = None,
     ):
         """Initialises the order template and this type's own settings.
 
@@ -91,6 +93,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
             periods: The int number of bars averaged, at least 2, or None to let UBI use 14.
             average_true_range_multiple: The float multiple of the average true range to trail by, or None to let UBI use 2.
             step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+            activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
 
         Raises:
             Nothing.
@@ -119,6 +122,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
         self.periods = periods
         self.average_true_range_multiple = average_true_range_multiple
         self.step_ticks = step_ticks
+        self.activate_at = activate_at
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -180,4 +184,5 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
             "periods": self.periods,
             "atr_multiple": self.average_true_range_multiple,
             "step_ticks": self.step_ticks,
+            "activate_at": self.activate_at,
         }

@@ -7,3 +7,7 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row B8 A
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 The module name and the `average_true_range_multiple` parameter spell out UBI's `atr_trail` and `atr_multiple`; `synthetic_fields()` sends the parameter under UBI's name.
+
+## `activate_at`, added on 2026-10-02
+
+UBI's `atr_trail` shares the base class `TrailingOrder` with `trailing_stop` and does not override its `run`, so it reads `activate_at` and holds the order until the last traded price reaches that level, answering HTTP 202 with an `outcome` of `armed`. UBI's own table of fixed types does not list `activate_at` for `atr_trail`, although its code and its `ATR_TRAIL_SETTINGS` preset settings accept it; it was added here on 2026-10-02 because the code accepts it, and it is the one setting of this class that UBI's documentation does not promise.

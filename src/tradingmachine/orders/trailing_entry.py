@@ -35,6 +35,7 @@ class TrailingEntryOrder(synthetic_order.SyntheticOrder):
         trail_points: The float fixed trailing distance in rupees, or None.
         trail_percent: The float trailing distance as a percentage of the best price seen, or None.
         step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+        activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
     """
 
     SYNTHETIC_TYPE = "trailing_entry"
@@ -62,6 +63,7 @@ class TrailingEntryOrder(synthetic_order.SyntheticOrder):
         trail_points: float | None = None,
         trail_percent: float | None = None,
         step_ticks: int | None = None,
+        activate_at: float | None = None,
     ):
         """Initialises the order template and this type's own settings.
 
@@ -86,6 +88,7 @@ class TrailingEntryOrder(synthetic_order.SyntheticOrder):
             trail_points: The float fixed trailing distance in rupees, or None.
             trail_percent: The float trailing distance as a percentage of the best price seen, or None.
             step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
+            activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
 
         Raises:
             Nothing.
@@ -112,6 +115,7 @@ class TrailingEntryOrder(synthetic_order.SyntheticOrder):
         self.trail_points = trail_points
         self.trail_percent = trail_percent
         self.step_ticks = step_ticks
+        self.activate_at = activate_at
 
     def synthetic_fields(self) -> dict:
         """Gives this type's own settings, the fields of the `synthetic` object besides `type`.
@@ -127,4 +131,5 @@ class TrailingEntryOrder(synthetic_order.SyntheticOrder):
             "trail_points": self.trail_points,
             "trail_percent": self.trail_percent,
             "step_ticks": self.step_ticks,
+            "activate_at": self.activate_at,
         }
