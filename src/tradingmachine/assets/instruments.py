@@ -2706,13 +2706,6 @@ class TradeableInstrument(Instrument):
                 print("Refused:", error)
             ```
         """
-        if part is None and not dry_run:
-            return self._unified_broker_interface.delete(
-                ORDER_PARENTS_PATH,
-                body={
-                    "parent_id": parent_id,
-                },
-            )
         body = {
             "parent_id": parent_id,
             "dry_run": dry_run,
