@@ -1,6 +1,6 @@
 """Rest a stepped stop for a one-share long, with milestones that would move it to breakeven and then start trailing.
 
-The program places a stepped stop as if a one-share intraday long in Vodafone Idea had just been bought at the last price, without buying anything. UBI rests a sell stop-limit 8% below the market, and its rules would move the stop to breakeven at a 6% gain and start trailing 3% behind at a 9% gain. The order's own price is set to the stop's price rather than the market, because UBI sends only the stop and a template priced at the market could otherwise trade. Neither the stop nor any milestone is reached in the seconds the order lives; the program prints the parent and the resting stop and cancels it.
+A stepped stop protects a position, and UBI refuses it with HTTP 409 when no position is held on the side that opened it, so the program opens its own: it buys one Vodafone Idea share at the best offer as an intraday position. UBI then rests a sell stop-limit 8% below the market, and its rules would move the stop to breakeven at a 6% gain and start trailing 3% behind at a 9% gain. The order's own price is set to the stop's price rather than the market, because UBI sends only the stop and a template priced at the market could otherwise trade. Neither the stop nor any milestone is reached in the seconds the order lives; the program prints the parent and the resting stop, cancels it and sells the share back. It refuses to start when Vodafone Idea is already held intraday, so that it never acts on a position it did not open.
 
 Typical usage example:
 
@@ -22,6 +22,7 @@ class SteppedStopForLong:
     Attributes:
         trading_account: The tradingmachine.accounts.account.Account, used to read the engine's answer when it comes late.
         share: The tradingmachine.assets.equities.Equity for Vodafone Idea on the NSE.
+        quantity_before: The int intraday quantity of Vodafone Idea held before the program opened its position.
         order: The tradingmachine.orders.stepped_stop.SteppedStopOrder the program places, or None before run() builds it.
     """
 
@@ -33,6 +34,7 @@ class SteppedStopForLong:
         """
         self.trading_account = account.Account()
         self.share = equities.Equity(exchange="nse", symbol="IDEA")
+        self.quantity_before = 0
         self.order = None
 
     def price_from_market(
@@ -229,28 +231,127 @@ class SteppedStopForLong:
             f"Parent {self.order.parent_id} is still not cancelled, so check it by hand"
         )
 
-    def run(self) -> None:
-        """Places the stepped stop, prints the parent and the resting stop, then cancels it.
+    def held_quantity(self) -> int:
+        """Gives the net intraday quantity of Vodafone Idea held now.
+
+        Returns:
+            The int quantity, positive when long, negative when short and 0 when nothing is held.
+
+        Raises:
+            tradingmachine.unified_broker_interface.exceptions.UnifiedBrokerInterfaceError: UBI could not read the positions.
+        """
+        positions = self.share.net_positions
+        if positions is None:
+            return 0
+        total = 0
+        for row in positions.to_dict("records"):
+            if row["product"] == "intraday":
+                total = total + int(row["quantity"])
+        return total
+
+    def open_position(self) -> None:
+        """Buys one share at the best offer as an intraday position and waits until UBI reports it.
+
+        The buy is a marketable limit half a percent above the best offer rather than a market order, because brokers refuse market orders sent through an API, and it is immediate-or-cancel so that nothing is left resting if it cannot fill at once. UBI chooses the broker for each order, so a buy one broker refuses is sent again up to four times, and a buy the engine answers late is not sent again but waited for.
 
         Returns:
             None.
 
         Raises:
+            TimeoutError: The position did not appear within thirty seconds.
+            tradingmachine.unified_broker_interface.exceptions.UnifiedBrokerInterfaceError: UBI refused the order or could not be reached.
+        """
+        for attempt in range(4):
+            try:
+                answer = self.share.buy_at_marketable_price(
+                    quantity=1,
+                    product="mis",
+                    validity="ioc",
+                    buffer_percent=0.5,
+                )
+            except exceptions.OrderRejectedError as error:
+                print(f"A broker refused the buy, so it is sent again: {error}")
+                continue
+            except exceptions.OrderOutcomeUnknownError:
+                print("The engine answered the buy late, so the position is watched.")
+                break
+            print(f"Opened with marketable buy {answer.get('order_id')}")
+            break
+        for attempt in range(30):
+            if self.held_quantity() > self.quantity_before:
+                print(f"Now holding {self.held_quantity()} intraday")
+                return
+            time.sleep(1)
+        raise TimeoutError("The buy did not show as a position within 30 seconds")
+
+    def close_position(self) -> None:
+        """Sells back the share this program bought, if the position shows that it was bought, trying up to five times.
+
+        The sell is sent with `reduce_position`, whose quantity reference UBI sizes and routes against the broker that actually holds the position, so the account is left as it was found rather than long at one broker and short at another. It is a limit half a percent below the last price, because brokers refuse market orders sent through an API.
+
+        Returns:
+            None.
+
+        Raises:
+            tradingmachine.unified_broker_interface.exceptions.UnifiedBrokerInterfaceError: UBI could not be reached.
+        """
+        for attempt in range(5):
+            if self.held_quantity() <= self.quantity_before:
+                print(f"Back to {self.held_quantity()} intraday, as before.")
+                return
+            try:
+                answer = self.share.reduce_position(
+                    quantity=1,
+                    product="mis",
+                    price=self.price_from_market(self.share, -0.5),
+                )
+            except exceptions.OrderRejectedError as error:
+                print(f"A broker refused the sell, so it is sent again: {error}")
+                time.sleep(2)
+                continue
+            except exceptions.OrderOutcomeUnknownError:
+                print(
+                    "The engine answered the sell late, so the position is read again."
+                )
+                time.sleep(10)
+                continue
+            print(f"Reducing the position with sell {answer.get('order_id')}")
+            time.sleep(4)
+        print("The position could still be open, so check it by hand.")
+
+    def run(self) -> None:
+        """Opens the position, places the stepped stop, prints the parent and the resting stop, cancels it and closes the position.
+
+        Returns:
+            None.
+
+        Raises:
+            RuntimeError: Vodafone Idea was already held intraday, so the program does not touch it.
             ValueError: UBI has no last price for a share.
+            TimeoutError: The opening order did not show as a position in time.
             tradingmachine.unified_broker_interface.exceptions.UnifiedBrokerInterfaceError: UBI refused a request or could not be reached.
         """
-        self.order = self.build_order(dry_run=False)
-        answer = self.place_order()
-        print(
-            f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
-            f"{answer.get('outcome')}, parent {self.order.parent_id}"
-        )
+        self.quantity_before = self.held_quantity()
+        if self.quantity_before != 0:
+            raise RuntimeError(
+                f"Vodafone Idea is already held intraday ({self.quantity_before}), so the program leaves that position alone"
+            )
         try:
-            time.sleep(2)
-            self.print_parent()
-            self.print_broker_orders()
+            self.open_position()
+            self.order = self.build_order(dry_run=False)
+            answer = self.place_order()
+            print(
+                f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
+                f"{answer.get('outcome')}, parent {self.order.parent_id}"
+            )
+            try:
+                time.sleep(2)
+                self.print_parent()
+                self.print_broker_orders()
+            finally:
+                self.cancel_order()
         finally:
-            self.cancel_order()
+            self.close_position()
 
 
 if __name__ == "__main__":
