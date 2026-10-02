@@ -43,18 +43,18 @@ class OrderBookSnapshot:
             tradingmachine.unified_broker_interface.exceptions.UnifiedBrokerInterfaceError: UBI refused the request or could not be reached.
         """
         bids = self.share.bids
-        asks = self.share.asks
-        print(f"{'Bid qty':>10} {'Bid':>10} | {'Ask':<10} {'Ask qty':<10}")
+        offers = self.share.offers
+        print(f"{'Bid qty':>10} {'Bid':>10} | {'Offer':<10} {'Offer qty':<10}")
         for level in range(5):
             bid_text = f"{'':>10} {'':>10}"
             if level < len(bids):
                 bid = bids[level]
                 bid_text = f"{bid['quantity']:>10} {bid['price']:>10.2f}"
-            ask_text = ""
-            if level < len(asks):
-                ask = asks[level]
-                ask_text = f"{ask['price']:<10.2f} {ask['quantity']:<10}"
-            print(f"{bid_text} | {ask_text}")
+            offer_text = ""
+            if level < len(offers):
+                offer = offers[level]
+                offer_text = f"{offer['price']:<10.2f} {offer['quantity']:<10}"
+            print(f"{bid_text} | {offer_text}")
 
     def print_figures(self) -> None:
         """Prints the spread, the mid price and the day's trading figures.

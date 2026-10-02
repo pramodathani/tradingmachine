@@ -73,7 +73,7 @@ These members read candles, quotes and the order book. The first four work on ev
 | <span class="member property">property</span> | [`last_price`](market-data.md#last_price) | The instrument's last traded price, read from UBI on every access. |
 | <span class="member property">property</span> | [`ohlc`](market-data.md#ohlc) | The day's open, high and low with the last and previous close prices, read from UBI on every access. |
 | <span class="member property">property</span> | [`bids`](market-data.md#bids) | The buy side of the order book, read from UBI on every access. |
-| <span class="member property">property</span> | [`asks`](market-data.md#asks) | The sell side of the order book, read from UBI on every access. |
+| <span class="member property">property</span> | [`offers`](market-data.md#offers) | The sell side of the order book, read from UBI on every access. |
 | <span class="member property">property</span> | [`best_bid`](market-data.md#best_bid) | The highest bid in the order book. |
 | <span class="member property">property</span> | [`best_offer`](market-data.md#best_offer) | The lowest offer in the order book. |
 | <span class="member property">property</span> | [`bid_offer_spread`](market-data.md#bid_offer_spread) | The gap between the best offer and the best bid, measured from one quote. |
@@ -138,7 +138,7 @@ These members place, change and cancel orders in one instrument, read that instr
 | <span class="member writes">places orders</span> | [`modify_order`](orders.md#modify_order) | Changes one pending order through UBI. |
 | <span class="member writes">places orders</span> | [`cancel_order`](orders.md#cancel_order) | Cancels one pending order through UBI. |
 | <span class="member writes">places orders</span> | [`cancel_open_orders`](orders.md#cancel_open_orders) | Cancels every order in this instrument that is still waiting, whether at a broker or held in UBI's order engine. |
-| <span class="member writes">places orders</span> | [`cancel_parent`](orders.md#cancel_parent) | Cancels one of the order engine's parents, with every leg it still has resting at a broker. |
+| <span class="member writes">places orders</span> | [`cancel_parent`](orders.md#cancel_parent) | Cancels one of the order engine's parents, with every leg it still has resting at a broker, or one part of a plan. |
 | <span class="member property">property</span> | [`orders`](orders.md#orders) | Every one of today's orders in this instrument, whatever its status. |
 | <span class="member property">property</span> | [`open_orders`](orders.md#open_orders) | Today's orders in this instrument that can still be changed. |
 | <span class="member property">property</span> | [`completed_orders`](orders.md#completed_orders) | Today's orders in this instrument that filled in full. |

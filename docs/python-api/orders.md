@@ -275,7 +275,7 @@ Each of these is described, with what to do next, on the [Errors](errors.md) pag
 
 ## modify_order
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `modify_order(order_id=None, quantity=None, price=None, trigger_price=None, order_type=None, validity=None, disclosed_quantity=None, broker=None, dry_run=False, parent_id=None)`<span class="route"><span class="method put">PUT</span> `/api/orders/modify`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `modify_order(order_id=None, quantity=None, price=None, trigger_price=None, order_type=None, validity=None, disclosed_quantity=None, broker=None, dry_run=False, parent_id=None, part=None)`<span class="route"><span class="method put">PUT</span> `/api/orders/modify`</span></div>
 
 This method changes one order that is still waiting in the market. Give at least one field to change; every field left as `None` keeps the value the order already has. UBI finds the order by its id in the brokers' order books, so the method does not check that the order belongs to the instrument you called it on.
 
@@ -298,7 +298,8 @@ An order the engine is still holding, such as a plain limit order waiting for th
 | `disclosed_quantity` | `int` or `None` | no | `None` | The new quantity to show on the exchange. |
 | `broker` | `str` or `None` | no | `None` | The broker holding the order. It is needed only after a `ConflictError` that says two brokers share the id. |
 | `dry_run` | `bool` | no | `False` | `True` has UBI build the broker's request and return it without sending it. |
-| `parent_id` | `str` or `None` | one of the two | `None` | The `parent_id` of an order the engine is still holding, as `place_order` returned it. |
+| `parent_id` | `str` or `None` | one of the two | `None` | The `parent_id` of an order the engine is still holding, or of the plan that holds `part`, as `place_order` returned it. |
+| `part` | `str` or `None` | no | `None` | With `parent_id`, the path of a part of a `plan` order that has not been sent, such as `root.each_fill.children.0` for a bracket's stop. Its `price`, `trigger_price` and `quantity` can change, and it keeps them until its turn comes. |
 
 #### Example
 
@@ -597,7 +598,7 @@ A parent is one order the order engine was asked for, such as a bracket, a trail
 
 ### cancel_parent
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_parent(parent_id)`<span class="route"><span class="method delete">DELETE</span> `/api/orders/parents`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_parent(parent_id, part=None, dry_run=False)`<span class="route"><span class="method delete">DELETE</span> `/api/orders/parents`, or `/api/orders/cancel` with `part` or `dry_run`</span></div>
 
 This method cancels one parent, with every leg it still has resting at a broker, so the parent places, moves and cancels nothing more. It is how a synthetic order is stopped and how a held limit order is cancelled. A position the parent has already opened is not closed.
 
@@ -608,6 +609,8 @@ When a broker refuses the cancel of one leg, or its outcome is unknown, UBI answ
 | Name | Type | Required | Default | Description |
 |---|---|:---:|---|---|
 | `parent_id` | `str` | yes | | The `parent_id` that `place_order` answered with. |
+| `part` | `str` or `None` | no | `None` | The path of one part of a `plan` order to cancel, such as `root.each_fill.children.0`, as the parent's `parameters.parts` lists it. The rest of the plan carries on. `None` cancels the whole parent. |
+| `dry_run` | `bool` | no | `False` | `True` has UBI say what would be cancelled, without cancelling anything. |
 
 #### Example
 
@@ -623,15 +626,15 @@ The example below places a held limit order and cancels it again. No output was 
 
 #### Returns
 
-A `dict` with `parent_id`, `synthetic_type`, `state`, `intent_id` and `cancelled_legs`, which holds one entry per leg with its `leg_id`, `broker`, `order_id`, `outcome` and `status_message`.
+A `dict` with `parent_id`, `synthetic_type`, `state`, `intent_id` and `cancelled_legs`, which holds one entry per leg with its `leg_id`, `broker`, `order_id`, `outcome` and `status_message`. A part answers instead with `parent_id`, `synthetic_type`, `part`, its `state`, `outcome`, `status_message`, `intent_id` and `orders`, where each order's `cancel_accepted` says whether its broker accepted the cancel.
 
 #### Raises
 
 | Exception | When |
 |---|---|
 | `BadRequestError` | The parent id is malformed. |
-| `NotFoundError` | The order engine holds no parent with this id. |
-| `ConflictError` | The parent has already finished. |
+| `NotFoundError` | The order engine holds no parent with this id, or the plan has no part at this path. |
+| `ConflictError` | The parent or part has already finished, the part is kept whole and has not started, or the parent is not a plan and was given a part. |
 | `ServiceUnavailableError` | The order engine is not running. |
 | `OrderOutcomeUnknownError` | The engine did not answer in time. |
 | `UnifiedBrokerInterfaceError` | Any other failure reported by, or on the way to, UBI. |

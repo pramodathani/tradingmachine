@@ -806,7 +806,7 @@ class Instrument(
             adjusted: A bool that is True for prices adjusted for splits and bonuses.
 
         Returns:
-            A pandas.DataFrame sorted by time, with `exchange`, `segment`, `datetime` (when the tick was received), `exchange_time` and `last_trade_time`, all in India time, then `broker`, `last_price`, `last_quantity`, `average_price`, `volume`, `buy_quantity`, `sell_quantity`, `oi` and the order book flattened into `bid1_price` to `bid5_orders` and `ask1_price` to `ask5_orders`, or None when no tick was recorded in the period.
+            A pandas.DataFrame sorted by time, with `exchange`, `segment`, `datetime` (when the tick was received), `exchange_time` and `last_trade_time`, all in India time, then `broker`, `last_price`, `last_quantity`, `average_price`, `volume`, `buy_quantity`, `sell_quantity`, `oi` and the order book flattened into `bid1_price` to `bid5_orders` and `offer1_price` to `offer5_orders`, or None when no tick was recorded in the period.
 
         Raises:
             BadRequestError: The period is invalid, such as an end that is not after the start.
@@ -830,7 +830,7 @@ class Instrument(
             columns = [
                 "datetime",
                 "bid1_price",
-                "ask1_price",
+                "offer1_price",
             ]
             print(ticks[columns].head(10))
             ```
@@ -849,7 +849,7 @@ class Instrument(
                 start="2026-09-29 10:00",
                 end="2026-09-29 11:00",
             )
-            spread = ticks["ask1_price"] - ticks["bid1_price"]
+            spread = ticks["offer1_price"] - ticks["bid1_price"]
             tick_size = float(vodafone_idea.tick_size)
             one_tick = (spread - tick_size).abs() < 1e-9
             print(f"{len(ticks)} ticks, {one_tick.mean() * 100:.1f}% at one tick")
@@ -915,7 +915,7 @@ class Instrument(
         depth = tick.get("depth") or {}
         sides = {
             "bid": depth.get("buy") or [],
-            "ask": depth.get("sell") or [],
+            "offer": depth.get("sell") or [],
         }
         for side_name, levels in sides.items():
             for level_number in range(1, 6):
@@ -1209,7 +1209,7 @@ class TradeableInstrument(Instrument):
         return self.quote["depth"]["buy"]
 
     @property
-    def asks(self) -> list[dict]:
+    def offers(self) -> list[dict]:
         """The sell side of the order book, read from UBI on every access.
 
         Returns:
@@ -1230,7 +1230,7 @@ class TradeableInstrument(Instrument):
                 symbol="INFY",
             )
 
-            for level in infosys.asks:
+            for level in infosys.offers:
                 print(level["price"], level["quantity"], level["orders"])
             ```
 
@@ -1246,7 +1246,7 @@ class TradeableInstrument(Instrument):
             )
 
             offered = 0
-            for level in reliance.asks:
+            for level in reliance.offers:
                 offered = offered + level["quantity"]
             bid = 0
             for level in reliance.bids:
@@ -1356,7 +1356,7 @@ class TradeableInstrument(Instrument):
                 print(f"Cost: Rs {best_offer['price'] * wanted_quantity:.2f}")
             ```
         """
-        return self._best_level(self.asks)
+        return self._best_level(self.offers)
 
     @property
     def bid_offer_spread(self) -> float | None:
@@ -1900,6 +1900,7 @@ class TradeableInstrument(Instrument):
         broker: str | None = None,
         dry_run: bool = False,
         parent_id: str | None = None,
+        part: str | None = None,
     ) -> dict:
         """Changes one pending order through UBI.
 
@@ -1911,6 +1912,8 @@ class TradeableInstrument(Instrument):
 
         An order the engine is still holding, such as a plain limit order waiting for the other side to reach its price, has no broker order id yet. Name it by the `parent_id` that `place_order` answered with instead of `order_id`; only its `price` and `quantity` can change, and nothing is sent to a broker.
 
+        A part of a `plan` order that has not sent anything yet, such as a bracket's stop before the entry fills, is named by the plan's `parent_id` and the part's path in `part`, such as `root.each_fill.children.0`, as the parent's `parameters.parts` lists it. Its `price`, `trigger_price` and `quantity` can change, and it keeps the new values until its turn comes, without anything being sent to a broker. Only a part with a fixed price, a plain limit or a native stop, takes a price, and only a stop takes a trigger price.
+
         Args:
             order_id: The str id the broker gave the order, as `place_order` returned it, or None when naming a held order by `parent_id`.
             quantity: The int new total quantity in underlying units, counting what is already filled, or None to leave it.
@@ -1921,15 +1924,16 @@ class TradeableInstrument(Instrument):
             disclosed_quantity: The int new quantity to show on the exchange, or None to leave it.
             broker: The str name of the broker holding the order, which is needed only after a ConflictError reporting that two brokers share the id, or None.
             dry_run: A bool that is True to have UBI build the broker's request and return it without sending it.
-            parent_id: The str id of an order the engine is still holding, as `place_order` returned it, or None when naming a broker order by `order_id`.
+            parent_id: The str id of an order the engine is still holding, or of the plan that holds `part`, as `place_order` returned it, or None when naming a broker order by `order_id`.
+            part: The str path of a part of a plan that has not been sent, such as `root.each_fill.children.0`, given with `parent_id`, or None.
 
         Returns:
-            A dict with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `outcome`, `status_message`, `broker_response` and `timing_ms`, and `parent_id` and `synthetic_type` for a leg of a synthetic order, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. A held order answers with `parent_id`, `synthetic_type`, `held` set to True, the new `price` and `quantity`, and an `outcome` of `accepted`.
+            A dict with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `outcome`, `status_message`, `broker_response` and `timing_ms`, and `parent_id` and `synthetic_type` for a leg of a synthetic order, or, for a dry run, a dict with `dry_run` and the `request` UBI would have sent. A held order answers with `parent_id`, `synthetic_type`, `held` set to True, the new `price` and `quantity`, and an `outcome` of `accepted`. A part of a plan answers with `parent_id`, `synthetic_type`, `part`, its `state`, the new `price`, `trigger_price` and `quantity`, and an `outcome` of `accepted`.
 
         Raises:
-            BadRequestError: No field was given to change, or a field is invalid or is one this broker cannot change.
-            NotFoundError: No broker's order book holds this order id, or the engine holds no parent with this parent id.
-            ConflictError: The order is already complete, cancelled, rejected or expired, two brokers hold the id and the detail lists them under `brokers`, a leg of a synthetic order was asked to change a field other than its price, trigger price or quantity, or a held order has already been sent, when the detail names its `broker` and `order_id`.
+            BadRequestError: No field was given to change, or a field is invalid or is one this broker cannot change, or a plan part works its price out from the market or is not a stop and was given a price or trigger price it cannot take.
+            NotFoundError: No broker's order book holds this order id, the engine holds no parent with this parent id, or the plan has no part at this path.
+            ConflictError: The order is already complete, cancelled, rejected or expired, two brokers hold the id and the detail lists them under `brokers`, a leg of a synthetic order was asked to change a field other than its price, trigger price or quantity, a held order or plan part has already been sent, when the detail names its `broker` and `order_id`, or a plan part is sized by an earlier part's fills, is kept whole, or closes a position and was asked to grow.
             OrderRejectedError: The broker refused the change, and the detail holds its answer.
             ServiceUnavailableError: The broker's order rate budget was full, so the change was not sent.
             OrderOutcomeUnknownError: The change was sent but its outcome is unknown.
@@ -2058,6 +2062,7 @@ class TradeableInstrument(Instrument):
         changeable_fields = {
             "order_id": order_id,
             "parent_id": parent_id,
+            "part": part,
             "quantity": quantity,
             "price": price,
             "trigger_price": trigger_price,
@@ -2636,23 +2641,32 @@ class TradeableInstrument(Instrument):
             },
         )
 
-    def cancel_parent(self, parent_id: str) -> dict:
-        """Cancels one of the order engine's parents, with every leg it still has resting at a broker.
+    def cancel_parent(
+        self,
+        parent_id: str,
+        part: str | None = None,
+        dry_run: bool = False,
+    ) -> dict:
+        """Cancels one of the order engine's parents, with every leg it still has resting at a broker, or one part of a plan.
 
         This is how a synthetic order is stopped and how an order the engine is still holding is cancelled. A position the parent has already opened is not closed.
+
+        With `part`, only that part of a `plan` order is cancelled, named by its path, such as `root.each_fill.children.0` for a bracket's stop, as the parent's `parameters.parts` lists it. A part whose turn has not come is never sent, a part waiting on its trigger is ended at once, and a part that has sent orders sends no more pieces and has each of its resting orders cancelled; the rest of the plan carries on, reacting as it does to that part finishing.
 
         When a broker refuses the cancel of one leg, or its outcome is unknown, UBI answers HTTP 207, which is returned rather than raised, with the parent's `state` as `cancelling` rather than `cancelled`. The parent no longer acts, and becomes `cancelled` once the broker reports that leg finished, so read `cancelled_legs` to see which one may still be live, and call this again to retry it.
 
         Args:
             parent_id: The str `parent_id` that `place_order` answered with.
+            part: The str path of one part of a plan to cancel, or None to cancel the whole parent.
+            dry_run: A bool that is True to have UBI say what would be cancelled, under `resting_legs` for a whole parent or `orders` for a part, without cancelling anything.
 
         Returns:
-            A dict with `parent_id`, `synthetic_type`, `state`, `intent_id` and `cancelled_legs`, one entry per leg with its `leg_id`, `broker`, `order_id`, `outcome` and `status_message`.
+            A dict with `parent_id`, `synthetic_type`, `state`, `intent_id` and `cancelled_legs`, one entry per leg with its `leg_id`, `broker`, `order_id`, `outcome` and `status_message`. A part answers instead with `parent_id`, `synthetic_type`, `part`, its `state`, `outcome`, `status_message`, `intent_id` and `orders`, where each order says in `cancel_accepted` whether its broker accepted the cancel, and HTTP 207 with an `outcome` of `partial` or `rejected` is returned rather than raised.
 
         Raises:
-            BadRequestError: The parent id is malformed.
-            NotFoundError: The order engine holds no parent with this id.
-            ConflictError: The parent has already finished.
+            BadRequestError: The parent id or part path is malformed.
+            NotFoundError: The order engine holds no parent with this id, or the plan has no part at this path.
+            ConflictError: The parent or part has already finished, or the part is kept whole and has not started, or the parent is not a plan and was given a part.
             ServiceUnavailableError: The order engine is not running.
             OrderOutcomeUnknownError: The engine did not answer in time.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
@@ -2692,12 +2706,20 @@ class TradeableInstrument(Instrument):
                 print("Refused:", error)
             ```
         """
-        return self._unified_broker_interface.delete(
-            ORDER_PARENTS_PATH,
-            body={
-                "parent_id": parent_id,
-            },
-        )
+        if part is None and not dry_run:
+            return self._unified_broker_interface.delete(
+                ORDER_PARENTS_PATH,
+                body={
+                    "parent_id": parent_id,
+                },
+            )
+        body = {
+            "parent_id": parent_id,
+            "dry_run": dry_run,
+        }
+        if part is not None:
+            body["part"] = part
+        return self._unified_broker_interface.delete(ORDER_CANCEL_PATH, body=body)
 
     def parent_orders(self, parent_id: str) -> pd.DataFrame | None:
         """Today's broker orders that one of the order engine's parents placed.

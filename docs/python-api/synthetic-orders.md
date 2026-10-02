@@ -20,6 +20,7 @@ The table below lists the three classes every synthetic order is built from, and
 | <span class="member property">property</span> | [`orders`, `trades`](#after-place-the-parent) | Today's broker orders the order placed, and their trades. |
 | <span class="member class">class</span> | [`OrderCandidate`](#ordercandidate) | One leg of an order that spans several instruments. |
 | <span class="member class">class</span> | [`ExposureWatch`](#exposurewatch) | One watched instrument of an exposure hedge. |
+| <span class="member class">class</span> | [`PlanOrder`](#plans-combining-the-types) | An order described as a tree of parts, which can combine the other types in one order. |
 
 ## All fifty-three types
 
@@ -38,7 +39,7 @@ The table below lists every class, in its family. The module and class names spe
 | [`BracketOrder`][tradingmachine.orders.bracket.BracketOrder] | `bracket` | `bracket` | Linked orders | An entry that arms a stop and a target behind itself on its first fill, even a partial one. | `stop_price`, `stop_limit_price`, `target_price` | 200 |
 | [`CoverOrder`][tradingmachine.orders.cover.CoverOrder] | `cover` | `cover` | Linked orders | An entry with a compulsory stop and no target. | `stop_price`, `stop_limit_price` | 200 |
 | [`ScaleOutOrder`][tradingmachine.orders.scale_out.ScaleOutOrder] | `scale_out` | `scale_out` | Linked orders | A bracket with several targets that take the position off in tranches, and a stop that moves to breakeven. | `target_prices`, `stop_price`, `stop_limit_price`, `breakeven_after` | 200 |
-| [`TwoSidedBreakoutOrder`][tradingmachine.orders.two_sided_breakout.TwoSidedBreakoutOrder] | `two_sided_breakout` | `two_sided_breakout` | Linked orders | A buy stop above a range and a sell stop below it, where the first to fire cancels the other. | `buy_trigger`, `buy_limit`, `sell_trigger`, `sell_limit`, optional `stop_price`, `stop_limit_price`, `target_price` | 200 |
+| [`TwoSidedBreakoutOrder`][tradingmachine.orders.two_sided_breakout.TwoSidedBreakoutOrder] | `two_sided_breakout` | `two_sided_breakout` | Linked orders | A buy stop above a range and a sell stop below it, where the first to fire cancels the other, with exits set a distance from the fill. | `buy_trigger`, `buy_limit`, `sell_trigger`, `sell_limit`, and `stop_distance` with `stop_limit_offset`, `target_distance` or both | 200 |
 | [`OneCancelsAllOrder`][tradingmachine.orders.one_cancels_all.OneCancelsAllOrder] | `one_cancels_all` | `oca` | Linked orders | Several candidate entries, each on its own instrument, where the first fill cancels all the rest. | `candidates` | 200 |
 | [`AttachedHedgeOrder`][tradingmachine.orders.attached_hedge.AttachedHedgeOrder] | `attached_hedge` | `attached_hedge` | Linked orders | Hedges each fill of the entry in another instrument, by a ratio or by an option's delta, in whole lots. | `hedge_instrument`, `ratio` or `delta_volatility` | 200 |
 | [`MarketIfTouchedOrder`][tradingmachine.orders.market_if_touched.MarketIfTouchedOrder] | `market_if_touched` | `market_if_touched` | Price triggers | Waits unseen for the price to touch a level, then takes what is there with a marketable limit. | `trigger_price`, `trigger_direction`, `buffer_ticks`, `trigger_on`, `hold_seconds` | 202 |
@@ -52,8 +53,8 @@ The table below lists every class, in its family. The module and class names spe
 | [`HiddenStopOrder`][tradingmachine.orders.hidden_stop.HiddenStopOrder] | `hidden_stop` | `hidden_stop` | Stops and trailing | A stop kept inside UBI that watches the bid or the offer, with an optional real stop behind it. | `trigger_price`, `backstop_price`, `backstop_limit_price`, `buffer_ticks`, `trigger_direction` | 202 |
 | [`CandleCloseStopOrder`][tradingmachine.orders.candle_close_stop.CandleCloseStopOrder] | `candle_close_stop` | `candle_close_stop` | Stops and trailing | A hidden stop that fires only when a whole bar closes past the level. | `trigger_price`, `bar_minutes`, `backstop_price`, `backstop_limit_price`, `buffer_ticks`, `trigger_direction` | 202 |
 | [`TrailingStopOrder`][tradingmachine.orders.trailing_stop.TrailingStopOrder] | `trailing_stop` | `trailing_stop` | Stops and trailing | A real stop at the broker whose trigger follows the market up, never down. | `stop_limit_offset`, `trail_points` or `trail_percent`, `step_ticks`, `activate_at` | 200, or 202 with `activate_at` |
-| [`TrailingEntryOrder`][tradingmachine.orders.trailing_entry.TrailingEntryOrder] | `trailing_entry` | `trailing_entry` | Stops and trailing | A stop entry that follows a falling market down, so the first bounce of the trailing distance fills it. | `stop_limit_offset`, `trail_points` or `trail_percent`, `step_ticks` | 200 |
-| [`AverageTrueRangeTrailOrder`][tradingmachine.orders.average_true_range_trail.AverageTrueRangeTrailOrder] | `average_true_range_trail` | `atr_trail` | Stops and trailing | A trailing stop whose distance is a multiple of the recent average true range. | `trail_points`, `stop_limit_offset`, `bar_minutes`, `periods`, `average_true_range_multiple`, `step_ticks` | 200 |
+| [`TrailingEntryOrder`][tradingmachine.orders.trailing_entry.TrailingEntryOrder] | `trailing_entry` | `trailing_entry` | Stops and trailing | A stop entry that follows a falling market down, so the first bounce of the trailing distance fills it. | `stop_limit_offset`, `trail_points` or `trail_percent`, `step_ticks`, `activate_at` | 200, or 202 with `activate_at` |
+| [`AverageTrueRangeTrailOrder`][tradingmachine.orders.average_true_range_trail.AverageTrueRangeTrailOrder] | `average_true_range_trail` | `atr_trail` | Stops and trailing | A trailing stop whose distance is a multiple of the recent average true range. | `trail_points`, `stop_limit_offset`, `bar_minutes`, `periods`, `average_true_range_multiple`, `step_ticks`, `activate_at` | 200, or 202 with `activate_at` |
 | [`DailyStopOrder`][tradingmachine.orders.daily_stop.DailyStopOrder] | `daily_stop` | `daily_stop` | Stops and trailing | A native stop placed afresh every trading morning for a position held overnight. | `stop_price`, `stop_limit_price`, `arm_at`, `valid_days` | 202 |
 | [`SteppedStopOrder`][tradingmachine.orders.stepped_stop.SteppedStopOrder] | `stepped_stop` | `stepped_stop` | Stops and trailing | A native stop moved to set levels at set profits, and switched to trailing at the last. | `entry_price`, `stop_price`, `stop_limit_offset`, `rules`, `step_ticks` | 200 |
 | [`PegOrder`][tradingmachine.orders.peg.PegOrder] | `peg` | `peg` | Book-following limits | A limit order kept re-priced to your own side's best price, the midpoint or the other side as the book moves. | `reference`, `offset_ticks`, `cap_price` | 200 |
@@ -76,9 +77,9 @@ The table below lists every class, in its family. The module and class names spe
 | [`TimeStopOrder`][tradingmachine.orders.time_stop.TimeStopOrder] | `time_stop` | `time_stop` | Time-based | Places an entry now and closes what filled at a time of day, or after some minutes. | `until_time` or `minutes` | 200 |
 | [`SquareOffOrder`][tradingmachine.orders.square_off.SquareOffOrder] | `square_off` | `square_off` | Time-based | At a time of day, cancels resting orders and then closes the day's positions on one product with limit orders. | `at_time`, `product`, `only_instruments` | 202 |
 | [`OpeningAuctionOrder`][tradingmachine.orders.opening_auction.OpeningAuctionOrder] | `opening_auction` | `opening_auction` | Time-based | Places the order during the pre-open, so it fills at the opening auction's price. | `at_time` | 202 |
-| [`BasketOrder`][tradingmachine.orders.basket.BasketOrder] | `basket` | `basket` | Multi-instrument | Orders on several instruments placed in one request, each reported on its own. | `candidates` | 200 |
+| [`BasketOrder`][tradingmachine.orders.basket.BasketOrder] | `basket` | `basket` | Multi-instrument | Orders on several instruments placed in one request, each reported on its own. | `candidates`, `hedge_benefit` | 200 |
 | [`LeggedSpreadOrder`][tradingmachine.orders.legged_spread.LeggedSpreadOrder] | `legged_spread` | `legged_spread` | Multi-instrument | A two-legged spread worked passively on the first leg and completed on the second at the price that makes the net. | `first_leg`, `second_leg`, `net_price` | 200 |
-| [`StrategyStopOrder`][tradingmachine.orders.strategy_stop.StrategyStopOrder] | `strategy_stop` | `strategy_stop` | Multi-instrument | A basket whose every leg is closed when the whole strategy's profit or loss crosses a line. | `candidates`, `loss_limit`, `profit_target` | 200 |
+| [`StrategyStopOrder`][tradingmachine.orders.strategy_stop.StrategyStopOrder] | `strategy_stop` | `strategy_stop` | Multi-instrument | A basket whose every leg is closed when the whole strategy's profit or loss crosses a line. | `candidates`, `loss_limit`, `profit_target`, `hedge_benefit` | 200 |
 | [`ExposureHedgeOrder`][tradingmachine.orders.exposure_hedge.ExposureHedgeOrder] | `exposure_hedge` | `exposure_hedge` | Multi-instrument | Trades one hedge instrument whenever the watched instruments' net exposure leaves a band. | `watched`, `lower_band`, `upper_band`, `hedge_exposure_per_unit` | 202 |
 
 Each class name links to its page in the generated reference, which lists every argument with its default. UBI's [glossary by family](https://pramodathani.github.io/unified_broker_interface/rest-api/synthetic-orders/#glossary-by-family) gives the rules UBI applies to each setting.
@@ -472,7 +473,7 @@ The tabs below group the fifty-three classes into UBI's eight families, which UB
     - `OneCancelsOtherOrder` protects a position you already hold. Set `transaction_type` to the side that opened it, so a long position is protected by asking for `buy`.
     - `ScaleOutOrder` takes a position off in tranches at several `target_prices` and moves the stop to breakeven after `breakeven_after` of them fill.
     - `OneTriggersOtherOrder` places a second order, described by the `then_` settings, sized to what the first filled.
-    - `TwoSidedBreakoutOrder` rests native buy and sell stops around a range, so they fire at exchange speed even if UBI is down, and cancels the one that did not fire.
+    - `TwoSidedBreakoutOrder` rests native buy and sell stops around a range, so they fire at exchange speed even if UBI is down, and cancels the one that did not fire. Its stop and target are distances from the entry's fill, so they suit a break either way.
     - `OneCancelsAllOrder` takes several candidates on different instruments and cancels the rest on the first fill.
     - `AttachedHedgeOrder` hedges each fill of the entry in `hedge_instrument`, sized by a fixed `ratio` or, for an option entry, by its Black-76 delta at `delta_volatility`, and rounded to whole lots of the hedge.
 
@@ -630,6 +631,118 @@ The tabs below group the fifty-three classes into UBI's eight families, which UB
     )
     answer = order.place()
     ```
+
+## Plans: combining the types
+
+A plan is UBI's fifty-fourth type, and it describes an order as a tree of parts rather than naming one fixed type. That lets several of the types above be combined in one order, such as a bracket whose entry waits for the price to touch a level, or an entry whose fills are protected by a stop and a trailing stop at once. `PlanOrder`, in `tradingmachine.orders.plan`, takes the same order template as every other class plus a `plan` argument, and the parts of the tree come from the package `tradingmachine.orders.plan_parts`, one class per part.
+
+The table below lists the parts by kind.
+
+| Kind | Classes | What they decide |
+|---|---|---|
+| Node | `OrderPart` | One order, and every setting below that shapes it. It can also give its own `instrument`, `quantity`, `transaction_type`, `product`, `validity` and `tag`, which is how one plan trades several instruments. |
+| Joins | `ThenPart`, `EitherPart`, `TogetherPart`, `SequencePart`, `RepeatPart`, `UsingPart` | The shape of the tree: an order that starts another when it fills; several at once where a fill on one acts on the others; several sent together, or one after another; one order sent again on a schedule; and one order split into pieces, each run as a plan of its own. |
+| Presets | `Preset` | An existing type used as an ingredient, such as `Preset("bracket", stop_price=990.0, stop_limit_price=988.0, target_price=1010.0)`. |
+| Triggers | `PriceCrosses`, `Trails`, `CandleCloses`, `AccountCondition`, `LimitMarketable`, `TimeAt`, `TimeAfter`, `TimeBefore`, `TimeFrom`, `AllConditions`, `AnyCondition` | When an order is sent. |
+| Pricing | `FixedPricing`, `MarketablePricing`, `NativeStopPricing`, `TrailPricing`, `PegPricing`, `ChasePricing`, `FollowInstrumentPricing`, `OptionModelPricing`, `StagesPricing` with `StageRule`, `FromFillPricing`, `FromParentFillPricing` | The price it is sent at, and whether that price follows the market, another instrument or an earlier fill. |
+| Pricing modifiers | `CapModifier`, `DiscretionModifier` | A worst price the rule may not pass, and a little room to trade past the price. They go beside the pricing rule. |
+| Executions | `AllAtOnceExecution`, `IcebergExecution`, `TwapExecution`, `VwapExecution`, `FrontLoadedExecution`, `ParticipationExecution`, `BookDepthExecution`, `TopUpExecution`, `DailyExecution`, `LadderExecution`, `FreezeLimitExecution` | How the order is sent: whole, or in pieces over time, by volume or by price. One execution can work each piece of another, such as TWAP slices each shown as an iceberg. |
+| Guard | `PostOnlyGuard` | Keeps an order from trading at once, so it only ever rests in the book. |
+| Lifetime | `Lifetime` | When an order ends by itself, at a time, after a while or when a condition holds, and what it does then. |
+| Venues | `PreOpenVenue`, `PaperVenue` | Sends the order in the pre-open session, or fills it on paper only. |
+| Quantities | `PositionQuantity`, `ParentFillQuantity`, `ParentFillDeltaQuantity` | Sizes the order from a position, from what an earlier order filled, or from the delta of an option the plan traded. |
+
+An `OrderPart` can also take `side="protect"`, which trades against the position the template's side opened, so a buy's protecting order is a sell. Presets are merged first and the order's own values after them: triggers from several sources must all hold, and a later pricing rule replaces an earlier one.
+
+The example below is a limit buy whose every fill is protected by a stop resting at the broker and by a stop that trails five rupees behind the market. The two stops share one quantity, so as one fills the other shrinks.
+
+```python
+from tradingmachine.orders import plan
+from tradingmachine.orders.plan_parts import either_part
+from tradingmachine.orders.plan_parts import native_stop_pricing
+from tradingmachine.orders.plan_parts import order_part
+from tradingmachine.orders.plan_parts import then_part
+from tradingmachine.orders.plan_parts import trail_pricing
+
+order = plan.PlanOrder(
+    share,
+    transaction_type="buy",
+    product="mis",
+    order_type="limit",
+    quantity=10,
+    price=1000.0,
+    plan=then_part.ThenPart(
+        first=order_part.OrderPart(),
+        each_fill=either_part.EitherPart(
+            children=[
+                order_part.OrderPart(
+                    side="protect",
+                    pricing=native_stop_pricing.NativeStopPricing(
+                        trigger_price=980.0,
+                        limit_price=978.0,
+                    ),
+                ),
+                order_part.OrderPart(
+                    side="protect",
+                    pricing=trail_pricing.TrailPricing(
+                        points=5.0,
+                        limit_offset=1.0,
+                    ),
+                ),
+            ],
+            sibling_rule="reduce",
+        ),
+    ),
+    dry_run=True,
+)
+answer = order.place()
+```
+
+UBI checks the whole plan before recording or sending anything, and a plan with any problem is refused with HTTP 400 listing every problem with the path of the part it is in, such as `root.each_fill.children.1`. A dry run answers with the plan as it would run, every default written out, under `plan`. A plan that sends nothing at once answers HTTP 202 with an `outcome` of `armed`.
+
+The example below buys in six slices over an hour, each slice shown to the market ten shares at a time, pegged to the bid but never above 1010, and ends whatever is left at 14:30.
+
+```python
+from tradingmachine.orders import plan
+from tradingmachine.orders.plan_parts import cap_modifier
+from tradingmachine.orders.plan_parts import iceberg_execution
+from tradingmachine.orders.plan_parts import lifetime
+from tradingmachine.orders.plan_parts import order_part
+from tradingmachine.orders.plan_parts import peg_pricing
+from tradingmachine.orders.plan_parts import twap_execution
+
+order = plan.PlanOrder(
+    share,
+    transaction_type="buy",
+    product="mis",
+    order_type="limit",
+    quantity=120,
+    price=1000.0,
+    plan=order_part.OrderPart(
+        pricing=peg_pricing.PegPricing(reference="own_touch"),
+        cap=cap_modifier.CapModifier(worst_price=1010.0),
+        execution=twap_execution.TwapExecution(slices=6, over_minutes=60),
+        inner_execution=iceberg_execution.IcebergExecution(visible_quantity=10),
+        lifetime=lifetime.Lifetime(at_time="14:30"),
+    ),
+    dry_run=True,
+)
+answer = order.place()
+```
+
+Because `Preset` takes any name, every preset UBI offers works here as soon as UBI adds it.
+
+### Acting on one part
+
+Once a plan is placed, each of its parts is named by a path, such as `root.first` for a bracket's entry and `root.each_fill.children.0` and `root.each_fill.children.1` for its stop and target. The table below lists the three members that work with those paths.
+
+| Member | What it does |
+|---|---|
+| `parts` | A table of the plan's parts, one row per path, with each part's `state`: `pending`, `waiting`, `working` or `done`. |
+| `cancel_part(part, dry_run=False)` | Cancels one part while the rest of the plan carries on. A part whose turn has not come is never sent, and a part that has sent orders sends no more and has its resting orders cancelled. |
+| `modify_part(part, price=None, trigger_price=None, quantity=None, dry_run=False)` | Changes a part that has not sent anything yet, such as a bracket's stop before the entry fills. Nothing is sent to a broker until the part's turn comes. |
+
+They call `TradeableInstrument.cancel_parent` and `modify_order` with the plan's `parent_id` and the part's path, which can also be used directly.
 
 ## The Atlas rows that need no class
 
