@@ -11,7 +11,7 @@ The table below lists every member on this page. Only `prices` is a method, beca
 | <span class="member property">property</span> | [`last_price`](#last_price) | The last traded price, as a float |
 | <span class="member property">property</span> | [`ohlc`](#ohlc) | The day's open, high and low with the last and previous close |
 | <span class="member property">property</span> | [`bids`](#bids) | The buy side of the order book |
-| <span class="member property">property</span> | [`asks`](#asks) | The sell side of the order book |
+| <span class="member property">property</span> | [`offers`](#offers) | The sell side of the order book |
 | <span class="member property">property</span> | [`best_bid`](#best_bid) | The highest bid |
 | <span class="member property">property</span> | [`best_offer`](#best_offer) | The lowest offer |
 | <span class="member property">property</span> | [`bid_offer_spread`](#bid_offer_spread) | The best offer minus the best bid, from one quote |
@@ -297,7 +297,7 @@ The table below shows where each property comes from in the quote, and what the 
 | Property | Read from the quote | RELIANCE on 2026-09-26 |
 |---|---|---|
 | `bids` | `depth.buy` | `[]` |
-| `asks` | `depth.sell` | `[{'orders': 11, 'price': 1226.0, 'quantity': 855}]` |
+| `offers` | `depth.sell` | `[{'orders': 11, 'price': 1226.0, 'quantity': 855}]` |
 | `best_bid` | the first of `depth.buy` | `None` |
 | `best_offer` | the first of `depth.sell` | `{'orders': 11, 'price': 1226.0, 'quantity': 855}` |
 | `bid_offer_spread` | both sides of one quote | `None` |
@@ -333,9 +333,9 @@ The output below was captured from a local UBI on 2026-09-26.
     []
     ```
 
-### asks
+### offers
 
-<div class="endpoint" markdown><span class="member property">property</span> `asks`<span class="route"><span class="method get">GET</span> `/api/instruments/quote`</span></div>
+<div class="endpoint" markdown><span class="member property">property</span> `offers`<span class="route"><span class="method get">GET</span> `/api/instruments/quote`</span></div>
 
 This property returns the sell side of the order book, best price first. It is a `list` of up to five dicts, each with `price`, `quantity` and `orders`, and it is empty when nobody is offering.
 
@@ -346,7 +346,7 @@ The output below was captured from a local UBI on 2026-09-26.
 === "Python"
 
     ```python
-    print(reliance.asks)
+    print(reliance.offers)
     ```
 
 === "Output"
@@ -522,4 +522,4 @@ The output below was captured from a local UBI on Saturday 2026-09-26, so the la
     ```
 
 ??? note "Under the hood"
-    `bids`, `asks`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest` and `last_trade_time` each read `self.quote` once. `best_bid` and `best_offer` read `bids` or `asks`, which is still one quote. `bid_offer_spread` and `mid_price` read `self.quote["depth"]` once and take both sides from it. UBI already drops empty levels from the depth, so the library does no filtering of its own. See [Quote](https://pramodathani.github.io/unified_broker_interface/rest-api/market-quotes/#quote) on the UBI site for the route and [Where a quote comes from](https://pramodathani.github.io/unified_broker_interface/rest-api/market-quotes/#where-a-quote-comes-from) for how UBI chooses between its cache and a broker.
+    `bids`, `offers`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest` and `last_trade_time` each read `self.quote` once. `best_bid` and `best_offer` read `bids` or `offers`, which is still one quote. `bid_offer_spread` and `mid_price` read `self.quote["depth"]` once and take both sides from it. UBI already drops empty levels from the depth, so the library does no filtering of its own. See [Quote](https://pramodathani.github.io/unified_broker_interface/rest-api/market-quotes/#quote) on the UBI site for the route and [Where a quote comes from](https://pramodathani.github.io/unified_broker_interface/rest-api/market-quotes/#where-a-quote-comes-from) for how UBI chooses between its cache and a broker.

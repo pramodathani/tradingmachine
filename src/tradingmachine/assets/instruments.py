@@ -806,7 +806,7 @@ class Instrument(
             adjusted: A bool that is True for prices adjusted for splits and bonuses.
 
         Returns:
-            A pandas.DataFrame sorted by time, with `exchange`, `segment`, `datetime` (when the tick was received), `exchange_time` and `last_trade_time`, all in India time, then `broker`, `last_price`, `last_quantity`, `average_price`, `volume`, `buy_quantity`, `sell_quantity`, `oi` and the order book flattened into `bid1_price` to `bid5_orders` and `ask1_price` to `ask5_orders`, or None when no tick was recorded in the period.
+            A pandas.DataFrame sorted by time, with `exchange`, `segment`, `datetime` (when the tick was received), `exchange_time` and `last_trade_time`, all in India time, then `broker`, `last_price`, `last_quantity`, `average_price`, `volume`, `buy_quantity`, `sell_quantity`, `oi` and the order book flattened into `bid1_price` to `bid5_orders` and `offer1_price` to `offer5_orders`, or None when no tick was recorded in the period.
 
         Raises:
             BadRequestError: The period is invalid, such as an end that is not after the start.
@@ -830,7 +830,7 @@ class Instrument(
             columns = [
                 "datetime",
                 "bid1_price",
-                "ask1_price",
+                "offer1_price",
             ]
             print(ticks[columns].head(10))
             ```
@@ -849,7 +849,7 @@ class Instrument(
                 start="2026-09-29 10:00",
                 end="2026-09-29 11:00",
             )
-            spread = ticks["ask1_price"] - ticks["bid1_price"]
+            spread = ticks["offer1_price"] - ticks["bid1_price"]
             tick_size = float(vodafone_idea.tick_size)
             one_tick = (spread - tick_size).abs() < 1e-9
             print(f"{len(ticks)} ticks, {one_tick.mean() * 100:.1f}% at one tick")
@@ -915,7 +915,7 @@ class Instrument(
         depth = tick.get("depth") or {}
         sides = {
             "bid": depth.get("buy") or [],
-            "ask": depth.get("sell") or [],
+            "offer": depth.get("sell") or [],
         }
         for side_name, levels in sides.items():
             for level_number in range(1, 6):
@@ -1209,7 +1209,7 @@ class TradeableInstrument(Instrument):
         return self.quote["depth"]["buy"]
 
     @property
-    def asks(self) -> list[dict]:
+    def offers(self) -> list[dict]:
         """The sell side of the order book, read from UBI on every access.
 
         Returns:
@@ -1230,7 +1230,7 @@ class TradeableInstrument(Instrument):
                 symbol="INFY",
             )
 
-            for level in infosys.asks:
+            for level in infosys.offers:
                 print(level["price"], level["quantity"], level["orders"])
             ```
 
@@ -1246,7 +1246,7 @@ class TradeableInstrument(Instrument):
             )
 
             offered = 0
-            for level in reliance.asks:
+            for level in reliance.offers:
                 offered = offered + level["quantity"]
             bid = 0
             for level in reliance.bids:
@@ -1356,7 +1356,7 @@ class TradeableInstrument(Instrument):
                 print(f"Cost: Rs {best_offer['price'] * wanted_quantity:.2f}")
             ```
         """
-        return self._best_level(self.asks)
+        return self._best_level(self.offers)
 
     @property
     def bid_offer_spread(self) -> float | None:

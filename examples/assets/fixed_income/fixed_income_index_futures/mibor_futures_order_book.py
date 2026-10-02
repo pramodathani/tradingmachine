@@ -55,13 +55,13 @@ class MiborFuturesOrderBook:
         print(f"{contract.underlying_symbol} future expiring {contract.expiry_date}")
         print(f"Last price: {contract.last_price}")
         bids = contract.bids
-        asks = contract.asks
-        if not bids and not asks:
+        offers = contract.offers
+        if not bids and not offers:
             print("The order book is empty.")
         for bid in bids:
             print(f"Bid {bid['price']} for {bid['quantity']}")
-        for ask in asks:
-            print(f"Offer {ask['price']} for {ask['quantity']}")
+        for offer in offers:
+            print(f"Offer {offer['price']} for {offer['quantity']}")
         print(f"Spread: {contract.bid_offer_spread}")
         print(f"Volume: {contract.total_traded_volume}")
         print(f"Open interest: {contract.open_interest}")

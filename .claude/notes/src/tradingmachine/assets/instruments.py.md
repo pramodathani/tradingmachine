@@ -81,7 +81,7 @@ The old `bids` and `asks` filtered out zero-price levels. UBI now drops empty le
 | `quote` property | `quote` on `Instrument` | Full unified quote dict |
 | `ltp` | `last_price` on `Instrument` | Uses `/api/instruments/ltp` |
 | `ohlc` | `ohlc` on `Instrument` | Uses `/api/instruments/ohlc`; `ohlc` has no close, but the dict has `previous_close` |
-| `bids`, `asks` | `bids`, `asks` | From `depth.buy` and `depth.sell` |
+| `bids`, `asks` | `bids`, `offers` | From `depth.buy` and `depth.sell`; `asks` was renamed `offers` on 2026-09-30 |
 | `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price` | Same names | |
 | `vwap` | `volume_weighted_average_price` | UBI's `average_price` |
 | `last_traded_quantity` | `last_quantity` | Underlying units, not lots |
@@ -477,7 +477,7 @@ Every converted member was read once against the live UBI, through `Equity(excha
 | `last_price` | 1038.5 |
 | `ohlc` | `{'high': 1044.5, 'low': 1030.3, 'open': 1031.8}` |
 | `quote` | The full dict, beginning `average_price`, `broker`, `broker_token`, `buy_quantity`, `change` |
-| `bids`, `asks`, `best_bid`, `best_offer` | Five levels a side, best bid 1142.3 and best offer 934.7 |
+| `bids`, `offers`, `best_bid`, `best_offer` | Five levels a side, best bid 1142.3 and best offer 934.7 |
 | `bid_offer_spread` | -207.6 |
 | `mid_price` | 1038.5 |
 | `volume_weighted_average_price`, `open_interest` | None, which is right for a share before the open |
@@ -760,7 +760,7 @@ Three things changed here for the new `tradingmachine.asset_baskets` package.
 
 It is a method rather than a property because it takes arguments, following the rule from 2026-09-22. Like `prices`, it is not cached and does not split a long period, because UBI is local; UBI's documentation asks callers to request short periods, and the replication fetches an hour at a time.
 
-The order book comes back from UBI as a `depth` object with up to five `buy` and five `sell` levels, and empty levels are left out. `_flatten_tick` turns it into the same `bid1_price` to `ask5_orders` columns that UBI's own tables use, with None for a missing level, so a DataFrame of ticks has a fixed set of columns whatever the depth. It is a `staticmethod` because it needs no instrument state.
+The order book comes back from UBI as a `depth` object with up to five `buy` and five `sell` levels, and empty levels are left out. `_flatten_tick` turns it into `bid1_price` to `bid5_orders` and `offer1_price` to `offer5_orders` columns, with None for a missing level, so a DataFrame of ticks has a fixed set of columns whatever the depth. It is a `staticmethod` because it needs no instrument state.
 
 ### Timestamps come in two shapes
 
@@ -774,3 +774,9 @@ Measured on 2026-09-30 for NSE shares:
 - Zerodha's full-mode feed is a snapshot of the book about once a second, not every change, so moves between snapshots are merged. For Vodafone Idea over 16 to 30 September, 88% of best-quote changes had both the bid and the ask move between two snapshots.
 - The recording has outages that hit every instrument at once. On 2026-09-29 the feed for NSE shares stopped at about 11:24 and did not return, and on other days whole stretches of 30 seconds or more are missing. A silence in the ticks is therefore not evidence that nothing traded.
 - The unified feed holds 2026-09-16 onwards, although the broker tables start on 2026-09-11.
+
+## `asks` renamed `offers`, on 2026-09-30
+
+The user asked that the sell side of the order book be called the offer everywhere in the library's own names, to match `best_offer`, `bid_offer_spread` and the `*_offer_price` order wrappers, which already used that word. So the `asks` property became `offers`, and the `ticks` columns `ask1_price` to `ask5_orders` became `offer1_price` to `offer5_orders`. The ticks columns therefore no longer match the `ask1_price` columns in UBI's broker tick tables, which is deliberate.
+
+Two uses of "ask" were left alone because they are UBI's vocabulary rather than the library's names: the `ask` value of `trigger_on` on the price-trigger order types, which UBI validates, and the history above, which records the old project's `asks`.

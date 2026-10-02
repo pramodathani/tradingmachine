@@ -44,7 +44,7 @@ classDiagram
         shared_unified_broker_interface()
     }
     class TradeableInstrument {
-        bids, asks, best_bid, best_offer
+        bids, offers, best_bid, best_offer
         mid_price, bid_offer_spread
         orders, open_orders, trades
         net_positions, day_positions
@@ -203,7 +203,7 @@ A member that only reports a value is a property, and a member is a method only 
 
 | Kind | Badge | Members |
 |---|---|---|
-| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `asks`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `parents`, `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl`; `constituents` on an index, an exchange traded fund and a mutual fund; the twenty-one contract properties on [Derivatives](../python-api/derivatives.md), from `days_to_expiry` to `notional_value` |
+| Reads a value | <span class="member property">property</span> | `quote`, `last_price`, `ohlc`; `bids`, `offers`, `best_bid`, `best_offer`, `bid_offer_spread`, `mid_price`, `volume_weighted_average_price`, `last_quantity`, `total_traded_volume`, `open_interest`, `last_trade_time`; `parents`, `orders`, `open_orders`, `completed_orders`, `rejected_orders`, `cancelled_orders`, `trades`; `net_positions`, `day_positions`, `positions_value`, `positions_pnl`; `holdings`, `holdings_value`, `holdings_pnl`; `constituents` on an index, an exchange traded fund and a mutual fund; the twenty-one contract properties on [Derivatives](../python-api/derivatives.md), from `days_to_expiry` to `notional_value` |
 | Takes arguments, only reads | <span class="member method">method</span> | `prices`, `parent`, `parent_orders`, `parent_trades`, `implied_volatility`, `greeks` and every analysis method |
 | Finds instruments | <span class="member function">classmethod</span> | `search`, `expiries`, `contracts`, `strikes`, `chain` |
 | Sends orders | <span class="member writes">places orders</span> | `place_order`, `modify_order`, `cancel_order`, `cancel_open_orders`, `cancel_parent`, the 32 price wrappers, `add_to_position`, `reduce_position`, `liquidate_position`, `liquidate_all_positions`, `add_to_holdings`, `reduce_holdings`, `liquidate_holdings` |

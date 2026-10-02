@@ -73,7 +73,7 @@ These members read candles, quotes and the order book. The first four work on ev
 | <span class="member property">property</span> | [`last_price`](market-data.md#last_price) | The instrument's last traded price, read from UBI on every access. |
 | <span class="member property">property</span> | [`ohlc`](market-data.md#ohlc) | The day's open, high and low with the last and previous close prices, read from UBI on every access. |
 | <span class="member property">property</span> | [`bids`](market-data.md#bids) | The buy side of the order book, read from UBI on every access. |
-| <span class="member property">property</span> | [`asks`](market-data.md#asks) | The sell side of the order book, read from UBI on every access. |
+| <span class="member property">property</span> | [`offers`](market-data.md#offers) | The sell side of the order book, read from UBI on every access. |
 | <span class="member property">property</span> | [`best_bid`](market-data.md#best_bid) | The highest bid in the order book. |
 | <span class="member property">property</span> | [`best_offer`](market-data.md#best_offer) | The lowest offer in the order book. |
 | <span class="member property">property</span> | [`bid_offer_spread`](market-data.md#bid_offer_spread) | The gap between the best offer and the best bid, measured from one quote. |
