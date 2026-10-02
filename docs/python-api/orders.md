@@ -598,7 +598,7 @@ A parent is one order the order engine was asked for, such as a bracket, a trail
 
 ### cancel_parent
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_parent(parent_id, part=None, dry_run=False)`<span class="route"><span class="method delete">DELETE</span> `/api/orders/parents`, or `/api/orders/cancel` with `part` or `dry_run`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_parent(parent_id, part=None, dry_run=False)`<span class="route"><span class="method delete">DELETE</span> `/api/orders/cancel`</span></div>
 
 This method cancels one parent, with every leg it still has resting at a broker, so the parent places, moves and cancels nothing more. It is how a synthetic order is stopped and how a held limit order is cancelled. A position the parent has already opened is not closed.
 
