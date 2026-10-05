@@ -1,6 +1,6 @@
 """The `twap` synthetic order type: a large order sent as equal slices at even intervals over a period.
 
-Spreading the order over time brings the average price paid closer to the period's average than to the price at the moment of asking. By default UBI holds each limit slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False.
+Spreading the order over time brings the average price paid closer to the period's average than to the price at the moment of asking. By default UBI holds each slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False, but only when the template is a `limit` order with a price that is neither `ioc` nor after-market; any other order, such as a market TWAP, is sent unheld, slice by slice. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on. At most one slice goes per tick, so slices that fell due while UBI was busy follow one a tick, and the schedule does not stop at the market's close.
 
 Typical usage example:
 
@@ -25,12 +25,12 @@ from tradingmachine.orders import synthetic_order
 class TimeWeightedAveragePriceOrder(synthetic_order.SyntheticOrder):
     """A large order sent as equal slices at even intervals over a period.
 
-    Spreading the order over time brings the average price paid closer to the period's average than to the price at the moment of asking. By default UBI holds each limit slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False.
+    Spreading the order over time brings the average price paid closer to the period's average than to the price at the moment of asking. By default UBI holds each slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False, but only when the template is a `limit` order with a price that is neither `ioc` nor after-market; any other order, such as a market TWAP, is sent unheld, slice by slice. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on. At most one slice goes per tick, so slices that fell due while UBI was busy follow one a tick, and the schedule does not stop at the market's close.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
-        slices: The int number of slices, from 2 to 60. The quantity must be at least this.
+        slices: The int number of slices, from 2 to 60. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
         over_minutes: The float number of minutes to spread the slices over. Above zero.
     """
 
@@ -67,7 +67,7 @@ class TimeWeightedAveragePriceOrder(synthetic_order.SyntheticOrder):
             product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
-            slices: The int number of slices, from 2 to 60. The quantity must be at least this.
+            slices: The int number of slices, from 2 to 60. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
             over_minutes: The float number of minutes to spread the slices over. Above zero.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.

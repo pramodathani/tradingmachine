@@ -1,6 +1,6 @@
 """The `closing_price` synthetic order type: an order sliced by volume through the half hour the day's closing price is computed from.
 
-This is market-on-close or limit-on-close, the Atlas's G2. NSE and BSE compute an equity's closing price as the volume weighted average of the trades from 15:00 to 15:30, so this is a volume weighted order spread across that window, which is the nearest there is for futures, options and intraday orders; only the cash segment's post-closing session fills at the closing price exactly, and it takes only delivery orders. The length is worked out from the window, so there is no `over_minutes`. An order sent before the window answers HTTP 202 with an `outcome` of `armed` and sends its first slice when the window opens, one sent inside the window sends its first slice at once and spreads the rest over what is left, and one sent after 15:30 is refused with HTTP 400. The window follows the instrument's exchange trading calendar.
+This is market-on-close or limit-on-close, the Atlas's G2. NSE and BSE compute an equity's closing price as the volume weighted average of the trades from 15:00 to 15:30, so this is a volume weighted order spread across that window, which is the nearest there is for futures, options and intraday orders; only the cash segment's post-closing session fills at the closing price exactly, and it takes only delivery orders. The length is worked out from the window, so there is no `over_minutes`. An order sent before the window answers HTTP 202 with an `outcome` of `armed` and sends its first slice when the window opens, one sent inside the window sends its first slice at once and spreads the rest over what is left, and one sent after 15:30 is refused with HTTP 400. The window follows the instrument's exchange trading calendar. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on.
 
 Typical usage example:
 
@@ -24,12 +24,12 @@ from tradingmachine.orders import synthetic_order
 class ClosingPriceOrder(synthetic_order.SyntheticOrder):
     """An order sliced by volume through the half hour the day's closing price is computed from.
 
-    This is market-on-close or limit-on-close, the Atlas's G2. NSE and BSE compute an equity's closing price as the volume weighted average of the trades from 15:00 to 15:30, so this is a volume weighted order spread across that window, which is the nearest there is for futures, options and intraday orders; only the cash segment's post-closing session fills at the closing price exactly, and it takes only delivery orders. The length is worked out from the window, so there is no `over_minutes`. An order sent before the window answers HTTP 202 with an `outcome` of `armed` and sends its first slice when the window opens, one sent inside the window sends its first slice at once and spreads the rest over what is left, and one sent after 15:30 is refused with HTTP 400. The window follows the instrument's exchange trading calendar.
+    This is market-on-close or limit-on-close, the Atlas's G2. NSE and BSE compute an equity's closing price as the volume weighted average of the trades from 15:00 to 15:30, so this is a volume weighted order spread across that window, which is the nearest there is for futures, options and intraday orders; only the cash segment's post-closing session fills at the closing price exactly, and it takes only delivery orders. The length is worked out from the window, so there is no `over_minutes`. An order sent before the window answers HTTP 202 with an `outcome` of `armed` and sends its first slice when the window opens, one sent inside the window sends its first slice at once and spreads the rest over what is left, and one sent after 15:30 is refused with HTTP 400. The window follows the instrument's exchange trading calendar. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
-        slices: The int number of slices, from 2 to 60, or None to let UBI use 6, one every five minutes across the default window. The quantity must be at least this.
+        slices: The int number of slices, from 2 to 60, or None to let UBI use 6, one every five minutes across the default window. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
         window_start: The str time the window opens, as `HH:MM` or `HH:MM:SS` India time, from 09:15 and before 15:30, or None to let UBI use `15:00`.
         volume_profile: The list of float relative weights, one per half hour from the open, none negative and adding up to more than zero, or None to let UBI use its own.
     """
@@ -80,7 +80,7 @@ class ClosingPriceOrder(synthetic_order.SyntheticOrder):
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
-            slices: The int number of slices, from 2 to 60, or None to let UBI use 6, one every five minutes across the default window. The quantity must be at least this.
+            slices: The int number of slices, from 2 to 60, or None to let UBI use 6, one every five minutes across the default window. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
             window_start: The str time the window opens, as `HH:MM` or `HH:MM:SS` India time, from 09:15 and before 15:30, or None to let UBI use `15:00`.
             volume_profile: The list of float relative weights, one per half hour from the open, none negative and adding up to more than zero, or None to let UBI use its own.
 

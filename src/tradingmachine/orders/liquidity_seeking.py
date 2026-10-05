@@ -1,6 +1,6 @@
 """The `liquidity_seeking` synthetic order type: an order that shows nothing and strikes only when enough size appears at an acceptable price.
 
-It is the closest thing to a minimum-quantity order that anyone can build: it waits until the visible book covers `minimum_quantity` at `limit_price` or better, and then sends an order for it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+It is the closest thing to a minimum-quantity order that anyone can build: it waits until the visible book covers `minimum_quantity` at `limit_price` or better, and then sends an order for it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. The strike is rounded down to whole lots and uses the template's validity, so with the default `day` an unfilled strike rests at `limit_price`. A book UBI marks stale is never acted on.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class LiquiditySeekingOrder(synthetic_order.SyntheticOrder):
     """An order that shows nothing and strikes only when enough size appears at an acceptable price.
 
-    It is the closest thing to a minimum-quantity order that anyone can build: it waits until the visible book covers `minimum_quantity` at `limit_price` or better, and then sends an order for it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    It is the closest thing to a minimum-quantity order that anyone can build: it waits until the visible book covers `minimum_quantity` at `limit_price` or better, and then sends an order for it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. The strike is rounded down to whole lots and uses the template's validity, so with the default `day` an unfilled strike rests at `limit_price`. A book UBI marks stale is never acted on.
 
     The order template's attributes are described on `SyntheticOrder`.
 

@@ -1,6 +1,6 @@
 """The `iceberg` synthetic order type: an order that rests one slice at a time and places the next when that slice fills.
 
-Only one slice is ever visible, so the size of the whole order is hidden from the book. `randomise_percent` varies each slice so that the pattern is harder to spot.
+Only one slice is ever visible, so the size of the whole order is hidden from the book. `randomise_percent` varies each slice so that the pattern is harder to spot. A randomised slice is brought to the nearest whole number of lots, at least one, and a slice cancelled or rejected at the broker ends the iceberg.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class IcebergOrder(synthetic_order.SyntheticOrder):
     """An order that rests one slice at a time and places the next when that slice fills.
 
-    Only one slice is ever visible, so the size of the whole order is hidden from the book. `randomise_percent` varies each slice so that the pattern is harder to spot.
+    Only one slice is ever visible, so the size of the whole order is hidden from the book. `randomise_percent` varies each slice so that the pattern is harder to spot. A randomised slice is brought to the nearest whole number of lots, at least one, and a slice cancelled or rejected at the broker ends the iceberg.
 
     The order template's attributes are described on `SyntheticOrder`.
 

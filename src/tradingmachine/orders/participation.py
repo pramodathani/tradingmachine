@@ -1,6 +1,6 @@
 """The `participation` synthetic order type: an order that trades a fixed share of the volume the market itself trades.
 
-Trading as a share of volume keeps the order inconspicuous, because it is never a large part of what is going through. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+Trading as a share of volume keeps the order inconspicuous, because it is never a large part of what is going through. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. Each slice is rounded down to whole lots, and only the volume a slice accounts for is used up, so the part it could not send counts towards the next slice; when the day's volume falls, as it can when another broker's quote takes over, counting starts again from there.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class ParticipationOrder(synthetic_order.SyntheticOrder):
     """An order that trades a fixed share of the volume the market itself trades.
 
-    Trading as a share of volume keeps the order inconspicuous, because it is never a large part of what is going through. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    Trading as a share of volume keeps the order inconspicuous, because it is never a large part of what is going through. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. Each slice is rounded down to whole lots, and only the volume a slice accounts for is used up, so the part it could not send counts towards the next slice; when the day's volume falls, as it can when another broker's quote takes over, counting starts again from there.
 
     The order template's attributes are described on `SyntheticOrder`.
 

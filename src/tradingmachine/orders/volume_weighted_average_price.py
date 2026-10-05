@@ -1,6 +1,6 @@
 """The `vwap` synthetic order type: a time-sliced order whose slice sizes follow the shape of the day's volume.
 
-It works like a `TimeWeightedAveragePriceOrder`, but trades more where the market usually trades more, so the average paid tracks the day's volume-weighted average price.
+It works like a `TimeWeightedAveragePriceOrder`, but trades more where the market usually trades more, so the average paid tracks the day's volume-weighted average price. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on.
 
 Typical usage example:
 
@@ -25,12 +25,12 @@ from tradingmachine.orders import synthetic_order
 class VolumeWeightedAveragePriceOrder(synthetic_order.SyntheticOrder):
     """A time-sliced order whose slice sizes follow the shape of the day's volume.
 
-    It works like a `TimeWeightedAveragePriceOrder`, but trades more where the market usually trades more, so the average paid tracks the day's volume-weighted average price.
+    It works like a `TimeWeightedAveragePriceOrder`, but trades more where the market usually trades more, so the average paid tracks the day's volume-weighted average price. Slices are shared out in whole lots, and a slice that comes to nothing, as it does when the order has fewer lots than slices, is skipped and the schedule moves on.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
-        slices: The int number of slices, from 2 to 60. The quantity must be at least this.
+        slices: The int number of slices, from 2 to 60. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
         over_minutes: The float number of minutes to spread the slices over. Above zero.
         volume_profile: The list of float relative weights, one per half hour from the open, none negative and adding up to more than zero, or None to let UBI use its own.
     """
@@ -69,7 +69,7 @@ class VolumeWeightedAveragePriceOrder(synthetic_order.SyntheticOrder):
             product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
-            slices: The int number of slices, from 2 to 60. The quantity must be at least this.
+            slices: The int number of slices, from 2 to 60. A quantity of fewer lots than this is accepted, and the empty slices are skipped.
             over_minutes: The float number of minutes to spread the slices over. Above zero.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.

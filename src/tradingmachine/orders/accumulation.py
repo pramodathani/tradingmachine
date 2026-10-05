@@ -1,6 +1,6 @@
 """The `accumulation` synthetic order type: a fixed quantity bought at a fixed interval, each purchase resting on its own side of the book.
 
-This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise.
+This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise. A template price that is not a whole number of ticks is refused with HTTP 400 when the order is placed. Purchases follow the clock rather than the market's hours, so hourly purchases on an intraday product carry on after the close.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class AccumulationOrder(synthetic_order.SyntheticOrder):
     """A fixed quantity bought at a fixed interval, each purchase resting on its own side of the book.
 
-    This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise.
+    This is a systematic plan in the manner of a SIP, run by UBI. Each purchase rests on its own side of the book rather than paying the spread. A `limit` template's price is a cap: the most a buy pays or the least a sell takes, so a purchase rests at the book's own touch when that is better and at the template's price otherwise. A template price that is not a whole number of ticks is refused with HTTP 400 when the order is placed. Purchases follow the clock rather than the market's hours, so hourly purchases on an intraday product carry on after the close.
 
     The order template's attributes are described on `SyntheticOrder`.
 

@@ -361,7 +361,7 @@ The table below lists which types hold by default, while UBI's `UNIFIED_BROKER_I
 | `OneCancelsAllOrder` | Every candidate | Nothing |
 | `LadderOrder` | Each rung, at its own price | Nothing |
 | `ScaleWithProfitTakerOrder` | Each rung, and again after its profit is taken | Every profit-taker |
-| `TimeWeightedAveragePriceOrder`, `ImplementationShortfallOrder` | Each limit slice, from its turn | Nothing |
+| `TimeWeightedAveragePriceOrder`, `ImplementationShortfallOrder` | Each slice, from its turn, when the template is a `limit` order with a price that is neither `ioc` nor after-market | Every slice of any other order, such as a market TWAP, which is sent unheld |
 | `FreezeSlicerOrder` | The whole order, whose slices then go out together | Nothing |
 
 Every other type is not held unless it asks, and some refuse to be held because resting at the broker is what they are for: a `GridOrder` or `TwoSidedQuoteOrder` asking for it is refused with HTTP 400 and the rule `not_holdable`. A `SimpleOrder` refuses `hold_limits=True` with HTTP 400. A `PlanOrder` follows UBI's switch unless it says otherwise, and an `OrderPart` can give its own `hold_limits` to hold, for example, a profit target, which as a follow-on order would otherwise rest at the broker.
