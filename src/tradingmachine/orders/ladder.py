@@ -1,6 +1,6 @@
 """The `ladder` synthetic order type: several limit orders spaced evenly between two prices, sharing the quantity between them.
 
-The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. The ladder places every rung at once and then does nothing more, so the rungs keep working at the broker whether or not UBI is running. UBI never works out references for a ladder, so give real numbers. The answer carries a list of `order_ids`, one per rung.
+The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class LadderOrder(synthetic_order.SyntheticOrder):
     """Several limit orders spaced evenly between two prices, sharing the quantity between them.
 
-    The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. The ladder places every rung at once and then does nothing more, so the rungs keep working at the broker whether or not UBI is running. UBI never works out references for a ladder, so give real numbers. The answer carries a list of `order_ids`, one per rung.
+    The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -59,6 +59,7 @@ class LadderOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the order template and this type's own settings.
@@ -82,7 +83,8 @@ class LadderOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
 
         Raises:
             Nothing.
@@ -103,6 +105,7 @@ class LadderOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.from_price = from_price

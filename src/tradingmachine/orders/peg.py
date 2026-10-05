@@ -1,6 +1,6 @@
 """The `peg` synthetic order type: a limit order kept re-priced to the bid, the offer or the midpoint as the book moves.
 
-Every re-price is a real modification that counts against the broker's order limits, so UBI throttles them and never sends one that changes nothing. A modification that changes the price loses the order's place in the queue.
+Every re-price is a real modification that counts against the broker's order limits, so UBI throttles them and never sends one that changes nothing. A modification that changes the price loses the order's place in the queue. The template's own price is not used: UBI places the order where the reference is, sends a `market` template as a limit there, and with no price for the reference yet answers HTTP 202 with an `outcome` of `armed` and places it on the first tick that has one. `cap_price` must be a whole number of ticks, or UBI refuses the order with HTTP 400.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class PegOrder(synthetic_order.SyntheticOrder):
     """A limit order kept re-priced to the bid, the offer or the midpoint as the book moves.
 
-    Every re-price is a real modification that counts against the broker's order limits, so UBI throttles them and never sends one that changes nothing. A modification that changes the price loses the order's place in the queue.
+    Every re-price is a real modification that counts against the broker's order limits, so UBI throttles them and never sends one that changes nothing. A modification that changes the price loses the order's place in the queue. The template's own price is not used: UBI places the order where the reference is, sends a `market` template as a limit there, and with no price for the reference yet answers HTTP 202 with an `outcome` of `armed` and places it on the first tick that has one. `cap_price` must be a whole number of ticks, or UBI refuses the order with HTTP 400.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -55,6 +55,7 @@ class PegOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         reference: str | None = None,
         offset_ticks: int | None = None,
@@ -78,7 +79,8 @@ class PegOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             reference: The str price to follow, `own_touch` for your own side's best price, `mid` or `opposite_touch`, or None to let UBI use `own_touch`.
             offset_ticks: The int number of ticks away from filling, where a negative number moves towards the market, or None to let UBI use 0.
             cap_price: The float price in rupees it never goes past, or None.
@@ -102,6 +104,7 @@ class PegOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.reference = reference

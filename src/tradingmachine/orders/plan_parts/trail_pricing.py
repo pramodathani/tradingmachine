@@ -23,7 +23,7 @@ class TrailPricing(plan_part.PlanPart):
         step_ticks: The int smallest move in ticks, or None for UBI's default of 1.
         average_true_range: A bool that is True to trail by a multiple of the average true range rather than a fixed distance.
         bar_minutes: The float length in minutes of the bars the average true range is measured over, or None for UBI's default of 5.
-        periods: The int number of bars averaged, at least 2, or None for UBI's default of 14.
+        periods: The int number of bars averaged, from 2 to 49 because UBI keeps the last 50 bars, or None for UBI's default of 14.
         average_true_range_multiple: The float multiple of the average true range to trail by, or None for UBI's default of 2.
     """
 
@@ -48,7 +48,7 @@ class TrailPricing(plan_part.PlanPart):
             step_ticks: The int smallest move in ticks, or None for UBI's default of 1.
             average_true_range: A bool that is True to trail by a multiple of the average true range, with `points` as the distance until enough bars have closed.
             bar_minutes: The float length in minutes of each bar, used with `average_true_range`, or None for UBI's default of 5.
-            periods: The int number of bars averaged, at least 2, used with `average_true_range`, or None for UBI's default of 14.
+            periods: The int number of bars averaged, from 2 to 49, used with `average_true_range`, or None for UBI's default of 14.
             average_true_range_multiple: The float multiple of the average true range to trail by, used with `average_true_range`, or None for UBI's default of 2.
 
         Raises:

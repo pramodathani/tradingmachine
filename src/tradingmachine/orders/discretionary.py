@@ -1,6 +1,6 @@
 """The `discretionary` synthetic order type: a limit order that shows one price and quietly takes a slightly worse one when it comes within reach.
 
-The visible limit rests at `price`. When the other side comes within `discretion_points` of it, UBI takes what is there and reduces the resting order by the same amount.
+The visible limit rests at `price`. When the other side comes within `discretion_points` of it, UBI takes what is there and reduces the resting order by the same amount. When the take covers the whole resting order, UBI cancels it rather than reducing it. The template must be a `limit` order with a price, and a stop or `market` template is refused with `discretion_needs_limit`.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class DiscretionaryOrder(synthetic_order.SyntheticOrder):
     """A limit order that shows one price and quietly takes a slightly worse one when it comes within reach.
 
-    The visible limit rests at `price`. When the other side comes within `discretion_points` of it, UBI takes what is there and reduces the resting order by the same amount.
+    The visible limit rests at `price`. When the other side comes within `discretion_points` of it, UBI takes what is there and reduces the resting order by the same amount. When the take covers the whole resting order, UBI cancels it rather than reducing it. The template must be a `limit` order with a price, and a stop or `market` template is refused with `discretion_needs_limit`.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -54,6 +54,7 @@ class DiscretionaryOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         discretion_quantity: int | None = None,
     ):
@@ -76,7 +77,8 @@ class DiscretionaryOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             discretion_quantity: The int quantity to take when the chance comes, or None to take everything still resting.
 
         Raises:
@@ -98,6 +100,7 @@ class DiscretionaryOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.discretion_points = discretion_points

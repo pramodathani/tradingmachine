@@ -1,6 +1,6 @@
 """The `underlying_peg` synthetic order type: a resting limit whose price moves by delta times another instrument's move, such as an option bid following the index.
 
-This is pegged-to-stock or delta-pegged, the Atlas's G6. The order is placed at the template's `price`, and UBI then keeps its price at that price plus `delta` times the watched instrument's move since it was placed, rounded to the tick, kept between `lowest_price` and `highest_price`, and changed only once it has moved at least `step_ticks`. The order's own book is never read, which matters on a far strike where one order moves the premium. The template must be a `limit` order with a price, and changing the price yourself restarts the peg from your price and the watched instrument's price at that moment. The answer carries `underlying_start`, the watched price the peg measures from.
+This is pegged-to-stock or delta-pegged, the Atlas's G6. The order is placed at the template's `price`, and UBI then keeps its price at that price plus `delta` times the watched instrument's move since it was placed, rounded to the tick, kept between `lowest_price` and `highest_price`, and changed only once it has moved at least `step_ticks`. The order's own book is never read, which matters on a far strike where one order moves the premium. The template must be a `limit` order with a price, and changing the price yourself restarts the peg from your price and the watched instrument's price at that moment. UBI keeps the watched price the peg measures from as `watched_start` in the part's `pricing_memory`, which the order's `parent` shows. `lowest_price` and `highest_price` must each be a whole number of ticks, or UBI refuses the order with HTTP 400.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class UnderlyingPegOrder(synthetic_order.SyntheticOrder):
     """A resting limit whose price moves by delta times another instrument's move, such as an option bid following the index.
 
-    This is pegged-to-stock or delta-pegged, the Atlas's G6. The order is placed at the template's `price`, and UBI then keeps its price at that price plus `delta` times the watched instrument's move since it was placed, rounded to the tick, kept between `lowest_price` and `highest_price`, and changed only once it has moved at least `step_ticks`. The order's own book is never read, which matters on a far strike where one order moves the premium. The template must be a `limit` order with a price, and changing the price yourself restarts the peg from your price and the watched instrument's price at that moment. The answer carries `underlying_start`, the watched price the peg measures from.
+    This is pegged-to-stock or delta-pegged, the Atlas's G6. The order is placed at the template's `price`, and UBI then keeps its price at that price plus `delta` times the watched instrument's move since it was placed, rounded to the tick, kept between `lowest_price` and `highest_price`, and changed only once it has moved at least `step_ticks`. The order's own book is never read, which matters on a far strike where one order moves the premium. The template must be a `limit` order with a price, and changing the price yourself restarts the peg from your price and the watched instrument's price at that moment. UBI keeps the watched price the peg measures from as `watched_start` in the part's `pricing_memory`, which the order's `parent` shows. `lowest_price` and `highest_price` must each be a whole number of ticks, or UBI refuses the order with HTTP 400.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -60,6 +60,7 @@ class UnderlyingPegOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         lowest_price: float | None = None,
         highest_price: float | None = None,
@@ -85,7 +86,8 @@ class UnderlyingPegOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             lowest_price: The float lowest price in rupees the order is moved to, above zero, or None for no floor.
             highest_price: The float highest price in rupees the order is moved to, above zero and not below `lowest_price`, or None for no ceiling.
             step_ticks: The int smallest move in ticks worth a modification, at least 1, or None to let UBI use 1.
@@ -109,6 +111,7 @@ class UnderlyingPegOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.watch_instrument = watch_instrument

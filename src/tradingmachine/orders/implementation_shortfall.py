@@ -1,6 +1,6 @@
 """The `implementation_shortfall` synthetic order type: a time-sliced order whose slices shrink, so most of it trades early.
 
-Trading early keeps the price paid close to the price when the decision was made, at the cost of more market impact. At an `urgency` of 0 it is exactly a `TimeWeightedAveragePriceOrder`.
+Trading early keeps the price paid close to the price when the decision was made, at the cost of more market impact. At an `urgency` of 0 it is exactly a `TimeWeightedAveragePriceOrder`. By default UBI holds each limit slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class ImplementationShortfallOrder(synthetic_order.SyntheticOrder):
     """A time-sliced order whose slices shrink, so most of it trades early.
 
-    Trading early keeps the price paid close to the price when the decision was made, at the cost of more market impact. At an `urgency` of 0 it is exactly a `TimeWeightedAveragePriceOrder`.
+    Trading early keeps the price paid close to the price when the decision was made, at the cost of more market impact. At an `urgency` of 0 it is exactly a `TimeWeightedAveragePriceOrder`. By default UBI holds each limit slice in its virtual order book from its turn until the other side of the book reaches its price, unless `hold_limits` is False.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -58,6 +58,7 @@ class ImplementationShortfallOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         urgency: float | None = None,
     ):
@@ -81,7 +82,8 @@ class ImplementationShortfallOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             urgency: The float urgency from 0 to 1, or None to let UBI use 0.5.
 
         Raises:
@@ -103,6 +105,7 @@ class ImplementationShortfallOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.slices = slices

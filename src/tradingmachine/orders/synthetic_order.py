@@ -46,6 +46,7 @@ class SyntheticOrder:
         quantity_reference: A dict describing the quantity for UBI to work out, or None.
         closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
         reduce_only: A bool that is True to have UBI check every leg against the net position held in the leg's instrument and product just before sending it, and refuse with HTTP 409 any leg that is not on the closing side or is bigger than the position.
+        hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price in its virtual order book until the other side of the book reaches that price, False to send them as they come, or None to let UBI use the type's default.
         dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
         parent_id: The str id UBI's order engine gave this order when `place()` sent it, or None before then and after a dry run, which records nothing.
     """
@@ -70,6 +71,7 @@ class SyntheticOrder:
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the order template.
@@ -90,6 +92,7 @@ class SyntheticOrder:
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
 
         Raises:
@@ -110,6 +113,7 @@ class SyntheticOrder:
         self.quantity_reference = quantity_reference
         self.closes_position = closes_position
         self.reduce_only = reduce_only
+        self.hold_limits = hold_limits
         self.dry_run = dry_run
         self.parent_id = None
 
@@ -175,7 +179,7 @@ class SyntheticOrder:
 
     @property
     def synthetic(self) -> dict:
-        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, and `closes_position` and `reduce_only` when each is True.
+        """The `synthetic` object sent with the order, holding `type`, this type's settings that are not None, `closes_position` and `reduce_only` when each is True, and `hold_limits` when it is not None.
 
         Examples:
             Print the synthetic object of an order of the base type, which names only the type:
@@ -217,6 +221,29 @@ class SyntheticOrder:
             order.reduce_only = False
             print(order.synthetic)
             ```
+
+            Show that `hold_limits` is sent only when it is given, here on a ladder whose rungs should rest at the broker at once:
+
+            ```python
+            from tradingmachine.assets import equities
+            from tradingmachine.orders import ladder
+
+            share = equities.Equity(exchange="nse", symbol="IDEA")
+            order = ladder.LadderOrder(
+                share,
+                transaction_type="buy",
+                product="mis",
+                order_type="limit",
+                quantity=2,
+                price=13.0,
+                from_price=13.0,
+                to_price=12.9,
+                steps=2,
+            )
+            print(order.synthetic)
+            order.hold_limits = False
+            print(order.synthetic)
+            ```
         """
         document = {
             "type": self.SYNTHETIC_TYPE,
@@ -228,13 +255,15 @@ class SyntheticOrder:
             document["closes_position"] = True
         if self.reduce_only:
             document["reduce_only"] = True
+        if self.hold_limits is not None:
+            document["hold_limits"] = self.hold_limits
         return document
 
     def place(self) -> dict:
         """Sends the order to UBI's order engine through `TradeableInstrument.place_order`, and keeps the `parent_id` the engine answers with.
 
         Returns:
-            The dict `place_order` returns. A type that acts at once answers with the broker's answer and a `parent_id`; a type that waits for a price or a time answers with an `outcome` of `armed` or `scheduled`, a `broker` and `order_id` of None, and a `parent_id`, which is the only handle on the order until it reaches a broker. The types that send several orders at once, `freeze_slicer`, `ladder`, `grid`, `two_sided_quote`, `basket`, `oco`, `bracket` and `two_sided_breakout`, answer with one combined `outcome`: `accepted` when every order was accepted, `partial` with HTTP 207 when only some were, which is returned rather than raised, and otherwise `unknown` or `rejected`, which are raised.
+            The dict `place_order` returns. A type that acts at once answers with the broker's answer and a `parent_id`; a type that waits for a price or a time, or whose limit orders UBI holds until the market reaches them, answers with an `outcome` of `armed`, a `broker` and `order_id` of None, and a `parent_id`, which is the only handle on the order until it reaches a broker. The types that send several orders at once, `freeze_slicer`, `ladder`, `grid`, `two_sided_quote`, `basket`, `oco`, `bracket` and `two_sided_breakout`, answer with a `legs` list, one entry per order with its plan `path`, `instrument_id`, `outcome`, `order_id` and `status_message`, and one combined `outcome`: `accepted` when every order was accepted, `partial` with HTTP 207 when only some were, which is returned rather than raised, and otherwise `unknown` or `rejected`, which are raised.
 
         Raises:
             BadRequestError: A template field is invalid, or one of this type's own settings is missing or wrong.

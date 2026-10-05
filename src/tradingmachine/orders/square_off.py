@@ -20,7 +20,7 @@ from tradingmachine.orders import synthetic_order
 class SquareOffOrder(synthetic_order.SyntheticOrder):
     """The day's positions on one product, closed with limit orders at a time of day after their resting orders are cancelled.
 
-    UBI decides the side, the order type and the quantity of every closing order from the positions, so the template carries placeholders for them. The instrument only anchors the request; it does not limit what is closed. It answers HTTP 202 with an `outcome` of `scheduled` and sends nothing until `at_time`, so keep the `parent_id` from the answer. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day, and the answer names the date.
+    UBI decides the side, the order type and the quantity of every closing order from the positions, so the template carries placeholders for them. The instrument only anchors the request; it does not limit what is closed. It answers HTTP 202 with an `outcome` of `armed` and sends nothing until `at_time`, so keep the `parent_id` from the answer. At that time UBI cancels every open order on each instrument it closes, including stops still waiting for their trigger, and sends each closing order on the product of the position it closes. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -42,6 +42,7 @@ class SquareOffOrder(synthetic_order.SyntheticOrder):
         tag: str | None = None,
         closes_position: bool = True,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the square-off.
@@ -55,6 +56,7 @@ class SquareOffOrder(synthetic_order.SyntheticOrder):
             tag: A str of up to twenty letters and digits to label the request with, or None.
             closes_position: A bool that is True to let the closing orders use the share of a broker's daily order cap kept for exits, which is what a square-off is.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI check the request and return it without recording or sending anything.
 
         Raises:
@@ -70,6 +72,7 @@ class SquareOffOrder(synthetic_order.SyntheticOrder):
             tag=tag,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.at_time = at_time

@@ -1,6 +1,6 @@
 """The `chaser` synthetic order type: a limit order that starts on its own side of the book and steps towards the other until it fills.
 
-It saves the spread when the market is patient and still fills when it is not. After `cross_after_seconds` it crosses the spread outright, and it never goes past `cap_price`.
+It saves the spread when the market is patient and still fills when it is not. After `cross_after_seconds` it crosses the spread outright, and it never goes past `cap_price`. It is never moved backwards, even when the book lags behind it, and `cross_after_seconds` is counted from the first tick after it rests.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class ChaserOrder(synthetic_order.SyntheticOrder):
     """A limit order that starts on its own side of the book and steps towards the other until it fills.
 
-    It saves the spread when the market is patient and still fills when it is not. After `cross_after_seconds` it crosses the spread outright, and it never goes past `cap_price`.
+    It saves the spread when the market is patient and still fills when it is not. After `cross_after_seconds` it crosses the spread outright, and it never goes past `cap_price`. It is never moved backwards, even when the book lags behind it, and `cross_after_seconds` is counted from the first tick after it rests.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -55,6 +55,7 @@ class ChaserOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         step_ticks: int | None = None,
         step_seconds: float | None = None,
@@ -79,7 +80,8 @@ class ChaserOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             step_ticks: The int number of ticks per step, or None to let UBI use 1.
             step_seconds: The float number of seconds between steps, or None to let UBI use 5.
             cap_price: The float worst price in rupees it will take, or None.
@@ -104,6 +106,7 @@ class ChaserOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.step_ticks = step_ticks

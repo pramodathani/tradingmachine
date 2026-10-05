@@ -1,6 +1,6 @@
 """The `bracket` synthetic order type: an entry that arms a stop and a target behind itself on its first fill, even a partial one.
 
-The exits are sized to what has filled and grown as more fills arrive, and once an exit fills the rest of the entry is cancelled and the other exit reduced. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. An entry that must never go out without a stop is a `CoverOrder` instead.
+The exits are sized to what has filled and grown as more fills arrive, and once an exit fills the rest of the entry is cancelled and the other exit reduced. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. An entry that must never go out without a stop is a `CoverOrder` instead. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once. An entry fill that arrives after both exits have finished sends the exits again for what it added, and a stop or target off the tick is refused with HTTP 400 before anything is sent.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class BracketOrder(synthetic_order.SyntheticOrder):
     """An entry that arms a stop and a target behind itself on its first fill, even a partial one.
 
-    The exits are sized to what has filled and grown as more fills arrive, and once an exit fills the rest of the entry is cancelled and the other exit reduced. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. An entry that must never go out without a stop is a `CoverOrder` instead.
+    The exits are sized to what has filled and grown as more fills arrive, and once an exit fills the rest of the entry is cancelled and the other exit reduced. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. An entry that must never go out without a stop is a `CoverOrder` instead. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once. An entry fill that arrives after both exits have finished sends the exits again for what it added, and a stop or target off the tick is refused with HTTP 400 before anything is sent.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -56,6 +56,7 @@ class BracketOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         stop_price: float | None = None,
         stop_limit_price: float | None = None,
@@ -79,7 +80,8 @@ class BracketOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             stop_price: The float trigger of the stop in rupees, or None for no stop.
             stop_limit_price: The float limit of the stop in rupees, required whenever `stop_price` is given, or None.
             target_price: The float limit of the target in rupees, or None for no target.
@@ -103,6 +105,7 @@ class BracketOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.stop_price = stop_price

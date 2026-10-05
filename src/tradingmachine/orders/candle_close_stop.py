@@ -1,6 +1,6 @@
 """The `candle_close_stop` synthetic order type: a hidden stop that fires only when a whole bar closes past the level.
 
-A brief wick through the level does not stop the position out. The bars are built from UBI's own price ticks from the moment the order is placed, so the first bar has to finish before anything can fire. Everything else is as for a `HiddenStopOrder`, including the optional backstop and the `backstop` object in the armed answer. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+A brief wick through the level does not stop the position out. The bars are built from the last traded price on UBI's own ticks from the moment the order is placed, and are aligned to the clock, so one-minute bars end on the minute and the first decision can come seconds after placing. The exit is a limit `buffer_ticks` past the other side's best price when the bar closes, and is not moved afterwards. Everything else is as for a `HiddenStopOrder`, including the optional backstop, which makes the answer HTTP 200 with a `legs` list. Without a backstop it answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class CandleCloseStopOrder(synthetic_order.SyntheticOrder):
     """A hidden stop that fires only when a whole bar closes past the level.
 
-    A brief wick through the level does not stop the position out. The bars are built from UBI's own price ticks from the moment the order is placed, so the first bar has to finish before anything can fire. Everything else is as for a `HiddenStopOrder`, including the optional backstop and the `backstop` object in the armed answer. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    A brief wick through the level does not stop the position out. The bars are built from the last traded price on UBI's own ticks from the moment the order is placed, and are aligned to the clock, so one-minute bars end on the minute and the first decision can come seconds after placing. The exit is a limit `buffer_ticks` past the other side's best price when the bar closes, and is not moved afterwards. Everything else is as for a `HiddenStopOrder`, including the optional backstop, which makes the answer HTTP 200 with a `legs` list. Without a backstop it answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -58,6 +58,7 @@ class CandleCloseStopOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         bar_minutes: float | None = None,
         backstop_price: float | None = None,
@@ -83,7 +84,8 @@ class CandleCloseStopOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             bar_minutes: The float length of each bar in minutes, or None to let UBI use 5.
             backstop_price: The float trigger in rupees of a real stop placed at the broker, given together with `backstop_limit_price`, or None.
             backstop_limit_price: The float limit in rupees of that real stop, or None.
@@ -109,6 +111,7 @@ class CandleCloseStopOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.trigger_level = trigger_price

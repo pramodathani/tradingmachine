@@ -52,6 +52,7 @@ class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
         tag: str | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the two legs, the template they default to and the net price.
@@ -70,7 +71,8 @@ class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
             tag: A str default label of up to twenty letters and digits, or None.
             closes_position: A bool that is True when both legs close positions, so they may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
 
         Raises:
             Nothing.
@@ -87,6 +89,7 @@ class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
             tag=tag,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.first_leg = first_leg

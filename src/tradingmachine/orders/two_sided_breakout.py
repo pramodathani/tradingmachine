@@ -1,6 +1,6 @@
 """The `two_sided_breakout` synthetic order type: a buy stop above a range and a sell stop below it, where the first to fire cancels the other.
 
-Both entries are native stop orders at the exchange, so they fire at exchange speed whether or not UBI is running; UBI only notices which went and cancels the other, rather than reducing it, because the two are opposite trades. A spike through both levels inside one tick fills both. After the break, a stop and a target are armed on the side that filled, each a distance from the entry's average fill rather than a price, because one absolute price cannot suit a break either way: after a break downwards, a target above the range would buy straight back. At least one of `stop_distance` and `target_distance` must be given. UBI never works out references for this type, so give real numbers.
+Both entries are native stop orders at the exchange, so they fire at exchange speed whether or not UBI is running; UBI only notices which went and cancels the other, rather than reducing it, because the two are opposite trades. A spike through both levels inside one tick fills both. After the break, a stop and a target are armed on the side that filled, each a distance from the entry's average fill rather than a price, because one absolute price cannot suit a break either way: after a break downwards, a target above the range would buy straight back. At least one of `stop_distance` and `target_distance` must be given. UBI never works out references for this type, so give real numbers. If the other side fills before its cancel lands, the two fills offset, and UBI cuts the exits to the net position, which is nothing when both sides filled in full.
 
 Typical usage example:
 
@@ -31,7 +31,7 @@ from tradingmachine.orders import synthetic_order
 class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
     """A buy stop above a range and a sell stop below it, where the first to fire cancels the other.
 
-    Both entries are native stop orders at the exchange, so they fire at exchange speed whether or not UBI is running; UBI only notices which went and cancels the other, rather than reducing it, because the two are opposite trades. A spike through both levels inside one tick fills both. After the break, a stop and a target are armed on the side that filled, each a distance from the entry's average fill rather than a price, because one absolute price cannot suit a break either way: after a break downwards, a target above the range would buy straight back. At least one of `stop_distance` and `target_distance` must be given. UBI never works out references for this type, so give real numbers.
+    Both entries are native stop orders at the exchange, so they fire at exchange speed whether or not UBI is running; UBI only notices which went and cancels the other, rather than reducing it, because the two are opposite trades. A spike through both levels inside one tick fills both. After the break, a stop and a target are armed on the side that filled, each a distance from the entry's average fill rather than a price, because one absolute price cannot suit a break either way: after a break downwards, a target above the range would buy straight back. At least one of `stop_distance` and `target_distance` must be given. UBI never works out references for this type, so give real numbers. If the other side fills before its cancel lands, the two fills offset, and UBI cuts the exits to the net position, which is nothing when both sides filled in full.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -69,6 +69,7 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         stop_distance: float | None = None,
         stop_limit_offset: float | None = None,
@@ -96,7 +97,8 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             stop_distance: The float distance in rupees between the entry's average fill and the trigger of the stop armed after the break, below the fill for a long and above it for a short, or None for no stop.
             stop_limit_offset: The float distance in rupees by which the stop's limit sits past its trigger, required with `stop_distance`, or None.
             target_distance: The float distance in rupees between the entry's average fill and the target armed after the break, above the fill for a long and below it for a short, or None for no target.
@@ -120,6 +122,7 @@ class TwoSidedBreakoutOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.buy_trigger = buy_trigger

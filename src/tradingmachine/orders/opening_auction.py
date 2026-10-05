@@ -1,6 +1,6 @@
 """The `opening_auction` synthetic order type: an order placed during the pre-open session, so it fills at the price the opening call auction discovers.
 
-This is market-on-open or limit-on-open, the Atlas's G1. UBI places it at `at_time` while the pre-open is collecting orders, or on its next clock tick when collection is already open. Only NSE and BSE equities and exchange traded funds, until 09:10 for a limit and 09:05 for a market order, and NSE stock and index futures, until 09:07 and 09:05, have a pre-open; UBI refuses anything else with HTTP 400 rather than send it into continuous trading, and refuses stop orders and `ioc` too. It does not check that a future is the current month's, the only one with a pre-open. Times follow the instrument's exchange trading calendar, so on a weekend or an exchange holiday the order waits for the next trading day's pre-open. It answers HTTP 202 with an `outcome` of `scheduled` and sends nothing to a broker until then, so keep the `parent_id` from the answer.
+This is market-on-open or limit-on-open, the Atlas's G1. UBI places it at `at_time` while the pre-open is collecting orders, answering HTTP 202 with an `outcome` of `armed`, or at once, with the broker's answer, when collection is already open. Only NSE and BSE equities and exchange traded funds, until 09:10 for a limit and 09:05 for a market order, and NSE stock and index futures, until 09:07 and 09:05, have a pre-open; UBI refuses anything else with HTTP 400 rather than send it into continuous trading, and refuses stop orders and `ioc` too. It does not check that a future is the current month's, the only one with a pre-open. Times follow the instrument's exchange trading calendar, so on a weekend or an exchange holiday the order waits for the next trading day's pre-open. Keep the `parent_id` from the answer, since nothing reaches a broker until then.
 
 Typical usage example:
 
@@ -23,7 +23,7 @@ from tradingmachine.orders import synthetic_order
 class OpeningAuctionOrder(synthetic_order.SyntheticOrder):
     """An order placed during the pre-open session, so it fills at the price the opening call auction discovers.
 
-    This is market-on-open or limit-on-open, the Atlas's G1. UBI places it at `at_time` while the pre-open is collecting orders, or on its next clock tick when collection is already open. Only NSE and BSE equities and exchange traded funds, until 09:10 for a limit and 09:05 for a market order, and NSE stock and index futures, until 09:07 and 09:05, have a pre-open; UBI refuses anything else with HTTP 400 rather than send it into continuous trading, and refuses stop orders and `ioc` too. It does not check that a future is the current month's, the only one with a pre-open. Times follow the instrument's exchange trading calendar, so on a weekend or an exchange holiday the order waits for the next trading day's pre-open. It answers HTTP 202 with an `outcome` of `scheduled` and sends nothing to a broker until then, so keep the `parent_id` from the answer.
+    This is market-on-open or limit-on-open, the Atlas's G1. UBI places it at `at_time` while the pre-open is collecting orders, answering HTTP 202 with an `outcome` of `armed`, or at once, with the broker's answer, when collection is already open. Only NSE and BSE equities and exchange traded funds, until 09:10 for a limit and 09:05 for a market order, and NSE stock and index futures, until 09:07 and 09:05, have a pre-open; UBI refuses anything else with HTTP 400 rather than send it into continuous trading, and refuses stop orders and `ioc` too. It does not check that a future is the current month's, the only one with a pre-open. Times follow the instrument's exchange trading calendar, so on a weekend or an exchange holiday the order waits for the next trading day's pre-open. Keep the `parent_id` from the answer, since nothing reaches a broker until then.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -51,6 +51,7 @@ class OpeningAuctionOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         at_time: str | None = None,
     ):
@@ -72,7 +73,8 @@ class OpeningAuctionOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             at_time: The str time to place the order, as `HH:MM` or `HH:MM:SS` India time, from 09:00 and before the pre-open stops collecting this order, or None to let UBI use `09:00:30`.
 
         Raises:
@@ -94,6 +96,7 @@ class OpeningAuctionOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.at_time = at_time

@@ -1,6 +1,6 @@
 """The `volatility` synthetic order type: an option order stated as an implied volatility, priced with the Black-76 model and re-priced as the underlying and time move.
 
-This is the Atlas's G7, an order such as "buy this call at 12.5 volatility". UBI works out the premium from the volatility, the option's strike, expiry and type, the watched instrument's last price as the forward, grown by `interest_rate` to expiry unless it is a future, and the time to 15:30 on the expiry date, in years of 365 days. It follows the watched instrument through the same step and throttle as an `UnderlyingPegOrder`. The template must be a `limit` order, and its `price` is the worst it accepts, the most a buy pays or the least a sell takes; the model's premium is used whenever it is better. Changing the order's price yourself makes it take the volatility your price implies and carry on at that. The answer carries `priced_at`, the price the order was first sent at.
+This is the Atlas's G7, an order such as "buy this call at 12.5 volatility". UBI works out the premium from the volatility, the option's strike, expiry and type, the watched instrument's last price as the forward, grown by `interest_rate` to expiry unless it is a future, and the time to 15:30 on the expiry date, in years of 365 days. It follows the watched instrument through the same step and throttle as an `UnderlyingPegOrder`. The template must be a `limit` order, and its `price` is the worst it accepts, the most a buy pays or the least a sell takes; the model's premium is used whenever it is better. Changing the order's price yourself makes it take the volatility your price implies and carry on at that. `lowest_price` and `highest_price` never push the order past that worst price, and an option that has already expired is refused with HTTP 400.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class VolatilityOrder(synthetic_order.SyntheticOrder):
     """An option order stated as an implied volatility, priced with the Black-76 model and re-priced as the underlying and time move.
 
-    This is the Atlas's G7, an order such as "buy this call at 12.5 volatility". UBI works out the premium from the volatility, the option's strike, expiry and type, the watched instrument's last price as the forward, grown by `interest_rate` to expiry unless it is a future, and the time to 15:30 on the expiry date, in years of 365 days. It follows the watched instrument through the same step and throttle as an `UnderlyingPegOrder`. The template must be a `limit` order, and its `price` is the worst it accepts, the most a buy pays or the least a sell takes; the model's premium is used whenever it is better. Changing the order's price yourself makes it take the volatility your price implies and carry on at that. The answer carries `priced_at`, the price the order was first sent at.
+    This is the Atlas's G7, an order such as "buy this call at 12.5 volatility". UBI works out the premium from the volatility, the option's strike, expiry and type, the watched instrument's last price as the forward, grown by `interest_rate` to expiry unless it is a future, and the time to 15:30 on the expiry date, in years of 365 days. It follows the watched instrument through the same step and throttle as an `UnderlyingPegOrder`. The template must be a `limit` order, and its `price` is the worst it accepts, the most a buy pays or the least a sell takes; the model's premium is used whenever it is better. Changing the order's price yourself makes it take the volatility your price implies and carry on at that. `lowest_price` and `highest_price` never push the order past that worst price, and an option that has already expired is refused with HTTP 400.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -61,6 +61,7 @@ class VolatilityOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         interest_rate: float | None = None,
         lowest_price: float | None = None,
@@ -87,7 +88,8 @@ class VolatilityOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             interest_rate: The float interest rate as a percentage, used to grow a watched index to expiry, or None to let UBI use 0.
             lowest_price: The float lowest price in rupees the order is moved to, above zero, or None for no floor.
             highest_price: The float highest price in rupees the order is moved to, above zero and not below `lowest_price`, or None for no ceiling.
@@ -112,6 +114,7 @@ class VolatilityOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.watch_instrument = watch_instrument

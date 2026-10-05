@@ -1,6 +1,6 @@
 """One order inside a plan, which may wait for a trigger, protect or close a position, be priced, be sent in pieces and end on its own.
 
-By default the order's instrument, side, quantity, product and validity come from the `PlanOrder` it belongs to, and an order inside a join is sized by the join. An order can also give its own instrument, quantity, side, product, validity and tag, which is how one plan trades several instruments. An order with no presets and no settings is the template as it stands, run as a `simple` order.
+By default the order's instrument, side, quantity, product and validity come from the `PlanOrder` it belongs to, and an order inside a join is sized by the join. An order can also give its own instrument, quantity, side, product, validity and tag, which is how one plan trades several instruments, and say for itself whether UBI holds it until the market reaches its price. An order with no presets and no settings is the template as it stands, run as a `simple` order.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ class OrderPart(plan_part.PlanPart):
     Attributes:
         presets: The list of plan_part.PlanPart presets merged into the order first, in order, or None for none.
         trigger: The plan_part.PlanPart condition the order waits for, or None to place it at once.
-        side: The str side, `buy`, `sell`, `protect`, `close` or `against_delta`, or None to use the template's side.
+        side: The str side, `buy`, `sell`, `protect`, `close`, `same_as_first` or `against_delta`, or None to use the template's side.
         pricing: The plan_part.PlanPart pricing rule that sets the price, or None to use the template's own order type and price.
         cap: The plan_part.PlanPart `CapModifier` that bounds the price the rule sets, or None for no bound.
         discretion: The plan_part.PlanPart `DiscretionModifier` that lets part of the order trade a little past its price, or None.
@@ -41,6 +41,7 @@ class OrderPart(plan_part.PlanPart):
         product: The str product of the order's own body, such as `mis`, or None for the template's.
         validity: The str validity of the order's own body, `day` or `ioc`, or None for the template's.
         tag: The str tag of the order's own body, or None for the template's.
+        hold_limits: A bool that is True to hold this order in UBI's virtual order book until the other side of the book reaches its price, False to send it as it comes whatever the plan says, or None to follow the plan.
     """
 
     def __init__(
@@ -63,6 +64,7 @@ class OrderPart(plan_part.PlanPart):
         product: str | None = None,
         validity: str | None = None,
         tag: str | None = None,
+        hold_limits: bool | None = None,
     ):
         """Initialises the order with its presets and its own slot values.
 
@@ -71,7 +73,7 @@ class OrderPart(plan_part.PlanPart):
         Args:
             presets: A sequence of plan_part.PlanPart presets, usually `Preset` objects, or None for none.
             trigger: A plan_part.PlanPart condition, such as `PriceCrosses` or `AllConditions`, or None to place the order at once.
-            side: The str side, `buy`, `sell`, `protect` to trade against the position the template's side opened, `close` to close the position a `PositionQuantity` names, or `against_delta` to hedge the delta of an option the plan traded, or None to use the template's side.
+            side: The str side, `buy`, `sell`, `protect` to trade against the position the template's side opened, `close` to close the position a `PositionQuantity` names, `same_as_first` to trade, as a Then join's child, on the side the first plan filled on, or `against_delta` to hedge the delta of an option the plan traded, or None to use the template's side.
             pricing: A plan_part.PlanPart pricing rule that sets the price, such as `FixedPricing`, `PegPricing` or `TrailPricing`, or None to use the template's own order type and price.
             cap: A plan_part.PlanPart `CapModifier`, the worst price the rule may set, or None.
             discretion: A plan_part.PlanPart `DiscretionModifier`, or None.
@@ -86,6 +88,7 @@ class OrderPart(plan_part.PlanPart):
             product: The str product of this order's own body, `cnc`, `mis` or `nrml`, or None.
             validity: The str validity of this order's own body, `day` or `ioc`, or None.
             tag: The str tag of this order's own body, or None.
+            hold_limits: A bool that is True to hold this order until the other side of the book reaches its price, False to send it as it comes, or None to follow the plan. UBI refuses True with HTTP 400 and the rule `not_holdable` for an order that cannot be held, such as a market order or one priced by anything but `FixedPricing`.
 
         Raises:
             Nothing.
@@ -109,12 +112,13 @@ class OrderPart(plan_part.PlanPart):
         self.product = product
         self.validity = validity
         self.tag = tag
+        self.hold_limits = hold_limits
 
     def document(self) -> dict:
         """Builds the `order` node UBI reads, holding every setting that is not None.
 
         Returns:
-            A dict with the single key `order`, whose value holds each setting that is set. UBI takes `pricing`, `execution`, `guards`, `lifetime` and `venue` as lists: the pricing rule, cap and discretion go in one `pricing` list, the execution and inner execution in one `execution` list, and the guard, lifetime and venue each in a list of one. An instrument is sent as its `instrument_id`.
+            A dict with the single key `order`, whose value holds each setting that is set. UBI takes `pricing`, `execution`, `guards`, `lifetime` and `venue` as lists: the pricing rule, cap and discretion go in one `pricing` list, the execution and inner execution in one `execution` list, and the guard, lifetime and venue each in a list of one. An instrument is sent as its `instrument_id`, and `hold_limits` is sent only when it is not None.
 
         Raises:
             Nothing.
@@ -226,6 +230,8 @@ class OrderPart(plan_part.PlanPart):
             settings["validity"] = self.validity
         if self.tag is not None:
             settings["tag"] = self.tag
+        if self.hold_limits is not None:
+            settings["hold_limits"] = self.hold_limits
         return {
             "order": settings,
         }
