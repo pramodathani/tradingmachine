@@ -43,7 +43,7 @@ The library passes the order vocabulary to UBI as plain lower-case strings, with
 | | `nrml` | Carry forward, for futures and options held overnight. |
 | `validity` | `day`, `ioc` | Good for the day, or immediate-or-cancel. UBI uses `day` when none is given. |
 | `status` (returned) | `PENDING`, `OPEN`, `COMPLETE`, `CANCELLED`, `REJECTED`, `EXPIRED` | UBI's own upper-case status of an order. |
-| `outcome` (returned) | `accepted`, `rejected`, `unknown`, `partial`, `armed`, `scheduled` | What happened to the request. `partial` means some of the orders of a type that sends several at once were accepted and some were not. `armed` and `scheduled` mean the order engine is holding the order, waiting for a price or a time. |
+| `outcome` (returned) | `accepted`, `rejected`, `unknown`, `partial`, `armed` | What happened to the request. `partial` means some of the orders of a type that sends several at once were accepted and some were not. `armed` means the order engine is holding the order, waiting for a price or a time. |
 
 UBI ties the price fields to the order type, and the library does not check this before sending. The table below shows the rule, which you will otherwise meet as a `BadRequestError`.
 
@@ -227,7 +227,7 @@ A `dict`, which is UBI's answer unchanged. The table below lists its keys; which
 | `broker` | `str` or `None` | The broker UBI chose. It is `None` for a held limit order or a synthetic order that is waiting for a price or a time. |
 | `instrument_id` | `str` | The instrument the order was for. |
 | `order_id` | `str` or `None` | The broker's id for the order, which `modify_order` and `cancel_order` take. It is `None` unless the outcome is `accepted`. |
-| `outcome` | `str` | `accepted`, `rejected` or `unknown`; `partial` for a type that sends several orders when only some were accepted, which UBI answers with HTTP 207 and the library returns rather than raises; or `armed` or `scheduled` for an order the engine is holding. Absent on a dry run. |
+| `outcome` | `str` | `accepted`, `rejected` or `unknown`; `partial` for a type that sends several orders when only some were accepted, which UBI answers with HTTP 207 and the library returns rather than raises; or `armed` for an order the engine is holding. Absent on a dry run. |
 | `status_message` | `str` or `None` | Why the outcome is not `accepted`. |
 | `broker_response` | `dict`, `str` or `None` | The broker's own answer. |
 | `dry_run` | `bool` | `True`, on a dry run only. |
@@ -237,7 +237,7 @@ A `dict`, which is UBI's answer unchanged. The table below lists its keys; which
 | `timing_ms` | `dict` | How long UBI spent preparing the order, and how long the broker took. |
 | `intent_id` | `str` | The id of the order's intent in UBI's order engine, on every answer. [`Account.intent`](account.md#intent) reads the answer again by it. |
 | `parent_id` | `str` | Present for an order the engine recorded as a parent, including a held limit order. Keep it: it is the only handle on an order that has not reached a broker yet. |
-| `order_ids` | `list` | Present for the types that send several orders at once, such as `freeze_slicer` and `ladder`, one id per order sent. |
+| `legs` | `list` | Present for the types that send several orders at once, such as `freeze_slicer` and `ladder`, one entry per order with its plan `path`, `instrument_id`, `outcome`, `order_id` and `status_message`. |
 
 #### Raises
 
@@ -652,8 +652,8 @@ A `pandas.DataFrame` with one row per parent, or `None` when no parent in this i
 | Column | Type | Description |
 |---|---|---|
 | `parent_order_id` | `str` | The parent's id, which is the `parent_id` the other members take. |
-| `synthetic_type` | `str` | The order type, such as `bracket`, or `virtual_limit` for a held limit order. |
-| `state` | `str` | `received`, `working`, `protecting` or `cancelling`. The finished states, `completed`, `cancelled`, `rejected` and `failed`, do not appear here. |
+| `synthetic_type` | `str` | `plan` for every type but `simple`, since UBI runs every other type as a plan of its preset; the type asked for is under `parameters` as `routed_from`. |
+| `state` | `str` | `received`, `working` or `cancelling`; a parent placed before 2026-10-03 can also show `protecting`. The finished states, `completed`, `cancelled`, `rejected` and `failed`, do not appear here. |
 | `instrument_id` | `str` | This instrument. |
 | `body` | `dict` | The order body the parent was placed with. |
 | `parameters` | `dict` | The type's settings, including the engine's own working values. |

@@ -122,8 +122,7 @@ Every answer to placing, modifying or cancelling an order carries an `outcome` s
 |---|---|---|---|
 | `accepted` | <span class="status s2">200</span> | Returns the answer | The broker took the request. The exchange can still refuse the order afterwards, so read its fate from `orders`. |
 | `partial` | <span class="status s2">207</span> | Returns the answer | Some of the orders of a type that sends several at once were accepted and some were not; each order's own outcome is listed in the answer |
-| `armed` | <span class="status s2">202</span> | Returns the answer | A held limit order or a synthetic order is waiting for a price, and nothing has reached a broker yet |
-| `scheduled` | <span class="status s2">202</span> | Returns the answer | A synthetic order is waiting for a time |
+| `armed` | <span class="status s2">202</span> | Returns the answer | A held limit order or a synthetic order is waiting for a price or a time, and nothing has reached a broker yet. UBI stopped answering `scheduled` on 2026-10-03 and answers `armed` for both. |
 | `rejected` | <span class="status s4">422</span> | Raises [`OrderRejectedError`](errors.md#orderrejectederror) | The broker answered and refused |
 | `unknown` | <span class="status s5">504</span> | Raises [`OrderOutcomeUnknownError`](errors.md#orderoutcomeunknownerror) | The request may or may not have taken effect, so read the order book before sending it again |
 
