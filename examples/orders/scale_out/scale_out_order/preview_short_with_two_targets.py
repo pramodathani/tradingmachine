@@ -1,6 +1,6 @@
-"""Preview and rest a short sale with two scale-out targets, then cancel it.
+"""Preview and place a short sale with two scale-out targets, held until the market reaches its price, then cancel it.
 
-The program previews, then rests, a limit sell of two Vodafone Idea shares 3% above the market. Once it filled, UBI would rest two limit buys of one share each at 3% and 4% below the market, and a stop-limit buy triggering 5% above the market that moves to the average entry price only after both targets have filled. The entry does not fill in the seconds it rests, so no short position is opened and no exit is ever sent; the program prints the parent and the broker order and then cancels the parent.
+The program previews, then places, a limit sell of two Vodafone Idea shares 3% above the market. Once it filled, UBI would rest two limit buys of one share each at 3% and 4% below the market, and a stop-limit buy triggering 5% above the market that moves to the average entry price only after both targets have filled. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet, no short position is opened and no exit is ever sent; the program prints the parent and the broker orders, of which there are none, and then cancels the parent.
 
 Typical usage example:
 

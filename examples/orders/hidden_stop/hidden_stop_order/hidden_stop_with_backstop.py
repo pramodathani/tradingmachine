@@ -1,6 +1,6 @@
 """Protect a one-share intraday long with a hidden stop and a real backstop at the broker.
 
-The program opens a one-share intraday long in Vodafone Idea, then previews and arms a hidden stop a fifth below the market with a real stop-limit backstop a quarter below it resting at the broker, and prints the backstop the answer describes. It cancels both and sells the share back.
+The program opens a one-share intraday long in Vodafone Idea, then previews and arms a hidden stop a fifth below the market with a real stop-limit backstop a quarter below it resting at the broker, and prints the backstop's leg from the answer. It cancels both and sells the share back.
 
 Typical usage example:
 
@@ -335,7 +335,7 @@ class BackstoppedHiddenStop:
                 time.sleep(2)
                 self.print_parent()
                 self.print_broker_orders()
-                print(f"Backstop: {answer.get('backstop')}")
+                print(f"Backstop: {answer.get('legs')}")
             finally:
                 self.cancel_order()
         finally:

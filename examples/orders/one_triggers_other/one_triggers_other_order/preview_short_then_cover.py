@@ -1,6 +1,6 @@
-"""Preview and rest a short sale that places its own buy-back, then cancel it.
+"""Preview and place a short sale that places its own buy-back, held until the market reaches its price, then cancel it.
 
-The program previews, then sends, a one-triggers-other order: a limit sell of one Vodafone Idea share 3% above the market which, once it filled, would place a limit buy of what filled 3% below the market, good for the day, to take the profit. UBI checks the second order before sending the first, so the preview shows that the buy-back is valid. The sell does not fill in the seconds it rests, so the buy-back is never sent and no short position is opened; the program prints the parent and the broker order and then cancels the parent.
+The program previews, then sends, a one-triggers-other order: a limit sell of one Vodafone Idea share 3% above the market which, once it filled, would place a limit buy of what filled 3% below the market, good for the day, to take the profit. UBI checks the second order before sending the first, so the preview shows that the buy-back is valid. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet, the buy-back is never sent and no short position is opened; the program prints the parent and the broker orders, of which there are none, and then cancels the parent.
 
 Typical usage example:
 

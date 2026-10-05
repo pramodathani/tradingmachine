@@ -1,6 +1,6 @@
 """Preview and schedule an offer two hours ahead, then cancel it before it is sent.
 
-The program previews, then schedules, a sell of one Vodafone Idea share 3% above the market to be placed two hours from now, India time, with a tag on it. The dry run shows the broker request UBI would send when the time comes. The program prints the waiting parent and cancels it, so nothing ever reaches a broker.
+The program previews, then schedules, a sell of one Vodafone Idea share 3% above the market to be placed two hours from now, India time, with a tag on it. The dry run shows the broker request UBI would send once the time has come and the best bid has reached the offer's price, since a scheduled limit order is held until then. The program prints the waiting parent and cancels it, so nothing ever reaches a broker.
 
 Typical usage example:
 

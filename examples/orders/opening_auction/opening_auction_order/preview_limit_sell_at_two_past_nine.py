@@ -1,6 +1,6 @@
 """Preview and schedule a pre-open limit sell for 09:02, then cancel it.
 
-The program previews, then schedules, an opening-auction sell of one Vodafone Idea share with a limit 3% above the last price, to be sent at 09:02 India time on the next trading day, before the pre-open stops collecting limit orders at 09:10. UBI answers HTTP 202 `scheduled` and sends nothing to a broker until then; the program prints the parent and cancels it. It refuses to run between 08:55 and 09:20 India time, because then the order would go straight into the pre-open and could trade at the auction before it was cancelled.
+The program previews, then schedules, an opening-auction sell of one Vodafone Idea share with a limit 3% above the last price, to be sent at 09:02 India time on the next trading day, before the pre-open stops collecting limit orders at 09:10. UBI answers HTTP 202 `armed` and sends nothing to a broker until then; the program prints the parent and cancels it. On a trading day after the pre-open has stopped collecting the order, UBI refuses it with HTTP 400 rather than keep it for the next day, and the program prints that refusal and stops, since nothing was placed. It refuses to run between 08:55 and 09:20 India time, because then the order would go straight into the pre-open and could trade at the auction before it was cancelled.
 
 Typical usage example:
 
@@ -247,7 +247,11 @@ class LimitSellAtTwoPastNine:
         print("A dry run, which sends and records nothing, says UBI would send:")
         print(preview.get("request", preview))
         self.order = self.build_order(dry_run=False)
-        answer = self.place_order()
+        try:
+            answer = self.place_order()
+        except exceptions.BadRequestError as error:
+            print(f"UBI refused the order, so nothing was placed: {error}")
+            return
         print(
             f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
             f"{answer.get('outcome')}, parent {self.order.parent_id}"

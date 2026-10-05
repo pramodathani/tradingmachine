@@ -1,6 +1,6 @@
 """Preview and rest an offer whose unfilled rest would be made marketable at 15:20.
 
-The program previews, then rests, a sell of one Vodafone Idea share 3% above the market with `at_expiry` set to `market`, so at 15:20 UBI would reprice what is left to take the bid. It prints the parent and cancels it well before then.
+The program previews, then rests, a sell of one Vodafone Idea share 3% above the market with `at_expiry` set to `market`, so at 15:20 UBI would reprice what is left to take the bid. UBI never holds an order whose `at_expiry` is `market`, because a held order could not be made marketable at the deadline, so this offer rests at the broker at once. It prints the parent and cancels it well before then.
 
 Typical usage example:
 

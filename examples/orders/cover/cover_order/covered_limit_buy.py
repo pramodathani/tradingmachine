@@ -1,6 +1,6 @@
 """Rest a limit buy that can never fill without a stop behind it.
 
-The program rests a cover order buying one Vodafone Idea share 3% below the market with a compulsory stop 6% below it. The entry does not fill, so the stop is never armed; the program prints the parent and the entry at the broker and cancels it.
+The program rests a cover order buying one Vodafone Idea share 3% below the market with a compulsory stop 6% below it. The entry does not fill, so the stop is never armed; the program prints the parent and the entry at the broker and cancels it. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -83,6 +83,7 @@ class CoveredLimitBuy:
             price=self.price_from_market(self.share, -3),
             stop_price=stop_price,
             stop_limit_price=round(stop_price - 0.05, 2),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

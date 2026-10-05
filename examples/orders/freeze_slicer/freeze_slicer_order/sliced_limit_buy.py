@@ -1,6 +1,6 @@
 """Send a limit buy through the freeze slicer and cancel it.
 
-The program sends a buy of one Vodafone Idea share 3% below the market through the freeze slicer. A cash share has no freeze quantity, so it goes as one order; the program prints the answer's order ids and the parent, then cancels it.
+The program sends a buy of one Vodafone Idea share 3% below the market through the freeze slicer. A cash share has no freeze quantity, so it would go as one order, and UBI holds it until the best offer comes down to its price; the program prints the answer's legs and the parent, then cancels it.
 
 Typical usage example:
 
@@ -231,7 +231,7 @@ class SlicedLimitBuy:
             time.sleep(2)
             self.print_parent()
             self.print_broker_orders()
-            print(f"Order ids: {answer.get('order_ids')}")
+            print(f"Legs: {answer.get('legs')}")
         finally:
             self.cancel_order()
 

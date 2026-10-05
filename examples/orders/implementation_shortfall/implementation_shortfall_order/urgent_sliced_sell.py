@@ -1,6 +1,6 @@
 """Preview and start an urgent sliced sell capped above the market, then stop it.
 
-The program previews, then starts, an implementation shortfall sell of three Vodafone Idea shares in three slices over fifteen minutes at an urgency of 0.9, capped 3% above the market. It prints the parent and cancels the order.
+The program previews, then starts, an implementation shortfall sell of three Vodafone Idea shares in three slices over fifteen minutes at an urgency of 0.9, capped 3% above the market. UBI holds each slice in its virtual order book from its turn until the best bid reaches its price, answering HTTP 202 `armed`, so no slice reaches the broker; the program prints the parent and cancels the order.
 
 Typical usage example:
 

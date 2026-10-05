@@ -1,6 +1,6 @@
 """Rest a buy that would scale out through three targets, then cancel it.
 
-The program rests a limit buy of three Vodafone Idea shares 3% below the market. Once it filled, UBI would rest three limit sells of one share each at 3%, 4% and 5% above the market, and a stop-limit sell triggering 5% below the market that moves to the average entry price after the first target fills. A scale-out needs at least two targets, and three shares give each target one. The entry does not fill in the seconds it rests, so no exit is ever sent; the program prints the parent and the broker order and then cancels the parent.
+The program rests a limit buy of three Vodafone Idea shares 3% below the market. Once it filled, UBI would rest three limit sells of one share each at 3%, 4% and 5% above the market, and a stop-limit sell triggering 5% below the market that moves to the average entry price after the first target fills. A scale-out needs at least two targets, and three shares give each target one. The entry does not fill in the seconds it rests, so no exit is ever sent; the program prints the parent and the broker order and then cancels the parent. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -87,6 +87,7 @@ class LongWithThreeTargets:
             ],
             stop_price=self.price_from_market(self.share, -5),
             stop_limit_price=self.price_from_market(self.share, -6),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

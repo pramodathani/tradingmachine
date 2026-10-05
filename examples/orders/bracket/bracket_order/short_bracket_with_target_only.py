@@ -1,6 +1,6 @@
-"""Preview and rest a short sale with a target and no stop.
+"""Preview and place a short sale with a target and no stop, held until the market reaches its price.
 
-The program previews, then rests, a sell of one Vodafone Idea share 3% above the market whose only exit is a target 3% below the market. It prints the parent and cancels it before anything fills.
+The program previews, then places, a sell of one Vodafone Idea share 3% above the market whose only exit is a target 3% below the market. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet; the program prints the parent and cancels it before anything fills.
 
 Typical usage example:
 

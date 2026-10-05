@@ -1,6 +1,6 @@
-"""Preview and rest two linked short-sale offers, then cancel both.
+"""Preview and place two linked short-sale offers, held until the market reaches their prices, then cancel both.
 
-The program previews, then sends, one `oca` order that rests a sell of one Vodafone Idea share and one Yes Bank share, each 3% above its own market and tagged with its own label. Neither fills in the seconds the offers rest, so no short position is opened; the program prints the parent and both broker orders, then cancels the parent, which cancels both offers.
+The program previews, then sends, one `oca` order that sells one Vodafone Idea share and one Yes Bank share, each 3% above its own market and tagged with its own label. UBI holds both offers in its virtual order book until the market reaches their prices, answering HTTP 202 `armed`, so no short position is opened and no broker order exists; the program prints the parent and the broker orders, of which there are none, then cancels the parent, which ends both offers.
 
 Typical usage example:
 

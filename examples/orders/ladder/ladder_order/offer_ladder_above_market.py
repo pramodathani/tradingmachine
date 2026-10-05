@@ -1,6 +1,6 @@
-"""Preview and rest a ladder of three offers from 3% to 6% above the market.
+"""Preview and place a ladder of three offers from 3% to 6% above the market, held until the market reaches each rung.
 
-The program previews, then rests, a ladder selling three Vodafone Idea shares in three rungs from 3% to 6% above the market, prints the parent and cancels the ladder.
+The program previews, then places, a ladder selling three Vodafone Idea shares in three rungs from 3% to 6% above the market. UBI holds each rung in its virtual order book until the best bid reaches that rung's price, answering HTTP 202 `armed`, so no rung reaches the broker; the program prints the parent and cancels the ladder.
 
 Typical usage example:
 

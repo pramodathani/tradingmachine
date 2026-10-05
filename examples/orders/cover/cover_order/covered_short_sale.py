@@ -1,6 +1,6 @@
-"""Preview and rest a short sale with a compulsory stop above it.
+"""Preview and place a short sale with a compulsory stop above it, held until the market reaches its price.
 
-The program previews, then rests, a cover order selling one Vodafone Idea share 3% above the market with a stop 6% above it, and prints the most it could lose per share before cancelling the order.
+The program previews, then places, a cover order selling one Vodafone Idea share 3% above the market with a stop 6% above it. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet. The program prints the most it could lose per share before cancelling the order.
 
 Typical usage example:
 

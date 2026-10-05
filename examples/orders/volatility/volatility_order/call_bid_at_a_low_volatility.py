@@ -263,7 +263,6 @@ class CallBidAtALowVolatility:
             f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
             f"{answer.get('outcome')}, parent {self.order.parent_id}"
         )
-        print(f"The call was first bid at {answer.get('priced_at')}")
         try:
             time.sleep(2)
             self.print_parent()

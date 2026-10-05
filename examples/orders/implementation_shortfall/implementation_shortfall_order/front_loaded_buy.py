@@ -1,6 +1,6 @@
 """Start a front-loaded sliced buy capped below the market, then stop it.
 
-The program starts an implementation shortfall buy of two Vodafone Idea shares in two slices over ten minutes, capped 3% below the market so no slice fills. It prints the parent and the first slice and cancels the order.
+The program starts an implementation shortfall buy of two Vodafone Idea shares in two slices over ten minutes, capped 3% below the market so no slice fills. It prints the parent and the first slice and cancels the order. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -84,6 +84,7 @@ class FrontLoadedBuy:
             price=self.price_from_market(self.share, -3),
             slices=2,
             over_minutes=10,
+            hold_limits=False,
             dry_run=dry_run,
         )
 

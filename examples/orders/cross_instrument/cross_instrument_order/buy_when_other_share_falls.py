@@ -1,6 +1,6 @@
 """Arm a buy in one share that fires when another share falls to a level.
 
-The program arms a buy of one Vodafone Idea share, sent as a limit 3% below its market, when Yes Bank's last price falls to a fifth below where it trades now. It prints the armed parent and cancels it.
+The program arms a buy of one Vodafone Idea share, sent as a limit 3% below its market, when Yes Bank's last price falls to a fifth below where it trades now; once it fired, UBI would hold the limit in its virtual order book until the best offer reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

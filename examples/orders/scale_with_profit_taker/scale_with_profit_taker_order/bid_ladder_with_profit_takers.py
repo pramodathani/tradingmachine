@@ -1,6 +1,6 @@
 """Rest a two-rung bid ladder whose rungs would each book their own profit and buy again.
 
-The program rests a buy of two Vodafone Idea shares as two one-share rungs from 3% to 5% below the market. If a rung filled, UBI would offer that share 2% above the rung's price and, once that sold, bid for it again, at most three times per rung. Neither rung fills in the seconds the order lives, so no profit-taker is sent; the program prints the parent and the resting rungs and cancels it.
+The program rests a buy of two Vodafone Idea shares as two one-share rungs from 3% to 5% below the market. If a rung filled, UBI would offer that share 2% above the rung's price and, once that sold, bid for it again, at most three times per rung. Neither rung fills in the seconds the order lives, so no profit-taker is sent; the program prints the parent and the resting rungs and cancels it. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -91,6 +91,7 @@ class BidLadderWithProfitTakers:
             steps=2,
             profit_points=profit_points,
             most_cycles=3,
+            hold_limits=False,
             dry_run=dry_run,
         )
 

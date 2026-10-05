@@ -214,7 +214,7 @@ class SlicedLimitSell:
         try:
             time.sleep(2)
             self.print_parent()
-            print(f"Order ids: {answer.get('order_ids')}")
+            print(f"Legs: {answer.get('legs')}")
         finally:
             self.cancel_order()
 
