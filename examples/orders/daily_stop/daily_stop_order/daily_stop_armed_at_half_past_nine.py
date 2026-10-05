@@ -1,6 +1,6 @@
 """Preview and schedule a daily stop armed at 09:30 for a one-share long.
 
-The program opens a one-share intraday long in Vodafone Idea, then previews and schedules a daily stop a fifth below the market that is placed at 09:30 each trading morning for two days, and prints the answer's first arming date. It cancels the stop and sells the share back.
+The program opens a one-share intraday long in Vodafone Idea, then previews and schedules a daily stop a fifth below the market that is placed at 09:30 each trading morning for two days, and prints the armed parent. It cancels the stop and sells the share back.
 
 Typical usage example:
 
@@ -313,7 +313,6 @@ class HalfPastNineDailyStop:
             try:
                 time.sleep(2)
                 self.print_parent()
-                print(f"First armed on: {answer.get('first_arm_on')}")
             finally:
                 self.cancel_order()
         finally:

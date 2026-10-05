@@ -1,6 +1,6 @@
-"""Preview and rest an offer whose filled part would be bought back forty-five minutes after placing.
+"""Preview and place an offer, held until the market reaches its price, whose filled part would be bought back forty-five minutes after placing.
 
-The program previews, then places, a time stop counted in minutes: a short sale of one Vodafone Idea share 3% above the market, which UBI would cancel forty-five minutes later before buying back whatever had filled at market. UBI refuses `minutes` on a weekend or an exchange holiday, because minutes from now mean nothing until the market opens, so run it on a trading day. The offer does not fill in the seconds the order lives; the program prints the parent and the resting offer and cancels it.
+The program previews, then places, a time stop counted in minutes: a short sale of one Vodafone Idea share 3% above the market, which UBI would cancel forty-five minutes later before buying back whatever had filled at market. UBI refuses `minutes` on a weekend or an exchange holiday, because minutes from now mean nothing until the market opens, so run it on a trading day. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet; the program prints the parent and the broker orders, of which there are none, and cancels it.
 
 Typical usage example:
 
@@ -213,7 +213,7 @@ class OfferClosedAfterFortyFiveMinutes:
         )
 
     def run(self) -> None:
-        """Previews the time stop, places it, prints the parent and the resting offer, then cancels it.
+        """Previews the time stop, places it, prints the parent and the broker orders, of which there are none, then cancels it.
 
         Returns:
             None.

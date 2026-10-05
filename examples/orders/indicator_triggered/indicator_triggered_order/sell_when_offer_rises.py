@@ -1,6 +1,6 @@
 """Preview and arm a sell sent when the best offer rises a fifth above the market.
 
-The program previews, then arms, a sell of one Vodafone Idea share that fires when the best offer in the live quote reaches a fifth above the market. It prints the armed parent and cancels it.
+The program previews, then arms, a sell of one Vodafone Idea share that fires when the best offer in the live quote reaches a fifth above the market; once it fired, UBI would hold the limit in its virtual order book until the best bid reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

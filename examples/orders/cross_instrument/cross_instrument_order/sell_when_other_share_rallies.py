@@ -1,6 +1,6 @@
 """Preview and arm a sell in one share that fires when another share's midpoint rallies.
 
-The program previews, then arms, a sell of one Vodafone Idea share at 3% above its market that fires when Yes Bank's midpoint rises a fifth above where it trades now. It prints the armed parent and cancels it.
+The program previews, then arms, a sell of one Vodafone Idea share at 3% above its market that fires when Yes Bank's midpoint rises a fifth above where it trades now; once it fired, UBI would hold the limit in its virtual order book until the best bid reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

@@ -1,6 +1,6 @@
 """The `market_if_touched` synthetic order type: an order that waits unseen for the price to touch a level and then takes what is there.
 
-A native stop can only fire when the price moves against a position, so buying on a dip to a level has to run in UBI. When the last traded price touches `trigger_price`, UBI sends a limit priced `buffer_ticks` past the other side's best price. `trigger_price` here is that level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+A native stop can only fire when the price moves against a position, so buying on a dip to a level has to run in UBI. When the last traded price touches `trigger_price`, UBI sends a limit priced `buffer_ticks` past the other side's best price. `trigger_price` here is that level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class MarketIfTouchedOrder(synthetic_order.SyntheticOrder):
     """An order that waits unseen for the price to touch a level and then takes what is there.
 
-    A native stop can only fire when the price moves against a position, so buying on a dip to a level has to run in UBI. When the last traded price touches `trigger_price`, UBI sends a limit priced `buffer_ticks` past the other side's best price. `trigger_price` here is that level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    A native stop can only fire when the price moves against a position, so buying on a dip to a level has to run in UBI. When the last traded price touches `trigger_price`, UBI sends a limit priced `buffer_ticks` past the other side's best price. `trigger_price` here is that level, not the order's own trigger. With `trigger_on`, the level is compared with the bid, the offer or the midpoint instead of the last trade, or must be reached on two ticks in a row (`double_last`) or for `hold_seconds` (`held`), so a single stray trade does not fire it. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -56,6 +56,7 @@ class MarketIfTouchedOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         trigger_direction: str | None = None,
         buffer_ticks: int | None = None,
@@ -80,7 +81,8 @@ class MarketIfTouchedOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
             buffer_ticks: The int number of ticks past the other side's best price to price the order, or None to let UBI use 2.
             trigger_on: The str price compared with the level and how it must confirm, `last`, `bid`, `ask`, `mid`, `double_last` or `held`, or None to let UBI use `last`.
@@ -105,6 +107,7 @@ class MarketIfTouchedOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.trigger_level = trigger_price

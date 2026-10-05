@@ -235,9 +235,6 @@ class OfferFollowingTheIndex:
             f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
             f"{answer.get('outcome')}, parent {self.order.parent_id}"
         )
-        print(
-            f"The Nifty 50 stood at {answer.get('underlying_start')} when the peg started"
-        )
         try:
             time.sleep(2)
             self.print_parent()

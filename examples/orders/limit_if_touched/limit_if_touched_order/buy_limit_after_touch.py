@@ -1,6 +1,6 @@
-"""Arm a buy that rests a limit once the price touches a level a fifth below the market.
+"""Arm a buy that holds a limit once the price touches a level a fifth below the market.
 
-The program arms a limit-if-touched buy of one Vodafone Idea share: if the price touches a fifth below the market, UBI rests a limit two ticks above that level. It prints the armed parent and cancels it.
+The program arms a limit-if-touched buy of one Vodafone Idea share: if the price touches a fifth below the market, UBI holds a limit two ticks above that level in its virtual order book and sends it once the best offer reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 
@@ -17,7 +17,7 @@ from tradingmachine.unified_broker_interface import exceptions
 
 
 class TouchedLevelBuy:
-    """A buy that waits for a touch of a level before resting its limit.
+    """A buy that waits for a touch of a level before holding its limit.
 
     Attributes:
         trading_account: The tradingmachine.accounts.account.Account, used to read the engine's answer when it comes late.

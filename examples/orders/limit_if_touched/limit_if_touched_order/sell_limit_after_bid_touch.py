@@ -1,6 +1,6 @@
 """Preview and arm a sell whose level is watched on the best bid.
 
-The program previews, then arms, a limit-if-touched sell of one Vodafone Idea share that fires when the best bid reaches a fifth above the market and then rests a limit at that level. It prints the armed parent and cancels it.
+The program previews, then arms, a limit-if-touched sell of one Vodafone Idea share that fires when the best bid reaches a fifth above the market and then holds a limit at that level in its virtual order book until the best bid reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

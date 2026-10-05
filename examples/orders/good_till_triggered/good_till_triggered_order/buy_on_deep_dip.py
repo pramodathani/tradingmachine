@@ -1,6 +1,6 @@
 """Arm a multi-day buy that fires only if the price falls a fifth.
 
-The program arms a good-till-triggered buy of one Vodafone Idea share that waits up to ten days for the price to fall a fifth below the market and then rests a limit there. It prints the armed parent and cancels it.
+The program arms a good-till-triggered buy of one Vodafone Idea share that waits up to ten days for the price to fall a fifth below the market and then holds a limit there in its virtual order book, across the remaining days, until the best offer reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

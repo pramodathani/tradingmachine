@@ -35,7 +35,7 @@ class PegPricing(plan_part.PlanPart):
             reference: The str place in the book, `own_touch` for the order's own side, `mid` for halfway between the bid and the offer, or `opposite_touch` for the other side, or None for UBI's default of `own_touch`.
             offset_ticks: The int number of ticks away from the reference, positive away from filling and negative towards it, or None for UBI's default of 0.
             follows: A bool that is False to price the order at its reference once and leave it there, True to move it whenever the reference moves, or None for UBI's default of True.
-            within_body_price: A bool that is True to treat the template's limit price as the worst price the order takes, resting at that price when the book shows no reference.
+            within_body_price: A bool that is True to treat the template's limit price as the worst price the order takes, resting at that price when the book shows no reference. UBI refuses that price with HTTP 400 when it is not a whole number of ticks.
 
         Raises:
             Nothing.

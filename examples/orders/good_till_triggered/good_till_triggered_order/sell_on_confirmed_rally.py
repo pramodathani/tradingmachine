@@ -1,6 +1,6 @@
 """Preview and arm a multi-day sell that fires on two trades in a row a fifth above the market.
 
-The program previews, then arms, a good-till-triggered sell of one Vodafone Idea share that fires only when two consecutive trades reach a fifth above the market, and then rests a limit there. It prints the armed parent and cancels it.
+The program previews, then arms, a good-till-triggered sell of one Vodafone Idea share that fires only when two consecutive trades reach a fifth above the market, and then holds a limit there in its virtual order book, across the remaining days, until the best bid reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

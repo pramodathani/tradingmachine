@@ -1,6 +1,6 @@
 """The `freeze_slicer` synthetic order type: an order above the exchange's freeze quantity, split into even orders that each fit.
 
-An exchange refuses any single futures or options order above its freeze quantity. UBI reads the limit that the broker it is sending to publishes, in that broker's own units, and splits the order evenly, so 250 against a limit of 100 goes as 84, 83 and 83. When the broker publishes no limit, the order goes whole. The answer carries a list of `order_ids`, one per slice.
+An exchange refuses any single futures or options order above its freeze quantity. UBI reads the limit that the broker it is sending to publishes, in that broker's own units, and splits the order into as few orders as fit below it, cut in whole lots as evenly as whole lots allow, so 55 NIFTY lots of 65 under a limit of 3,511 go as 28 and 27 lots. When the broker publishes no limit, the order goes whole, and an order whose single lot is already above the limit is refused with HTTP 400. By default UBI holds the whole order until the other side of the book reaches its price and then sends every slice together, answering HTTP 202 with an `outcome` of `armed`; with `hold_limits` False it is sent at once, and the answer carries a `legs` list with one entry per slice.
 
 Typical usage example:
 
@@ -23,7 +23,7 @@ from tradingmachine.orders import synthetic_order
 class FreezeSlicerOrder(synthetic_order.SyntheticOrder):
     """An order above the exchange's freeze quantity, split into even orders that each fit.
 
-    An exchange refuses any single futures or options order above its freeze quantity. UBI reads the limit that the broker it is sending to publishes, in that broker's own units, and splits the order evenly, so 250 against a limit of 100 goes as 84, 83 and 83. When the broker publishes no limit, the order goes whole. The answer carries a list of `order_ids`, one per slice.
+    An exchange refuses any single futures or options order above its freeze quantity. UBI reads the limit that the broker it is sending to publishes, in that broker's own units, and splits the order into as few orders as fit below it, cut in whole lots as evenly as whole lots allow, so 55 NIFTY lots of 65 under a limit of 3,511 go as 28 and 27 lots. When the broker publishes no limit, the order goes whole, and an order whose single lot is already above the limit is refused with HTTP 400. By default UBI holds the whole order until the other side of the book reaches its price and then sends every slice together, answering HTTP 202 with an `outcome` of `armed`; with `hold_limits` False it is sent at once, and the answer carries a `legs` list with one entry per slice.
 
     The order template's attributes are described on `SyntheticOrder`, and this type adds none of its own.
     """
@@ -48,6 +48,7 @@ class FreezeSlicerOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the order template and this type's own settings.
@@ -68,7 +69,8 @@ class FreezeSlicerOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
 
         Raises:
             Nothing.
@@ -89,6 +91,7 @@ class FreezeSlicerOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
 

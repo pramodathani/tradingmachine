@@ -1,6 +1,6 @@
 """Rest two bids where the first fill cancels the other, then cancel both.
 
-The program sends one `oca` order that rests a buy of one Vodafone Idea share and one Yes Bank share, each 3% below its own market. Had either filled, UBI would have cancelled the other. Neither fills in the seconds the bids rest; the program prints the parent and both broker orders, then cancels the parent, which cancels both bids.
+The program sends one `oca` order that rests a buy of one Vodafone Idea share and one Yes Bank share, each 3% below its own market. Had either filled, UBI would have cancelled the other. Neither fills in the seconds the bids rest; the program prints the parent and both broker orders, then cancels the parent, which cancels both bids. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -92,6 +92,7 @@ class FirstOfTwoBids:
             order_type="limit",
             quantity=1,
             price=self.price_from_market(self.share, -3),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

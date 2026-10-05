@@ -2,7 +2,7 @@
 
 A plan combines the existing synthetic order types and their building blocks in one order. Its orders can wait for a trigger, protect or close a position, be priced and capped, be sent in pieces over time, end on their own and trade other instruments, set either by presets named after the existing types or by slot values, and they are joined with `ThenPart`, `EitherPart`, `TogetherPart`, `SequencePart`, `RepeatPart` and `UsingPart`. The parts live in `tradingmachine.orders.plan_parts`, and the order template, the instrument, side, quantity, product and validity, is the same as every other type's.
 
-UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the path of the part it is in. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`.
+UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the path of the part it is in. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`. UBI holds each order that would rest at the broker at a fixed limit price in its virtual order book until the other side of the book reaches it, while UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` switch is on and the plan does not say otherwise; follow-on orders in a Then join's child, such as exits, and orders on the `protect` side rest at the broker unless their own `OrderPart` asks to be held. When a plan is refused after some of its orders have reached a broker, the refused order is listed in the answer's `legs` with its reason and the others stay watched.
 
 Typical usage example:
 
@@ -66,6 +66,7 @@ class PlanOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
     ):
         """Initialises the order template and the plan.
@@ -87,6 +88,7 @@ class PlanOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this plan sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
+            hold_limits: A bool that is True to have UBI hold each order of the plan that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to follow UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` switch. An `OrderPart`'s own `hold_limits` decides for that order.
             dry_run: A bool that is True to have UBI build the first broker request and return it, with the plan as it would run, without recording or sending anything.
 
         Raises:
@@ -108,6 +110,7 @@ class PlanOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.plan = plan

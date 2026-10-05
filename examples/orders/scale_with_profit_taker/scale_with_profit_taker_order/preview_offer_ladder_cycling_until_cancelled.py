@@ -1,6 +1,6 @@
-"""Preview and rest a two-rung offer ladder whose rungs would cycle until the order is cancelled.
+"""Preview and place a two-rung offer ladder, held until the market reaches each rung, whose rungs would cycle until the order is cancelled.
 
-The program previews, then rests, a short sale of two Vodafone Idea shares as two one-share rungs from 3% to 5% above the market, with no limit on how often a rung may go round. If a rung filled, UBI would bid for that share 2% below the rung's price and, once that bought it back, offer it again. Neither rung fills in the seconds the order lives; the program prints the parent and the resting rungs and cancels it.
+The program previews, then places, a short sale of two Vodafone Idea shares as two one-share rungs from 3% to 5% above the market, with no limit on how often a rung may go round. If a rung filled, UBI would bid for that share 2% below the rung's price and, once that bought it back, offer it again. UBI holds each rung in its virtual order book until the best bid reaches its price, answering HTTP 202 with nothing placed, so no rung reaches the broker; the program prints the parent and cancels it.
 
 Typical usage example:
 
@@ -222,7 +222,7 @@ class OfferLadderCyclingUntilCancelled:
         )
 
     def run(self) -> None:
-        """Previews the scale order, places it, prints the parent and its rungs at the broker, then cancels it.
+        """Previews the scale order, places it, prints the parent and the rungs at the broker, of which there are none, then cancels it.
 
         Returns:
             None.

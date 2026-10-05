@@ -1,6 +1,6 @@
 """Rest a limit buy with a stop and a target that arm only when it fills.
 
-The program rests a buy of one Vodafone Idea share 3% below the market, with a stop 5% below the market and a target 3% above it. Because the entry does not fill, neither exit is sent; the program prints the parent and cancels it.
+The program rests a buy of one Vodafone Idea share 3% below the market, with a stop 5% below the market and a target 3% above it. Because the entry does not fill, neither exit is sent; the program prints the parent and cancels it. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -84,6 +84,7 @@ class BracketedLimitBuy:
             stop_price=stop_price,
             stop_limit_price=round(stop_price - 0.05, 2),
             target_price=self.price_from_market(self.share, 3),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

@@ -1,6 +1,6 @@
 """The `indicator_triggered` synthetic order type: an order sent as a limit when one field of the live quote crosses a level.
 
-It compares one value from the quote, not a computed indicator. The most useful is `average_price`, the day's volume-weighted average, because buying when the price comes back below the day's average cannot be written as a native stop. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+It compares one value from the quote, not a computed indicator. The most useful is `average_price`, the day's volume-weighted average, because buying when the price comes back below the day's average cannot be written as a native stop. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. Once it fires, its limit is held in UBI's virtual order book until the other side of the book reaches it, even if the price moves back, unless `hold_limits` is False.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
     """An order sent as a limit when one field of the live quote crosses a level.
 
-    It compares one value from the quote, not a computed indicator. The most useful is `average_price`, the day's volume-weighted average, because buying when the price comes back below the day's average cannot be written as a native stop. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` or `scheduled` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer.
+    It compares one value from the quote, not a computed indicator. The most useful is `average_price`, the day's volume-weighted average, because buying when the price comes back below the day's average cannot be written as a native stop. `trigger_price` here is the level, not the order's own trigger. It answers HTTP 202 with an `outcome` of `armed` and sends nothing to a broker until it fires, so keep the `parent_id` from the answer. Once it fires, its limit is held in UBI's virtual order book until the other side of the book reaches it, even if the price moves back, unless `hold_limits` is False.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -58,6 +58,7 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         watch_field: str | None = None,
         trigger_direction: str | None = None,
@@ -81,7 +82,8 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             watch_field: The str quote field watched, `last_price`, `average_price`, `previous_close`, `best_bid`, `best_offer` or `mid`, or None to let UBI use `last_price`.
             trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
 
@@ -104,6 +106,7 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.trigger_level = trigger_price

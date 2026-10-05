@@ -1,6 +1,6 @@
 """The `scale_with_profit_taker` synthetic order type: a ladder whose every filled rung gets its own profit-taker, and is placed again once that profit is taken.
 
-This is the Atlas's G15, what Interactive Brokers sells as ScaleTrader. The rungs are placed as a `LadderOrder` places them. Once a rung has filled completely, a limit for the same quantity goes out `profit_points` better, a sell above a filled buy or a buy below a filled sell, and once that fills the rung is placed again at its own price, up to `most_cycles` times per rung. A rung is placed again only after its profit-taker has closed it, so the position never grows past the ladder's own quantity. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+This is the Atlas's G15, what Interactive Brokers sells as ScaleTrader. The rungs are placed as a `LadderOrder` places them. Once a rung has filled completely, a limit for the same quantity goes out `profit_points` better, a sell above a filled buy or a buy below a filled sell, and once that fills the rung is placed again at its own price, up to `most_cycles` times per rung. A rung is placed again only after its profit-taker has closed it, so the position never grows past the ladder's own quantity. The order does not finish on its own, so cancel it with `cancel()` when you are done. By default UBI holds each rung in its virtual order book until the other side of the book reaches its price, and holds it again once its profit has been taken, answering HTTP 202 with nothing placed, while every profit-taker rests at the broker as soon as its rung fills; give `hold_limits` False to rest the rungs at the broker.
 
 Typical usage example:
 
@@ -28,7 +28,7 @@ from tradingmachine.orders import synthetic_order
 class ScaleWithProfitTakerOrder(synthetic_order.SyntheticOrder):
     """A ladder whose every filled rung gets its own profit-taker, and is placed again once that profit is taken.
 
-    This is the Atlas's G15, what Interactive Brokers sells as ScaleTrader. The rungs are placed as a `LadderOrder` places them. Once a rung has filled completely, a limit for the same quantity goes out `profit_points` better, a sell above a filled buy or a buy below a filled sell, and once that fills the rung is placed again at its own price, up to `most_cycles` times per rung. A rung is placed again only after its profit-taker has closed it, so the position never grows past the ladder's own quantity. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+    This is the Atlas's G15, what Interactive Brokers sells as ScaleTrader. The rungs are placed as a `LadderOrder` places them. Once a rung has filled completely, a limit for the same quantity goes out `profit_points` better, a sell above a filled buy or a buy below a filled sell, and once that fills the rung is placed again at its own price, up to `most_cycles` times per rung. A rung is placed again only after its profit-taker has closed it, so the position never grows past the ladder's own quantity. The order does not finish on its own, so cancel it with `cancel()` when you are done. By default UBI holds each rung in its virtual order book until the other side of the book reaches its price, and holds it again once its profit has been taken, answering HTTP 202 with nothing placed, while every profit-taker rests at the broker as soon as its rung fills; give `hold_limits` False to rest the rungs at the broker.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -64,6 +64,7 @@ class ScaleWithProfitTakerOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         most_cycles: int | None = None,
     ):
@@ -89,7 +90,8 @@ class ScaleWithProfitTakerOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             most_cycles: The int number of times each rung may go round, at least 1, or None to let a rung cycle until the order is cancelled.
 
         Raises:
@@ -111,6 +113,7 @@ class ScaleWithProfitTakerOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.from_price = from_price

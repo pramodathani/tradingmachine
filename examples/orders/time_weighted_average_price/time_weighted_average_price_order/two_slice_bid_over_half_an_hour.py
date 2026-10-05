@@ -1,6 +1,6 @@
 """Start buying two shares in two equal slices over half an hour, then cancel after the first slice.
 
-The program places a time-weighted average price order to buy two Vodafone Idea shares in two one-share slices over thirty minutes, each a limit 3% below the market. UBI sends the first slice at once and would send the second fifteen minutes later. The first slice does not fill in the seconds the order lives; the program prints the parent and the resting slice and cancels the order, which also stops the second slice.
+The program places a time-weighted average price order to buy two Vodafone Idea shares in two one-share slices over thirty minutes, each a limit 3% below the market. UBI sends the first slice at once and would send the second fifteen minutes later. The first slice does not fill in the seconds the order lives; the program prints the parent and the resting slice and cancels the order, which also stops the second slice. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -84,6 +84,7 @@ class TwoSliceBidOverHalfAnHour:
             price=self.price_from_market(self.share, -3),
             slices=2,
             over_minutes=30.0,
+            hold_limits=False,
             dry_run=dry_run,
         )
 

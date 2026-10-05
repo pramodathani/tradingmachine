@@ -1,6 +1,6 @@
 """Rest a ladder of two bids between 3% and 5% below the market, then cancel it.
 
-The program rests a ladder buying two Vodafone Idea shares in two rungs, the first 3% and the last 5% below the market, and prints the parent's rungs and the broker orders before cancelling the ladder.
+The program rests a ladder buying two Vodafone Idea shares in two rungs, the first 3% and the last 5% below the market, and prints the parent's rungs and the broker orders before cancelling the ladder. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -83,6 +83,7 @@ class BidLadder:
             to_price=self.price_from_market(self.share, -5),
             price=self.price_from_market(self.share, -3),
             steps=2,
+            hold_limits=False,
             dry_run=dry_run,
         )
 

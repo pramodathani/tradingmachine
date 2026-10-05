@@ -1,6 +1,6 @@
 """The `basket` synthetic order type: orders on several instruments placed in one request, each reported on its own.
 
-Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate.
+Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and the same instrument may not appear twice.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class BasketOrder(synthetic_order.SyntheticOrder):
     """Orders on several instruments placed in one request, each reported on its own.
 
-    Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate.
+    Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and the same instrument may not appear twice.
 
     The order template's attributes are described on `SyntheticOrder`, where `instrument` is the first candidate's.
 
@@ -51,6 +51,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
         tag: str | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         hedge_benefit: bool = False,
     ):
@@ -69,7 +70,8 @@ class BasketOrder(synthetic_order.SyntheticOrder):
             tag: A str default label of up to twenty letters and digits, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs, rather than adding every leg's margin up.
 
         Raises:
@@ -92,6 +94,7 @@ class BasketOrder(synthetic_order.SyntheticOrder):
             tag=tag,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.candidates = list(candidates)

@@ -1,6 +1,6 @@
 """Preview and start selling three shares in three slices over an hour, then cancel after the first slice.
 
-The program previews, then places, a time-weighted average price order to sell three Vodafone Idea shares short in three one-share slices over sixty minutes, each a limit 3% above the market. The dry run shows the first slice's broker request. UBI sends the first slice at once and would send the next twenty minutes later. The first slice does not fill in the seconds the order lives; the program prints the parent and the resting slice and cancels the order, which also stops the later slices.
+The program previews, then places, a time-weighted average price order to sell three Vodafone Idea shares short in three one-share slices over sixty minutes, each a limit 3% above the market. The dry run shows the first slice's broker request. UBI holds each slice in its virtual order book from its turn, the first at once and the next twenty minutes later, until the best bid reaches its price, answering HTTP 202 `armed`, so no slice reaches the broker; the program prints the parent and cancels the order, which also stops the later slices.
 
 Typical usage example:
 
@@ -216,7 +216,7 @@ class ThreeSliceOfferOverAnHour:
         )
 
     def run(self) -> None:
-        """Previews the TWAP, places it, prints the parent and its first slice at the broker, then cancels it.
+        """Previews the TWAP, places it, prints the parent and the broker orders, of which there are none, then cancels it.
 
         Returns:
             None.

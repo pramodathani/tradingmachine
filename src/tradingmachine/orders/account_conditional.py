@@ -1,6 +1,6 @@
 """The `account_conditional` synthetic order type: an order sent, or cancelled, when the account's free margin, day's profit or open position count reaches a level.
 
-This is the Atlas's G17, which waits on the account rather than on a price. About once a second, UBI compares `account_field` with `account_level` in `trigger_direction`: `available_balance` is the free margin across every broker, `day_pnl` is realized plus unrealized profit across every broker as the daily loss lockout reads it, and `open_positions` is how many net positions are open. With `action` set to `place`, nothing is sent until the condition holds, and the answer is HTTP 202 with an `outcome` of `armed`, so keep the `parent_id` from the answer. With `cancel`, the order is sent at once and cancelled when the condition holds, such as pulling a resting bid when the day's loss reaches a limit. `trigger_direction` is required, because the side of the order says nothing about which way the account has to move.
+This is the Atlas's G17, which waits on the account rather than on a price. About once a second, UBI compares `account_field` with `account_level` in `trigger_direction`: `available_balance` is the free margin across every broker, `day_pnl` is realized plus unrealized profit across every broker as the daily loss lockout reads it, and `open_positions` is how many net positions are open. With `action` set to `place`, nothing is sent until the condition holds, and the answer is HTTP 202 with an `outcome` of `armed`, so keep the `parent_id` from the answer. With `cancel`, the order is sent at once and cancelled when the condition holds, such as pulling a resting bid when the day's loss reaches a limit. `trigger_direction` is required, because the side of the order says nothing about which way the account has to move. With `place`, a limit order is held in UBI's virtual order book from the moment the condition holds until the other side of the book reaches its price, even if the account figure moves back, unless `hold_limits` is False.
 
 Typical usage example:
 
@@ -27,7 +27,7 @@ from tradingmachine.orders import synthetic_order
 class AccountConditionalOrder(synthetic_order.SyntheticOrder):
     """An order sent, or cancelled, when the account's free margin, day's profit or open position count reaches a level.
 
-    This is the Atlas's G17, which waits on the account rather than on a price. About once a second, UBI compares `account_field` with `account_level` in `trigger_direction`: `available_balance` is the free margin across every broker, `day_pnl` is realized plus unrealized profit across every broker as the daily loss lockout reads it, and `open_positions` is how many net positions are open. With `action` set to `place`, nothing is sent until the condition holds, and the answer is HTTP 202 with an `outcome` of `armed`, so keep the `parent_id` from the answer. With `cancel`, the order is sent at once and cancelled when the condition holds, such as pulling a resting bid when the day's loss reaches a limit. `trigger_direction` is required, because the side of the order says nothing about which way the account has to move.
+    This is the Atlas's G17, which waits on the account rather than on a price. About once a second, UBI compares `account_field` with `account_level` in `trigger_direction`: `available_balance` is the free margin across every broker, `day_pnl` is realized plus unrealized profit across every broker as the daily loss lockout reads it, and `open_positions` is how many net positions are open. With `action` set to `place`, nothing is sent until the condition holds, and the answer is HTTP 202 with an `outcome` of `armed`, so keep the `parent_id` from the answer. With `cancel`, the order is sent at once and cancelled when the condition holds, such as pulling a resting bid when the day's loss reaches a limit. `trigger_direction` is required, because the side of the order says nothing about which way the account has to move. With `place`, a limit order is held in UBI's virtual order book from the moment the condition holds until the other side of the book reaches its price, even if the account figure moves back, unless `hold_limits` is False.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -61,6 +61,7 @@ class AccountConditionalOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         action: str | None = None,
     ):
@@ -85,7 +86,8 @@ class AccountConditionalOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             action: The str action when the condition holds, `place` to send the order then or `cancel` to send it at once and cancel it then, or None to let UBI use `place`.
 
         Raises:
@@ -107,6 +109,7 @@ class AccountConditionalOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.account_field = account_field

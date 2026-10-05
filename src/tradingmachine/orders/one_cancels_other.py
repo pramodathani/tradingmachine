@@ -1,6 +1,6 @@
 """The `oco` synthetic order type: a stop and a target resting together on a position already held, each shrinking as the other fills.
 
-Set `transaction_type` to the side that opened the position, so a long position is protected by asking for `buy`, and both exits are sells. When one exit fills in part, the other is reduced by the same amount rather than cancelled, so the position is never left unprotected. Both exits rest at the exchange, so in a fast market both can fill before the reduction lands; no exchange offers an order that prevents that. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit.
+Set `transaction_type` to the side that opened the position, so a long position is protected by asking for `buy`, and both exits are sells. When one exit fills in part, the other is reduced by the same amount rather than cancelled, so the position is never left unprotected. Both exits rest at the exchange, so in a fast market both can fill before the reduction lands; no exchange offers an order that prevents that. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. Both exits go to the broker that holds the position, whatever the broker selector would choose, and UBI refuses with HTTP 409 a position held at more than one broker or one smaller than the order's `quantity`, since a fill could then open a position the other way.
 
 Typical usage example:
 
@@ -26,7 +26,7 @@ from tradingmachine.orders import synthetic_order
 class OneCancelsOtherOrder(synthetic_order.SyntheticOrder):
     """A stop and a target resting together on a position already held, each shrinking as the other fills.
 
-    Set `transaction_type` to the side that opened the position, so a long position is protected by asking for `buy`, and both exits are sells. When one exit fills in part, the other is reduced by the same amount rather than cancelled, so the position is never left unprotected. Both exits rest at the exchange, so in a fast market both can fill before the reduction lands; no exchange offers an order that prevents that. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit.
+    Set `transaction_type` to the side that opened the position, so a long position is protected by asking for `buy`, and both exits are sells. When one exit fills in part, the other is reduced by the same amount rather than cancelled, so the position is never left unprotected. Both exits rest at the exchange, so in a fast market both can fill before the reduction lands; no exchange offers an order that prevents that. Give a stop, a target or both, and a stop always needs its limit, because every stop is a stop-limit. Both exits go to the broker that holds the position, whatever the broker selector would choose, and UBI refuses with HTTP 409 a position held at more than one broker or one smaller than the order's `quantity`, since a fill could then open a position the other way.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -56,6 +56,7 @@ class OneCancelsOtherOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         stop_price: float | None = None,
         stop_limit_price: float | None = None,
@@ -79,7 +80,8 @@ class OneCancelsOtherOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             stop_price: The float trigger of the stop in rupees, or None for no stop.
             stop_limit_price: The float limit of the stop in rupees, required whenever `stop_price` is given, or None.
             target_price: The float limit of the target in rupees, or None for no target.
@@ -103,6 +105,7 @@ class OneCancelsOtherOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.stop_price = stop_price

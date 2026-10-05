@@ -1,6 +1,6 @@
 """The `post_only` synthetic order type: a limit order checked to rest rather than trade before it is sent.
 
-Indian exchanges have no post-only flag, so this can only check the book before sending; the book can still move while the order is in flight. When the order would cross, `on_crossing` decides: `refuse` answers HTTP 409 and sends nothing, and `rest` moves the price back to your own side's best price.
+Indian exchanges have no post-only flag, so this can only check the book before sending; the book can still move while the order is in flight. When the order would cross, `on_crossing` decides: `refuse` answers HTTP 409 and sends nothing, and `rest` moves the price back to your own side's best price. A buy counts as passive anywhere below the best offer and a sell anywhere above the best bid, so a price inside the spread is sent as it is. UBI refuses a `market` template with `post_only_crosses` and a stop with `post_only_needs_limit`, both with HTTP 400, and with no readable book on arrival it answers HTTP 202 with an `outcome` of `armed` and checks the book on the first tick that has one.
 
 Typical usage example:
 
@@ -23,7 +23,7 @@ from tradingmachine.orders import synthetic_order
 class PostOnlyOrder(synthetic_order.SyntheticOrder):
     """A limit order checked to rest rather than trade before it is sent.
 
-    Indian exchanges have no post-only flag, so this can only check the book before sending; the book can still move while the order is in flight. When the order would cross, `on_crossing` decides: `refuse` answers HTTP 409 and sends nothing, and `rest` moves the price back to your own side's best price.
+    Indian exchanges have no post-only flag, so this can only check the book before sending; the book can still move while the order is in flight. When the order would cross, `on_crossing` decides: `refuse` answers HTTP 409 and sends nothing, and `rest` moves the price back to your own side's best price. A buy counts as passive anywhere below the best offer and a sell anywhere above the best bid, so a price inside the spread is sent as it is. UBI refuses a `market` template with `post_only_crosses` and a stop with `post_only_needs_limit`, both with HTTP 400, and with no readable book on arrival it answers HTTP 202 with an `outcome` of `armed` and checks the book on the first tick that has one.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -51,6 +51,7 @@ class PostOnlyOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         on_crossing: str | None = None,
     ):
@@ -72,7 +73,8 @@ class PostOnlyOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             on_crossing: The str action when the order would cross, `refuse` or `rest`, or None to let UBI use `refuse`.
 
         Raises:
@@ -94,6 +96,7 @@ class PostOnlyOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.on_crossing = on_crossing

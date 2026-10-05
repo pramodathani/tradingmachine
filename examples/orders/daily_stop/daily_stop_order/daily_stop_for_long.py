@@ -1,6 +1,6 @@
 """Schedule a stop re-placed every morning for a one-share long.
 
-The program buys one Vodafone Idea share at the best offer as an intraday position and sets a reduce-only daily stop a fifth below the market for five days. Sent after the morning's arming time it first arms on the next trading day, so the program prints the scheduled parent, cancels it and sells the share back.
+The program buys one Vodafone Idea share at the best offer as an intraday position and sets a reduce-only daily stop a fifth below the market for five days. Sent after the morning's arming time it first arms on the next trading day, so the program prints the armed parent, cancels it and sells the share back.
 
 Typical usage example:
 

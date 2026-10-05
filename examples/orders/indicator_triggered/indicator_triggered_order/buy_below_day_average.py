@@ -1,6 +1,6 @@
 """Arm a buy sent when the day's average price falls well below the market.
 
-The program arms a buy of one Vodafone Idea share that fires when the day's volume-weighted average price falls a fifth below the current market, which it will not do today. It prints the armed parent and cancels it.
+The program arms a buy of one Vodafone Idea share that fires when the day's volume-weighted average price falls a fifth below the current market, which it will not do today; once it fired, UBI would hold the limit in its virtual order book until the best offer reaches it. It prints the armed parent and cancels it.
 
 Typical usage example:
 

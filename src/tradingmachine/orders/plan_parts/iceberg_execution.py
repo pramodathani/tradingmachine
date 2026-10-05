@@ -1,6 +1,6 @@
 """The `iceberg` execution of a plan: only part of the order shown at a time.
 
-The order is sent as pieces of `visible_quantity`, the next only once the last has filled. Each piece may vary by up to `randomise_percent` either way, worked out from the parent's id and the number of pieces sent, so another trader cannot spot a repeating size; UBI's default is 0, no variation. A piece that is cancelled or rejected rather than filled stops the iceberg.
+The order is sent as pieces of `visible_quantity`, the next only once the last has filled. Each piece may vary by up to `randomise_percent` either way, worked out from the parent's id and the number of pieces sent, so another trader cannot spot a repeating size; UBI's default is 0, no variation, and a varied piece is brought to the nearest whole number of lots, at least one. A piece that is cancelled or rejected rather than filled stops the iceberg.
 
 An iceberg can nest on either side. As the outer execution it releases its pieces as slices for an inner one to work, and as the inner execution it shows each slice of a `TwapExecution`, `VwapExecution`, `FrontLoadedExecution`, `ParticipationExecution` or another iceberg a little at a time.
 

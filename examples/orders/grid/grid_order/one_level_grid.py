@@ -1,6 +1,6 @@
 """Set a grid of one bid and one offer about 4% either side of the market, then take it down.
 
-The program sets a grid around Vodafone Idea's last price with one level on each side, the step being about 4% of the price, and a most inventory of one share. It prints the rungs from the answer and the parent, then cancels the grid.
+The program sets a grid around Vodafone Idea's last price with one level on each side, the step being about 4% of the price, and a most inventory of one share. It prints the legs from the answer and the parent, then cancels the grid.
 
 Typical usage example:
 
@@ -235,7 +235,7 @@ class OneLevelGrid:
             time.sleep(2)
             self.print_parent()
             self.print_broker_orders()
-            print(f"Rungs: {answer.get('rungs')}")
+            print(f"Legs: {answer.get('legs')}")
         finally:
             self.cancel_order()
 

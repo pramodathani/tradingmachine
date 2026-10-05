@@ -1,6 +1,6 @@
 """Schedule a limit buy for the next pre-open session, then cancel it.
 
-The program schedules an opening-auction buy of one Vodafone Idea share with a limit 3% below the last price, to be sent at UBI's default time of 09:00:30 India time on the next trading day. UBI answers HTTP 202 `scheduled` and sends nothing to a broker until then; the program prints the parent and cancels it. It refuses to run between 08:55 and 09:20 India time, because then the order would go straight into the pre-open and could trade at the auction before it was cancelled.
+The program schedules an opening-auction buy of one Vodafone Idea share with a limit 3% below the last price, to be sent at UBI's default time of 09:00:30 India time on the next trading day. UBI answers HTTP 202 `armed` and sends nothing to a broker until then; the program prints the parent and cancels it. On a trading day after the pre-open has stopped collecting the order, UBI refuses it with HTTP 400 rather than keep it for the next day, and the program prints that refusal and stops, since nothing was placed. It refuses to run between 08:55 and 09:20 India time, because then the order would go straight into the pre-open and could trade at the auction before it was cancelled.
 
 Typical usage example:
 
@@ -243,7 +243,11 @@ class LimitBuyAtNextOpen:
         """
         self.refuse_near_pre_open()
         self.order = self.build_order(dry_run=False)
-        answer = self.place_order()
+        try:
+            answer = self.place_order()
+        except exceptions.BadRequestError as error:
+            print(f"UBI refused the order, so nothing was placed: {error}")
+            return
         print(
             f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
             f"{answer.get('outcome')}, parent {self.order.parent_id}"

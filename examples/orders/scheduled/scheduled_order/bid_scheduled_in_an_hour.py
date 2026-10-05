@@ -1,6 +1,6 @@
 """Schedule a bid to be placed an hour from now, then cancel it before it is sent.
 
-The program asks UBI to hold a buy of one Vodafone Idea share 3% below the market until an hour from now, India time. UBI answers `scheduled` and sends nothing to a broker until then, so the program prints the waiting parent, shows that no broker order exists yet, and cancels it long before its time comes. On a weekend or an exchange holiday the time falls on the next trading day.
+The program asks UBI to hold a buy of one Vodafone Idea share 3% below the market until an hour from now, India time. UBI answers `armed` and sends nothing to a broker until then, and at that time it would hold the limit in its virtual order book until the best offer reaches its price, so the program prints the waiting parent, shows that no broker order exists yet, and cancels it long before its time comes. On a weekend or an exchange holiday the time falls on the next trading day.
 
 Typical usage example:
 

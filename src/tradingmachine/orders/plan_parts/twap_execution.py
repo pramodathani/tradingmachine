@@ -1,6 +1,6 @@
 """The `twap` execution of a plan: equal slices sent on a clock, a time-weighted average price order.
 
-The quantity is cut into `slices`, from 2 to 60, and one is sent every `over_minutes` times 60 divided by `slices` seconds, the first at once. Units that do not divide evenly go to the earliest slices, each slice is worked out from the order's total when it falls due, so a total a join changes is spread over the slices still to come, and a slice that has not filled is left resting when the next goes. The order starts working as soon as its trigger holds.
+The quantity is cut into `slices`, from 2 to 60, and one is sent every `over_minutes` times 60 divided by `slices` seconds, the first at once. Units that do not divide evenly go to the earliest slices, each slice is worked out from the order's total when it falls due, so a total a join changes is spread over the slices still to come, and a slice that has not filled is left resting when the next goes. Slices are whole lots, and a slice that comes to nothing is skipped rather than stalling the order. The order starts working as soon as its trigger holds.
 
 A TWAP can be the outer execution of a nested pair, releasing slices that an inner `IcebergExecution`, `VwapExecution`, `FrontLoadedExecution` or another TWAP works, or the inner one, working each slice of an outer execution. It cannot carry a resting stop, because a stop protects the whole position at once.
 

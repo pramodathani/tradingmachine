@@ -1,6 +1,6 @@
 """The `good_till_time` synthetic order type: an order placed now whose unfilled part is cancelled at a time of day.
 
-Indian exchanges offer only `day` and `ioc` validity, with nothing in between, so this fills that gap: whatever has filled by `until_time` is kept, and the rest is cancelled. With `at_expiry` set to `market`, the rest is instead made marketable at `until_time`, as a limit two ticks past the other side's best price, and the order carries on until it fills. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day, and the answer names the date.
+Indian exchanges offer only `day` and `ioc` validity, with nothing in between, so this fills that gap: whatever has filled by `until_time` is kept, and the rest is cancelled. With `at_expiry` set to `market`, the rest is instead made marketable at `until_time`, as a limit two ticks past the other side's best price, and the order carries on until it fills. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day. By default UBI holds a limit order in its virtual order book until the other side of the book reaches its price, and one still held at `until_time` is never sent; it is not held when `hold_limits` is False or `at_expiry` is `market`.
 
 Typical usage example:
 
@@ -24,7 +24,7 @@ from tradingmachine.orders import synthetic_order
 class GoodTillTimeOrder(synthetic_order.SyntheticOrder):
     """An order placed now whose unfilled part is cancelled at a time of day.
 
-    Indian exchanges offer only `day` and `ioc` validity, with nothing in between, so this fills that gap: whatever has filled by `until_time` is kept, and the rest is cancelled. With `at_expiry` set to `market`, the rest is instead made marketable at `until_time`, as a limit two ticks past the other side's best price, and the order carries on until it fills. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day, and the answer names the date.
+    Indian exchanges offer only `day` and `ioc` validity, with nothing in between, so this fills that gap: whatever has filled by `until_time` is kept, and the rest is cancelled. With `at_expiry` set to `market`, the rest is instead made marketable at `until_time`, as a limit two ticks past the other side's best price, and the order carries on until it fills. Times follow the instrument's exchange trading calendar: on a weekend or an exchange holiday a time means that time on the next trading day. By default UBI holds a limit order in its virtual order book until the other side of the book reaches its price, and one still held at `until_time` is never sent; it is not held when `hold_limits` is False or `at_expiry` is `market`.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -54,6 +54,7 @@ class GoodTillTimeOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         at_expiry: str | None = None,
     ):
@@ -76,7 +77,8 @@ class GoodTillTimeOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             at_expiry: The str action at `until_time`, `cancel` to cancel whatever has not filled or `market` to modify it to a limit two ticks past the other side's best price so it takes what is there, or None to let UBI use `cancel`.
 
         Raises:
@@ -98,6 +100,7 @@ class GoodTillTimeOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.until_time = until_time

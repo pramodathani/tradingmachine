@@ -233,9 +233,6 @@ class BidFollowingAnotherShare:
             f"Placed a {self.order.SYNTHETIC_TYPE} order: outcome "
             f"{answer.get('outcome')}, parent {self.order.parent_id}"
         )
-        print(
-            f"Yes Bank stood at {answer.get('underlying_start')} when the peg started"
-        )
         try:
             time.sleep(2)
             self.print_parent()

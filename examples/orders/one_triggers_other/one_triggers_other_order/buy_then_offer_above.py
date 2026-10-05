@@ -1,6 +1,6 @@
 """Rest a buy that would place a sell once it fills, then cancel it.
 
-The program sends a one-triggers-other order: a limit buy of one Vodafone Idea share 3% below the market which, once it filled, would place a limit sell of what filled 3% above the market. The buy does not fill in the seconds it rests, so the sell is never sent; the program prints the parent and the broker order and then cancels the parent.
+The program sends a one-triggers-other order: a limit buy of one Vodafone Idea share 3% below the market which, once it filled, would place a limit sell of what filled 3% above the market. The buy does not fill in the seconds it rests, so the sell is never sent; the program prints the parent and the broker order and then cancels the parent. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -83,6 +83,7 @@ class BuyThenOfferAbove:
             then_transaction_type="sell",
             then_order_type="limit",
             then_price=self.price_from_market(self.share, 3),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

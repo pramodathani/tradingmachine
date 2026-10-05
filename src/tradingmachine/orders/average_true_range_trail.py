@@ -33,7 +33,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
         trail_points: The float fixed distance in rupees used until enough bars exist. Above zero.
         stop_limit_offset: The float distance in rupees past the trigger that the stop's limit sits. Above zero.
         bar_minutes: The float length of each bar in minutes, or None to let UBI use 5.
-        periods: The int number of bars averaged, at least 2, or None to let UBI use 14.
+        periods: The int number of bars averaged, from 2 to 49 because UBI keeps the last 50 bars, or None to let UBI use 14.
         average_true_range_multiple: The float multiple of the average true range to trail by, or None to let UBI use 2.
         step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
         activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
@@ -61,6 +61,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
         quantity_reference: dict | None = None,
         closes_position: bool = False,
         reduce_only: bool = False,
+        hold_limits: bool | None = None,
         dry_run: bool = False,
         bar_minutes: float | None = None,
         periods: int | None = None,
@@ -88,9 +89,10 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
             quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
-            dry_run: A bool that is True to have UBI build the first broker request and return it without recording or sending anything.
+            hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
+            dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
             bar_minutes: The float length of each bar in minutes, or None to let UBI use 5.
-            periods: The int number of bars averaged, at least 2, or None to let UBI use 14.
+            periods: The int number of bars averaged, from 2 to 49 because UBI keeps the last 50 bars, or None to let UBI use 14.
             average_true_range_multiple: The float multiple of the average true range to trail by, or None to let UBI use 2.
             step_ticks: The int number of ticks the trigger must be able to move before it is moved, or None to let UBI use 1.
             activate_at: The float price in rupees the last traded price must reach before the stop is placed a trail's distance from it, which answers HTTP 202 with an `outcome` of `armed`, or None to place the stop at once.
@@ -114,6 +116,7 @@ class AverageTrueRangeTrailOrder(synthetic_order.SyntheticOrder):
             quantity_reference=quantity_reference,
             closes_position=closes_position,
             reduce_only=reduce_only,
+            hold_limits=hold_limits,
             dry_run=dry_run,
         )
         self.trail_points = trail_points

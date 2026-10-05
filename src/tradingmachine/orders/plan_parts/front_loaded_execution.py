@@ -1,6 +1,6 @@
 """The `front_loaded` execution of a plan: slices that shrink as they go, so most of the order trades early, an implementation shortfall order.
 
-It sends `slices`, from 2 to 60, on the same clock as `TwapExecution`, one every `over_minutes` times 60 divided by `slices` seconds, the first at once. Each slice is `1 - urgency × 0.5` of the one before, so an urgency of 0 is an even split and an urgency of 1 halves every slice; UBI's default urgency is 0.5, each slice three quarters of the last.
+It sends `slices`, from 2 to 60, on the same clock as `TwapExecution`, one every `over_minutes` times 60 divided by `slices` seconds, the first at once. Each slice is `1 - urgency × 0.5` of the one before, so an urgency of 0 is an even split and an urgency of 1 halves every slice; UBI's default urgency is 0.5, each slice three quarters of the last. Slices are whole lots, and a slice that comes to nothing is skipped.
 
 It can be the outer or the inner execution of a nested pair, and cannot carry a resting stop.
 

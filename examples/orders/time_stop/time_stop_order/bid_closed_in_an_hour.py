@@ -1,6 +1,6 @@
 """Rest a bid whose filled part would be closed an hour from now.
 
-The program places a time stop: a buy of one Vodafone Idea share 3% below the market, sent at once, which UBI would cancel an hour from now, India time, before closing whatever had filled with a market sell. It closes only what this order filled, never anything else held in the share. The bid does not fill in the seconds the order lives; the program prints the parent and the resting bid and cancels it.
+The program places a time stop: a buy of one Vodafone Idea share 3% below the market, which UBI would cancel an hour from now, India time, before closing whatever had filled with a market sell. It closes only what this order filled, never anything else held in the share. The bid does not fill in the seconds the order lives; the program prints the parent and the resting bid and cancels it. It passes `hold_limits=False`, so UBI sends the order to the broker at once instead of holding it until the market reaches its price.
 
 Typical usage example:
 
@@ -101,6 +101,7 @@ class BidClosedInAnHour:
             quantity=1,
             price=self.price_from_market(self.share, -3),
             until_time=self.time_of_day_from_now(60),
+            hold_limits=False,
             dry_run=dry_run,
         )
 

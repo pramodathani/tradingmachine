@@ -1,6 +1,6 @@
-"""Rest a bid that is cancelled automatically at 15:15 if it has not filled.
+"""Place a bid, held until the market reaches its price, that is cancelled automatically at 15:15 if it has not filled.
 
-The program rests a buy of one Vodafone Idea share 3% below the market that UBI cancels at 15:15. It prints the parent and the resting order and cancels it at once rather than waiting.
+The program places a buy of one Vodafone Idea share 3% below the market that UBI cancels at 15:15. UBI holds it in its virtual order book until the market reaches its price, answering HTTP 202 `armed`, so no broker order exists yet, and one still held at 15:15 is never sent. The program prints the parent and the broker orders, of which there are none, and cancels it at once rather than waiting.
 
 Typical usage example:
 
