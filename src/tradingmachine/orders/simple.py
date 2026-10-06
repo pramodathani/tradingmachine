@@ -1,6 +1,6 @@
 """The `simple` synthetic order type: one plain order sent to one broker, with nothing watching it afterwards.
 
-This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful for three things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
+This is what UBI's order engine runs when an order carries no `synthetic` object at all, unless the order is a plain limit or market order that UBI holds or follows the book with. Asking for it by name is useful for four things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to send a real `market` order, since a plain market order is otherwise run as a `marketable_limit` that follows the other side of the book for 30 seconds and is refused with HTTP 409 when that side is empty; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
 
 Typical usage example:
 
@@ -23,7 +23,7 @@ from tradingmachine.orders import synthetic_order
 class SimpleOrder(synthetic_order.SyntheticOrder):
     """One plain order sent to one broker, with nothing watching it afterwards.
 
-    This is what UBI's order engine runs when an order carries no `synthetic` object at all. Asking for it by name is useful for three things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
+    This is what UBI's order engine runs when an order carries no `synthetic` object at all, unless the order is a plain limit or market order that UBI holds or follows the book with. Asking for it by name is useful for four things: to send a `limit` order to the broker at once, since a plain limit order with a price is otherwise held inside UBI as a `virtual_limit` until the other side reaches its price; to send a real `market` order, since a plain market order is otherwise run as a `marketable_limit` that follows the other side of the book for 30 seconds and is refused with HTTP 409 when that side is empty; to mark the order as closing a position with `closes_position`, so it may use the share of a broker's daily order cap kept for exits; and to make it reduce-only with `reduce_only`.
 
     The order template's attributes are described on `SyntheticOrder`, and this type adds none of its own.
     """

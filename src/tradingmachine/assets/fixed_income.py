@@ -252,7 +252,7 @@ class FixedIncome(instruments.TradeableInstrument):
     ) -> dict:
         """Buys more of this bond to keep.
 
-        The order is always sent as `cnc`, which is the product that puts a holding in the demat account. Nothing is read first, because a bond can be bought whether or not it is already held, and UBI checks funds no more than a broker's order endpoint does.
+        The order is always sent as `cnc`, which is the product that puts a holding in the demat account. Nothing is read first, because a bond can be bought whether or not it is already held, and UBI checks funds no more than a broker's order endpoint does. Without a price the order is sent to the broker as a real market order rather than as the marketable limit UBI would otherwise make of it, because a cash bond has no quote, so a marketable limit would always be refused with HTTP 409.
 
         Args:
             quantity: The int number of units to buy.
@@ -303,6 +303,7 @@ class FixedIncome(instruments.TradeableInstrument):
                 validity=validity,
                 after_market=after_market,
                 tag=tag,
+                as_marketable_limit=False,
             )
         return self.buy_at_limit_price(
             price=price,
@@ -492,6 +493,8 @@ class FixedIncome(instruments.TradeableInstrument):
     ) -> dict:
         """Sends the sell order that reduces the holding.
 
+        Without a price the order is sent as a real market order, because a cash bond has no quote for a marketable limit to be priced from.
+
         Args:
             quantity: The int number of units to sell.
             price: The float limit price in rupees, or None to send a market order.
@@ -512,6 +515,7 @@ class FixedIncome(instruments.TradeableInstrument):
                 validity=validity,
                 after_market=after_market,
                 tag=tag,
+                as_marketable_limit=False,
             )
         return self.sell_at_limit_price(
             price=price,
