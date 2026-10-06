@@ -7,3 +7,7 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row G16 
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 UBI builds it on its `grid` type, but the documentation lists only these five fields, so the grid's `levels` and `step_points` are not offered. It never finishes on its own, which is why the class docstring points at `cancel()`.
+
+## UBI's fixes of 2026-10-05, recorded on 2026-10-06
+
+UBI's commit `d3a354c` made three changes the docstrings now describe. A body with only a `quantity_reference` used to fail inside UBI with a division by None and an HTTP 503; it is now refused with HTTP 400, so the `quantity` and `quantity_reference` arguments say so even though the class still accepts both, following the rule that UBI holds the order rules. A side whose last order the broker rejected is no longer quoted again every second, which had repeated a margin refusal endlessly. UBI's documentation also now says that the inventory cap is checked before each re-quote, so a full-size quote can overshoot it by up to one quote less one unit.

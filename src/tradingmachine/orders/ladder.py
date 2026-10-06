@@ -1,6 +1,6 @@
 """The `ladder` synthetic order type: several limit orders spaced evenly between two prices, sharing the quantity between them.
 
-The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
+The quantity is divided among the rungs rather than repeated, in whole lots with the first rungs taking the remainder, so 100 over three steps is 34, 33 and 33, and 225 on a lot of 75 over two steps is 150 and 75. UBI refuses with HTTP 400 a quantity of fewer lots than `steps`. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
 
 Typical usage example:
 
@@ -26,14 +26,14 @@ from tradingmachine.orders import synthetic_order
 class LadderOrder(synthetic_order.SyntheticOrder):
     """Several limit orders spaced evenly between two prices, sharing the quantity between them.
 
-    The quantity is divided among the rungs rather than repeated, so 100 over three steps is 34, 33 and 33. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
+    The quantity is divided among the rungs rather than repeated, in whole lots with the first rungs taking the remainder, so 100 over three steps is 34, 33 and 33, and 225 on a lot of 75 over two steps is 150 and 75. UBI refuses with HTTP 400 a quantity of fewer lots than `steps`. By default UBI holds every rung in its virtual order book and sends each one only when the other side of the book reaches that rung's own price, so a rung the market never reaches costs no order message, and the answer is HTTP 202 with an `outcome` of `armed`. A held rung is the plan part `root.pieces.0`, `root.pieces.1` and so on, which `PlanOrder`'s part methods can change or cancel without a broker message, and it gives up its place in the queue. With `hold_limits` False every rung is sent at once and rests at the broker, and the answer carries a `legs` list with one entry per rung. UBI never works out references for a ladder, so give real numbers.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
         from_price: The float price of the first rung in rupees. Above zero.
         to_price: The float price of the last rung in rupees. Above zero, and different from `from_price`.
-        steps: The int number of rungs, from 2 to 20. The quantity must be at least this.
+        steps: The int number of rungs, from 2 to 20. The quantity must be at least this many lots.
     """
 
     SYNTHETIC_TYPE = "ladder"
@@ -72,7 +72,7 @@ class LadderOrder(synthetic_order.SyntheticOrder):
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
             from_price: The float price of the first rung in rupees. Above zero.
             to_price: The float price of the last rung in rupees. Above zero, and different from `from_price`.
-            steps: The int number of rungs, from 2 to 20. The quantity must be at least this.
+            steps: The int number of rungs, from 2 to 20. The quantity must be at least this many lots.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.

@@ -1,6 +1,6 @@
 """The `grid` synthetic order type: resting buys below the market and sells above it, where each fill places its opposite one step away.
 
-A grid books a small profit every time the price swings back and forth through a level. A trending market keeps filling one side, which is why `most_inventory` is required: it caps how large a position the grid may build.
+A grid books a small profit every time the price swings back and forth through a level. A trending market keeps filling one side, which is why `most_inventory` is required: it caps how large a position the grid may build. Once the position reaches it, every resting order on the side that would make the position bigger is cancelled and not placed again, and since the cap is checked after each fill, one fill can take the position past it. `step_points` must be a whole number of ticks, or UBI refuses the order with HTTP 400, because each filled order is answered one step away. The grid never re-centres and never ends on its own, and once you cancel it with `cancel()`, a fill that arrives afterwards places nothing new.
 
 Typical usage example:
 
@@ -26,13 +26,13 @@ from tradingmachine.orders import synthetic_order
 class GridOrder(synthetic_order.SyntheticOrder):
     """Resting buys below the market and sells above it, where each fill places its opposite one step away.
 
-    A grid books a small profit every time the price swings back and forth through a level. A trending market keeps filling one side, which is why `most_inventory` is required: it caps how large a position the grid may build.
+    A grid books a small profit every time the price swings back and forth through a level. A trending market keeps filling one side, which is why `most_inventory` is required: it caps how large a position the grid may build. Once the position reaches it, every resting order on the side that would make the position bigger is cancelled and not placed again, and since the cap is checked after each fill, one fill can take the position past it. `step_points` must be a whole number of ticks, or UBI refuses the order with HTTP 400, because each filled order is answered one step away. The grid never re-centres and never ends on its own, and once you cancel it with `cancel()`, a fill that arrives afterwards places nothing new.
 
     The order template's attributes are described on `SyntheticOrder`.
 
     Attributes:
         levels: The int number of levels on each side, from 1 to 20.
-        step_points: The float distance between levels in rupees. Above zero.
+        step_points: The float distance between levels in rupees, above zero and a whole number of ticks.
         most_inventory: The int largest position the grid may hold, at least 1.
     """
 
@@ -71,7 +71,7 @@ class GridOrder(synthetic_order.SyntheticOrder):
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
             levels: The int number of levels on each side, from 1 to 20.
-            step_points: The float distance between levels in rupees. Above zero.
+            step_points: The float distance between levels in rupees, above zero and a whole number of ticks.
             most_inventory: The int largest position the grid may hold, at least 1.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             trigger_price: The float trigger price in rupees of the order itself, or None for an order type that takes no trigger.

@@ -7,3 +7,7 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row C5 p
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 The Atlas suggests a chaser for each purchase; UBI rests each one instead, because the engine has no nested parents. UBI's note on `accumulation.py` explains that choice.
+
+## UBI's fixes of 2026-10-05, recorded on 2026-10-06
+
+UBI's commit `b507de0` made the accumulation preset check `purchases` and `every_minutes` itself, so a bad value is reported under its own name rather than as a repeat's `times` at `root`, and made a dry run make the checks placing makes, including the off-tick price check. The docstrings mention both.

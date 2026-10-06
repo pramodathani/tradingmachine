@@ -1,6 +1,6 @@
 """The `two_sided_quote` synthetic order type: a bid and an offer kept around the fair price, leaning away from the inventory they build.
 
-This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The template's `quantity` is the size of each quote. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The cap is checked before each re-quote, so a full-size quote can take the position past it by up to one quote less one unit. The template's `quantity` is the size of each quote and must be given, because UBI refuses a `quantity_reference` with HTTP 400. A side whose last order the broker rejected is not quoted again, so a refusal such as a margin shortfall is not repeated every second. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
 
 Typical usage example:
 
@@ -27,7 +27,7 @@ from tradingmachine.orders import synthetic_order
 class TwoSidedQuoteOrder(synthetic_order.SyntheticOrder):
     """A bid and an offer kept around the fair price, leaning away from the inventory they build.
 
-    This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The template's `quantity` is the size of each quote. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
+    This is the Atlas's G16, a market-making pair. Every second, UBI moves the bid to `half_spread_points` below the fair price and the offer the same distance above, the fair price being the midpoint unless `fair_price` says `last`. For each order's worth held, both quotes move `skew_ticks` against the position, a quote is modified only once it would move at least `step_ticks`, and once the net position reaches `most_inventory` the side that would add to it is cancelled until the position comes back. The cap is checked before each re-quote, so a full-size quote can take the position past it by up to one quote less one unit. The template's `quantity` is the size of each quote and must be given, because UBI refuses a `quantity_reference` with HTTP 400. A side whose last order the broker rejected is not quoted again, so a refusal such as a margin shortfall is not repeated every second. Every move of the fair price by a step is two modifications, each counting towards the broker's daily order messages, so keep `step_ticks` as wide as the strategy allows. The order does not finish on its own, so cancel it with `cancel()` when you are done.
 
     The order template's attributes are described on `SyntheticOrder`.
 
@@ -74,7 +74,7 @@ class TwoSidedQuoteOrder(synthetic_order.SyntheticOrder):
             transaction_type: The str side of the order, `buy` or `sell`.
             product: The str product, `cnc` for delivery, `mis` for intraday or `nrml` for carry forward.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
-            quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
+            quantity: The int size of each quote in underlying units, not lots; UBI refuses the order with HTTP 400 when it is None.
             half_spread_points: The float distance in rupees each quote sits from the fair price. Above zero.
             most_inventory: The int largest net position in underlying units the quotes may build, at least 1.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
@@ -84,7 +84,7 @@ class TwoSidedQuoteOrder(synthetic_order.SyntheticOrder):
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
             price_reference: A dict describing the price for UBI to work out, such as `{"kind": "mid"}`, or None.
-            quantity_reference: A dict describing the quantity for UBI to work out, such as `{"kind": "liquidate_position"}`, or None.
+            quantity_reference: A dict describing the quantity for UBI to work out, which UBI refuses for this type with HTTP 400, so leave it None.
             closes_position: A bool that is True when every order this type sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.

@@ -1,6 +1,6 @@
 """The `cover` synthetic order type: an entry with a compulsory stop and no target.
 
-It behaves like a bracket without a target, except that the stop is required and a target is refused: the stop is armed on the first partial fill, grows as the entry fills, and is cancelled if the entry is cancelled with nothing filled. Brokers once sold this as a product, and Flattrade's API restricts it, which is why UBI rebuilds it. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once.
+It behaves like a bracket without a target, except that the stop is required and a target is refused: the stop is armed on the first partial fill, grows as the entry fills, and is cancelled if the entry is cancelled with nothing filled. Brokers once sold this as a product, and Flattrade's API restricts it, which is why UBI rebuilds it. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once. A stop the broker refuses cancels the rest of the entry, and the parent ends `failed`, because the position is left without its stop.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class CoverOrder(synthetic_order.SyntheticOrder):
     """An entry with a compulsory stop and no target.
 
-    It behaves like a bracket without a target, except that the stop is required and a target is refused: the stop is armed on the first partial fill, grows as the entry fills, and is cancelled if the entry is cancelled with nothing filled. Brokers once sold this as a product, and Flattrade's API restricts it, which is why UBI rebuilds it. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once.
+    It behaves like a bracket without a target, except that the stop is required and a target is refused: the stop is armed on the first partial fill, grows as the entry fills, and is cancelled if the entry is cancelled with nothing filled. Brokers once sold this as a product, and Flattrade's API restricts it, which is why UBI rebuilds it. By default UBI holds a limit entry in its virtual order book until the other side of the book reaches its price, answering HTTP 202 with an `outcome` of `armed`, while the exits rest at the broker as the entry fills; give `hold_limits` False to send the entry at once. A stop the broker refuses cancels the rest of the entry, and the parent ends `failed`, because the position is left without its stop.
 
     The order template's attributes are described on `SyntheticOrder`.
 
