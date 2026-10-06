@@ -31,13 +31,13 @@ Only instruments in UBI's cash segments can be reported as holdings, so only fiv
 | Every index class | :material-close: | An index cannot be owned. |
 | `Commodity`, `Currency` and their derivatives | :material-close: | UBI's cash segments exclude commodities and currencies, so they are never reported as holdings. |
 
-Two classes need care. No broker that serves quotes carries a cash bond or a mutual fund, so `FixedIncome` and `MutualFund` have no live price. Give the three order methods a `price`, which sends a limit order, rather than letting them send a market order into a book nobody quotes.
+Two classes need care. No broker that serves quotes carries a cash bond or a mutual fund, so `FixedIncome` and `MutualFund` have no live price. Give the three order methods a `price`, which sends a limit order, rather than letting them send a market order into a book nobody quotes. When no price is given, these two classes send a real market order, because the `marketable_limit` UBI makes of a plain market order needs a quote and would always be refused with HTTP 409.
 
 ## Always cnc
 
 Every order these members send uses the `cnc` product, and there is no parameter to change it. `cnc` is the only product that buys into or sells out of a demat account. Selling a holding as `mis` would not sell your shares at all: it would open an intraday short position beside them, which the broker squares off before the close, so the mistake would cost money twice and leave the holding untouched. Removing the parameter makes that impossible to do by accident.
 
-The order methods send plain market or limit orders through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price), [`buy_at_limit_price`](price-wrappers.md#buy_at_limit_price) and their sell twins. A limit order is held by UBI's order engine until the book reaches its price, except for `MutualFund` and `FixedIncome`, which pass `hold=False` because nothing quotes them and a held order would never be sent. [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains why.
+The order methods send plain market or limit orders through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price), [`buy_at_limit_price`](price-wrappers.md#buy_at_limit_price) and their sell twins. A limit order is held by UBI's order engine until the book reaches its price, except for `MutualFund` and `FixedIncome`, which pass `hold=False` because nothing quotes them and a held order would never be sent. A market order is sent by UBI as a `marketable_limit`, a limit that follows the other side of the book for 30 seconds, except again for those two classes, which pass `as_marketable_limit=False` for the same reason. [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) explains why.
 
 ## Free units and pledged units
 

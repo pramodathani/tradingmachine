@@ -1,6 +1,6 @@
 """The `repeat` join of a plan: one order sent again and again, on a timer or once each trading day.
 
-The child must be an `OrderPart`, not another join, and UBI sends it `times` times, from 1 to 100. Exactly one of `every_minutes` and `every_trading_day_at` must be given. With `every_minutes`, the first copy goes at once and each later copy that many minutes after the one before, counted from when the plan was placed. With `every_trading_day_at`, each copy goes at that time on its own trading day and the plan is kept across days. With `until`, a condition, every copy still waiting is ended once the condition holds; the order then takes no lifetime of its own. A repeat join cannot be a `then` join's child.
+The child must be a plain `OrderPart`, not another join, and UBI sends it `times` times, from 1 to 100. Exactly one of `every_minutes` and `every_trading_day_at` must be given. With `every_minutes`, the first copy goes at once and each later copy that many minutes after the one before, counted from when the plan was placed. With `every_trading_day_at`, each copy goes at that time on its own trading day and the plan is kept across days. With `until`, a condition, every copy still waiting is ended once the condition holds; the order then takes no lifetime of its own. UBI also refuses, with the rule `repeat_needs_order`, a child whose presets make it a join, such as a `bracket`, and a child naming a type kept whole, such as a `grid`, because either would place its orders at once rather than wait its turn. A repeat join cannot be a `then` join's child.
 
 Typical usage example:
 
@@ -38,7 +38,7 @@ class RepeatPart(plan_part.PlanPart):
         """Initialises the join with its order and schedule.
 
         Args:
-            child: The plan_part.PlanPart sent each time, which must be an `OrderPart`; UBI refuses a join here.
+            child: The plan_part.PlanPart sent each time, which must be a plain `OrderPart`; UBI refuses a join here, and a preset that stands for a join or a type kept whole, with the rule `repeat_needs_order`.
             times: The int number of copies, from 1 to 100.
             every_minutes: The float minutes above zero between copies, or None when `every_trading_day_at` is given.
             every_trading_day_at: The str time of day in India, such as `09:20`, at which each copy is sent on its own trading day, or None when `every_minutes` is given.

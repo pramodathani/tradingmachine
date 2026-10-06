@@ -1,6 +1,6 @@
 """The `legged_spread` synthetic order type: two legs worked one after the other so that together they reach a net price.
 
-UBI rests the first leg passively and, as it fills, takes the second leg at whatever price makes the pair come to `net_price`. Only an exchange's own multi-leg order can guarantee a net price, so between the two fills the position is one-legged, and a market that moves in that moment leaves the second leg unfilled at the price wanted. UBI never resolves price or quantity references for this type.
+UBI rests the first leg passively and, as it fills, takes the second leg at whatever price makes the pair come to `net_price`. The second leg follows every fill of the first with a new order, in whole lots of its own instrument rounded to the nearest lot, so a first leg of 75 Nifty units is matched by 80 Sensex units. Each new order is priced so that the second leg's orders together average the price the net needs, rounded to the second leg's tick in your favour, down for a buy and up for a sell, and the second leg's own `quantity`, `price` and `order_type` are not used. UBI reads the second leg's instrument when the order arrives, so one that is not mapped is refused with HTTP 404 before anything is sent. When the second leg is refused, UBI cancels the rest of the first and the parent ends `failed`, because what filled is left one-legged. Only an exchange's own multi-leg order can guarantee a net price, so between the two fills the position is one-legged, and a market that moves in that moment leaves the second leg unfilled at the price wanted. UBI never resolves price or quantity references for this type.
 
 Typical usage example:
 
@@ -24,13 +24,13 @@ from tradingmachine.orders import synthetic_order
 class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
     """A two-legged spread worked passively on the first leg and completed on the second at the price that makes the net.
 
-    The template's fields are the defaults each leg may override, and the first leg's instrument anchors the request.
+    The template's fields are the defaults each leg may override, and the first leg's instrument anchors the request. The second leg follows every fill of the first with a new order, in whole lots of its own instrument rounded to the nearest lot, so a first leg of 75 Nifty units is matched by 80 Sensex units. Each new order is priced so that the second leg's orders together average the price the net needs, rounded to the second leg's tick in your favour, down for a buy and up for a sell, and the second leg's own `quantity`, `price` and `order_type` are not used. UBI reads the second leg's instrument when the order arrives, so one that is not mapped is refused with HTTP 404 before anything is sent. When the second leg is refused, UBI cancels the rest of the first and the parent ends `failed`, because what filled is left one-legged.
 
     The order template's attributes are described on `SyntheticOrder`, where `instrument` is the first leg's.
 
     Attributes:
         first_leg: The order_candidate.OrderCandidate worked passively first.
-        second_leg: The order_candidate.OrderCandidate taken as the first fills.
+        second_leg: The order_candidate.OrderCandidate taken as the first fills, whose own quantity, price and order type are not used.
         net_price: The float net debit per unit in rupees, positive when the spread costs money and negative when it brings money in.
     """
 
@@ -59,7 +59,7 @@ class LeggedSpreadOrder(synthetic_order.SyntheticOrder):
 
         Args:
             first_leg: The order_candidate.OrderCandidate worked passively first.
-            second_leg: The order_candidate.OrderCandidate taken as the first fills, on a different instrument.
+            second_leg: The order_candidate.OrderCandidate taken as the first fills, on a different instrument, whose own quantity, price and order type are not used.
             net_price: The float net debit per unit in rupees, positive when the spread costs money and negative when it brings money in.
             transaction_type: The str default side for both legs, `buy` or `sell`.
             product: The str default product for both legs, `cnc`, `mis` or `nrml`.

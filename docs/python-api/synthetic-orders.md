@@ -1,6 +1,6 @@
 # Synthetic orders
 
-A synthetic order is an order that no Indian exchange offers, such as a bracket, a trailing stop, an iceberg or an order sliced over half an hour. UBI's order engine builds each one out of ordinary broker orders: it places them, watches them, changes them and cancels them for you. The package `tradingmachine.orders` has one class for each of the fifty-three types the engine runs. Each class only describes the order and sends the description; all the work happens in UBI.
+A synthetic order is an order that no Indian exchange offers, such as a bracket, a trailing stop, an iceberg or an order sliced over half an hour. UBI's order engine builds each one out of ordinary broker orders: it places them, watches them, changes them and cancels them for you. The package `tradingmachine.orders` has one class for each of the fifty-four types the engine runs. Each class only describes the order and sends the description; all the work happens in UBI.
 
 !!! danger "These are real orders"
     `place()` sends real orders through UBI to real brokers, with real money. Many of these types keep acting after `place()` has returned: a trigger fires hours later, a trailing stop moves all day, a grid trades back and forth, a good-till-triggered order waits for up to a year. Construct every order with `dry_run=True` first, which has UBI build the first broker request and return it without recording or sending anything.
@@ -22,7 +22,7 @@ The table below lists the three classes every synthetic order is built from, and
 | <span class="member class">class</span> | [`ExposureWatch`](#exposurewatch) | One watched instrument of an exposure hedge. |
 | <span class="member class">class</span> | [`PlanOrder`](#plans-combining-the-types) | An order described as a tree of parts, which can combine the other types in one order. |
 
-## All fifty-three types
+## All fifty-four types
 
 The table below lists every class, in its family. The module and class names spell out UBI's abbreviations, so UBI's `oto` is `one_triggers_other` here and its `atr_trail` is `average_true_range_trail`. The settings are the class's own keyword arguments, named as UBI names them except for `average_true_range_multiple`, which UBI calls `atr_multiple`, and for arguments that take an instrument object where UBI takes an id. Every class also takes `reduce_only` and `hold_limits`, described under [Reduce-only orders](#reduce-only-orders) and [Holding limit orders](#holding-limit-orders). The last column is UBI's first answer: 200 means a broker order goes out when you ask, and 202 means the engine records the order and waits for a price or a time. A type marked "or 202 when held" holds its limit orders by default and so answers 202.
 
@@ -62,6 +62,7 @@ The table below lists every class, in its family. The module and class names spe
 | [`PostOnlyOrder`][tradingmachine.orders.post_only.PostOnlyOrder] | `post_only` | `post_only` | Book-following limits | A limit order checked to rest rather than trade before it is sent. | `on_crossing` | 200 |
 | [`DiscretionaryOrder`][tradingmachine.orders.discretionary.DiscretionaryOrder] | `discretionary` | `discretionary` | Book-following limits | A limit order that shows one price and quietly takes a slightly worse one when it comes within reach. | `discretion_points`, `discretion_quantity` | 200 |
 | [`VirtualLimitOrder`][tradingmachine.orders.virtual_limit.VirtualLimitOrder] | `virtual_limit` | `virtual_limit` | Book-following limits | A limit order held inside UBI and sent only when the other side of the book reaches its price. Every plain `day` limit order now runs as this type. | `paper` | 202 |
+| [`MarketableLimitOrder`][tradingmachine.orders.marketable_limit.MarketableLimitOrder] | `marketable_limit` | `marketable_limit` | Book-following limits | A market order sent as a limit a few ticks past the other side's best price, which follows that price until it fills and is cancelled after a time. Every plain market order now runs as this type. | `buffer_ticks`, `fill_within_seconds` | 200, or 409 on an empty book |
 | [`UnderlyingPegOrder`][tradingmachine.orders.underlying_peg.UnderlyingPegOrder] | `underlying_peg` | `underlying_peg` | Book-following limits | Moves a resting limit by delta times another instrument's move, such as an option bid following the index. | `watch_instrument`, `delta`, `lowest_price`, `highest_price`, `step_ticks` | 200 |
 | [`VolatilityOrder`][tradingmachine.orders.volatility.VolatilityOrder] | `volatility` | `volatility` | Book-following limits | Prices an option from an implied volatility with Black-76, and re-prices it as the underlying and time move. | `watch_instrument`, `volatility`, `interest_rate`, `lowest_price`, `highest_price`, `step_ticks` | 200 |
 | [`TimeWeightedAveragePriceOrder`][tradingmachine.orders.time_weighted_average_price.TimeWeightedAveragePriceOrder] | `time_weighted_average_price` | `twap` | Execution algorithms | A large order sent as equal slices at even intervals over a period. | `slices`, `over_minutes` | 200, or 202 when held |
@@ -99,7 +100,7 @@ The chart below counts the types in each family and splits them by their usual f
       {"family": "Execution algorithms", "answer": "202: waits", "types": 3},
       {"family": "Stops and trailing", "answer": "200: acts at once", "types": 4},
       {"family": "Stops and trailing", "answer": "202: waits", "types": 3},
-      {"family": "Book-following limits", "answer": "200: acts at once", "types": 6},
+      {"family": "Book-following limits", "answer": "200: acts at once", "types": 7},
       {"family": "Book-following limits", "answer": "202: waits", "types": 1},
       {"family": "Price triggers", "answer": "202: waits", "types": 8},
       {"family": "Plain and laddered", "answer": "200: acts at once", "types": 6},
@@ -125,7 +126,7 @@ The chart below counts the types in each family and splits them by their usual f
 
 ## How the classes fit together
 
-Every class inherits from `SyntheticOrder`, which holds the ordinary order fields, called the template, and sends them with a `synthetic` object naming the type and holding its settings. A subclass adds only its own settings. The five multi-instrument classes also take small helper objects, one per instrument. The class diagram below shows the shape with a few of the fifty-three.
+Every class inherits from `SyntheticOrder`, which holds the ordinary order fields, called the template, and sends them with a `synthetic` object naming the type and holding its settings. A subclass adds only its own settings. The five multi-instrument classes also take small helper objects, one per instrument. The class diagram below shows the shape with a few of the fifty-four.
 
 ```mermaid
 classDiagram
@@ -464,7 +465,7 @@ An `ExposureWatch` names one instrument whose net position counts towards the ex
 
 ## By family
 
-The tabs below group the fifty-three classes into UBI's eight families, which UBI's documentation uses to make the list easier to scan; neither UBI's code nor this package groups them. Each tab has one example, taken from the classes' own docstrings, and every example is a dry run. In the examples, `reliance` and `infosys` are `Equity` objects and `nifty_call` and `nifty_put` are `EquityIndexOption` objects.
+The tabs below group the fifty-four classes into UBI's eight families, which UBI's documentation uses to make the list easier to scan; neither UBI's code nor this package groups them. Each tab has one example, taken from the classes' own docstrings, and every example is a dry run. In the examples, `reliance` and `infosys` are `Equity` objects and `nifty_call` and `nifty_put` are `EquityIndexOption` objects.
 
 === "Plain and laddered"
 
@@ -571,7 +572,7 @@ The tabs below group the fifty-three classes into UBI's eight families, which UB
 
 === "Book-following limits"
 
-    These seven types manage a limit order against the market. `PegOrder` re-prices it to your own side's best price, the midpoint or the other side, and every re-price is a real modification that loses the order's place in the queue. `ChaserOrder` starts on its own side and steps towards the other until it fills, crossing outright after `cross_after_seconds` and never beyond `cap_price`. `PostOnlyOrder` checks the book before sending, because Indian exchanges have no post-only flag; with `on_crossing="refuse"` an order that would cross is refused with HTTP 409. `DiscretionaryOrder` shows one price and takes a slightly worse one when it comes within `discretion_points`. `VirtualLimitOrder` holds the limit inside UBI until the other side reaches it, and with `paper=True` never sends anything at all; every plain `day` limit order now runs as this type. `UnderlyingPegOrder` moves a resting limit by `delta` times the move of `watch_instrument`, such as an option bid following the index, without reading the option's own thin book. `VolatilityOrder` states an option order as an implied `volatility` and lets UBI work the premium out with Black-76, re-pricing as the underlying and time move; its `price` is the worst it will accept.
+    These eight types manage a limit order against the market. `PegOrder` re-prices it to your own side's best price, the midpoint or the other side, and every re-price is a real modification that loses the order's place in the queue. `ChaserOrder` starts on its own side and steps towards the other until it fills, crossing outright after `cross_after_seconds` and never beyond `cap_price`. `PostOnlyOrder` checks the book before sending, because Indian exchanges have no post-only flag; with `on_crossing="refuse"` an order that would cross is refused with HTTP 409. `DiscretionaryOrder` shows one price and takes a slightly worse one when it comes within `discretion_points`. `VirtualLimitOrder` holds the limit inside UBI until the other side reaches it, and with `paper=True` never sends anything at all; every plain `day` limit order now runs as this type. `MarketableLimitOrder` is a market order with a worst price: a limit `buffer_ticks` past the other side's best price, two by default, moved after that price until it fills and cancelled after `fill_within_seconds`, thirty by default, and refused with HTTP 409 when nobody is on the other side or the quote is missing or stale; every plain market order that is not after-market now runs as this type with the defaults. `UnderlyingPegOrder` moves a resting limit by `delta` times the move of `watch_instrument`, such as an option bid following the index, without reading the option's own thin book. `VolatilityOrder` states an option order as an implied `volatility` and lets UBI work the premium out with Black-76, re-pricing as the underlying and time move; its `price` is the worst it will accept.
 
     The example below keeps a buy of ten shares pegged to the midpoint, never paying more than 1005 rupees.
 

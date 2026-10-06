@@ -74,3 +74,5 @@ Since 2026-09-27 UBI's order engine holds a plain `day` limit order until a live
 ## `constituents`, added on 2026-09-28
 
 `MutualFund.constituents` returns the stored `MutualFundConstituents` basket of what the scheme holds. UBI has no price for a mutual fund, so the scheme's own `sharpe_ratio` and every other performance measure return None, and the basket is the only way to measure a scheme; the docstring says so. It imports the basket store inside the property, for the reason given in `instruments.py.md`. `MutualFund.prices` deliberately does not fall back to the constituents, because a price rebuilt from the holdings would be passed off as the real net asset value while leaving out cash, fees and anything in `unmapped_weight`.
+
+On 2026-10-06 UBI began running plain market orders as marketable limits, which need a live quote. A mutual fund has none, so a holdings method called without a price would always have been refused with HTTP 409. The two market calls therefore pass `as_marketable_limit=False`, the same way the limit calls pass `hold=False`. A broker may still refuse a real market order sent through an API, so giving a price remains the advice.

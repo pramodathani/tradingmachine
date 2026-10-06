@@ -788,3 +788,13 @@ UBI's commits `2ea9e57`, `ae01763` and `102433f` of 2026-10-02 let a caller act 
 `cancel_parent` first sent a whole-parent cancel to `DELETE /api/orders/parents` and only a part or a dry run to `DELETE /api/orders/cancel`, because the new route had not yet been run live from here. Later on 2026-10-02 the user asked for that split to be removed, so every cancel now goes to `DELETE /api/orders/cancel` with `parent_id`, which UBI documents as giving the same answer as `/api/orders/parents` for a whole parent, including its HTTP 207 when a leg's cancel was refused, and which UBI keeps the older route only for programs that already call it. It had still not been run live when the change was made, so the next live run of the example programs, whose clean-up depends on `cancel_parent`, is its first real test. `ORDER_PARENTS_PATH` stays, because `parents` and `parent` still read `GET /api/orders/parents`.
 
 UBI's cancel route also takes `parent_id` without `part`, so `cancel_order` could have taken a `parent_id` too. It was not given one, because `cancel_parent` already names a parent and two methods doing the same thing would only invite the question of which to use.
+
+## Market orders and `as_marketable_limit`, added on 2026-10-06
+
+UBI began running every plain market order as a `marketable_limit` on 2026-10-06 (its commit `462c6c1`): a limit two ticks past the other side's best price that follows it and is cancelled after 30 seconds, refused with HTTP 409 when it cannot be priced. `buy_at_market_price` and `sell_at_market_price` gained `as_marketable_limit`, True by default so that the library follows UBI's default, as `hold` does for the limit pair. False sends `synthetic={"type": "simple"}`, because UBI converts only a body without a `synthetic` object.
+
+The name was chosen over something shorter such as `follow_book` because it names UBI's type, so a reader can look the behaviour up in UBI's documentation.
+
+The position-closing methods were left alone, because `_close_with_reference` already sends `synthetic={"type": "simple", "closes_position": True}` and so already sends a real market order. `add_to_position` calls the market wrappers and so gets the conversion.
+
+The third example of each market wrapper sends a real market order. On the morning of 2026-10-06 UBI chose Flattrade, which refused it with `ALGO_CHK: MKT Order type not allowed for API order`, so the example catches `OrderRejectedError` and prints the refusal rather than failing; another broker would fill it, and the example's clean-up then closes the position as the other two do.

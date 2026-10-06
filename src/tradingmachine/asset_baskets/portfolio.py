@@ -2,7 +2,7 @@
 
 `Portfolio` gives every member a quantity, and optionally the average price it was bought at. It can be built by hand, or read from the account with `from_holdings` or `from_positions`, which build every member from one list request. Its weights are the members' shares of today's value, and its candles are what the same quantities would have been worth at each candle, so the inherited `sharpe_ratio` or `maximum_drawdown` describe the portfolio as it is held now.
 
-`place_orders` sends one market order per member in a single `POST /api/orders/place` list request, which UBI's order engine places in parallel at whichever broker each order suits; it does not use UBI's `basket` synthetic order, which is capped at 25 legs and sends every leg to one broker. `rebalance_trades` works out the buys and sells that would move the portfolio to another basket's weights, and `rebalance` sends them. The quantities are floored to whole units and sent as computed, with no lot size or tick size check, because UBI checks orders itself.
+`place_orders` sends one market order per member in a single `POST /api/orders/place` list request, which UBI's order engine places in parallel at whichever broker each order suits; it does not use UBI's `basket` synthetic order, which is capped at 25 legs and sends every leg to one broker. `rebalance_trades` works out the buys and sells that would move the portfolio to another basket's weights, and `rebalance` sends them. The quantities are floored to whole units and sent as computed, with no lot size or tick size check, because UBI checks orders itself. UBI's order engine sends each market order as a `marketable_limit`, a limit two ticks past the other side's best price that follows the book and is cancelled after 30 seconds, so a member with nobody on the other side of the book or no fresh quote gets HTTP 409 in its row and an order that has not filled within the 30 seconds is left part filled; `as_marketable_limit=False` sends real market orders instead.
 
 Typical usage example:
 
@@ -756,10 +756,13 @@ class Portfolio(asset_basket.AssetBasket):
         validity: str = "day",
         tag: str | None = None,
         dry_run: bool = False,
+        as_marketable_limit: bool = True,
     ) -> pd.DataFrame:
         """Sends one market order per member for its quantity, all in one list request.
 
         With `buy`, each member's quantity is bought, and a negative quantity is sold instead; with `sell`, the other way round. This buys a portfolio built by hand or by `Index.to_portfolio`, and sells one to close it. The orders are placed in parallel and not as one unit, so some can be accepted while others are refused, and each row of the answer says what happened to its order.
+
+        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row and nothing is sent for it. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
 
         Args:
             product: The str product every order is sent with, such as `cnc` for delivery or `mis` for intraday.
@@ -767,6 +770,7 @@ class Portfolio(asset_basket.AssetBasket):
             validity: The str validity of every order, such as `day`.
             tag: A str tag to put on every order, or None.
             dry_run: A bool that is True to have UBI build every order without sending it.
+            as_marketable_limit: A bool that is True to let UBI's order engine send each order as a limit that follows the other side of the book for up to 30 seconds, and False to send market orders to the brokers at once.
 
         Returns:
             A pandas.DataFrame with one row per order, holding `label`, `instrument_id`, `transaction_type`, `quantity`, the entry's HTTP `status`, the `broker` UBI chose, `outcome`, `order_id`, `parent_id`, `intent_id` and `error`.
@@ -849,6 +853,41 @@ class Portfolio(asset_basket.AssetBasket):
             elif status in ("OPEN", "PENDING"):
                 print(idea.cancel_order(order_id)["outcome"])
             ```
+
+            Have UBI build the same orders as real market orders, which it would send to the brokers at once rather than as limits following the book:
+
+            ```python
+            from tradingmachine.asset_baskets import basket_member
+            from tradingmachine.asset_baskets import portfolio
+            from tradingmachine.assets import equities
+
+            quantities = {
+                "IDEA": 100,
+                "INFY": 5,
+                "TCS": 2,
+            }
+            average_prices = {
+                "IDEA": 12.5,
+                "INFY": 1450.0,
+                "TCS": 3100.0,
+            }
+            members = []
+            for symbol in quantities:
+                share = equities.Equity(exchange="nse", symbol=symbol)
+                member = basket_member.BasketMember(
+                    share,
+                    quantity=quantities[symbol],
+                    average_price=average_prices[symbol],
+                )
+                members.append(member)
+            held = portfolio.Portfolio(name="long-term shares", members=members)
+            results = held.place_orders(
+                product="cnc",
+                dry_run=True,
+                as_marketable_limit=False,
+            )
+            print(results[["label", "transaction_type", "quantity", "status"]])
+            ```
         """
         planned = []
         for member in self.members:
@@ -865,7 +904,14 @@ class Portfolio(asset_basket.AssetBasket):
                     "quantity": abs(member.quantity),
                 }
             )
-        return self._send_orders(planned, product, validity, tag, dry_run)
+        return self._send_orders(
+            planned,
+            product,
+            validity,
+            tag,
+            dry_run,
+            as_marketable_limit,
+        )
 
     def rebalance_trades(
         self,
@@ -1040,10 +1086,13 @@ class Portfolio(asset_basket.AssetBasket):
         validity: str = "day",
         tag: str | None = None,
         dry_run: bool = False,
+        as_marketable_limit: bool = True,
     ) -> pd.DataFrame:
         """Sends the market orders `rebalance_trades` works out, all in one list request.
 
         The sales and purchases are sent together and placed in parallel, so for a delivery account the purchases must be affordable without the money the sales will release.
+
+        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row, which leaves the portfolio part rebalanced, and nothing is sent for it. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
 
         Args:
             target: The AssetBasket whose weights to move to, such as an Index.
@@ -1052,6 +1101,7 @@ class Portfolio(asset_basket.AssetBasket):
             validity: The str validity of every order, such as `day`.
             tag: A str tag to put on every order, or None.
             dry_run: A bool that is True to have UBI build every order without sending it.
+            as_marketable_limit: A bool that is True to let UBI's order engine send each order as a limit that follows the other side of the book for up to 30 seconds, and False to send market orders to the brokers at once.
 
         Returns:
             A pandas.DataFrame with one row per order, in the form `place_orders` returns, which is empty when no trade is needed.
@@ -1169,7 +1219,14 @@ class Portfolio(asset_basket.AssetBasket):
                     "quantity": abs(trade.trade_quantity),
                 }
             )
-        return self._send_orders(planned, product, validity, tag, dry_run)
+        return self._send_orders(
+            planned,
+            product,
+            validity,
+            tag,
+            dry_run,
+            as_marketable_limit,
+        )
 
     def _send_orders(
         self,
@@ -1178,6 +1235,7 @@ class Portfolio(asset_basket.AssetBasket):
         validity: str,
         tag: str | None,
         dry_run: bool,
+        as_marketable_limit: bool,
     ) -> pd.DataFrame:
         """Sends planned market orders in one list request and tabulates UBI's answer.
 
@@ -1187,6 +1245,7 @@ class Portfolio(asset_basket.AssetBasket):
             validity: The str validity of every order.
             tag: A str tag to put on every order, or None.
             dry_run: A bool that is True to have UBI build every order without sending it.
+            as_marketable_limit: A bool that is True to let UBI's order engine send each order as a limit that follows the other side of the book for up to 30 seconds, and False to send market orders to the brokers at once.
 
         Returns:
             A pandas.DataFrame with one row per planned order, holding `label`, `instrument_id`, `transaction_type`, `quantity`, `status`, `broker`, `outcome`, `order_id`, `parent_id`, `intent_id` and `error`, which is empty when nothing was planned.
@@ -1222,6 +1281,10 @@ class Portfolio(asset_basket.AssetBasket):
             }
             if tag is not None:
                 body["tag"] = tag
+            if not as_marketable_limit:
+                body["synthetic"] = {
+                    "type": "simple",
+                }
             orders.append(body)
         response = self._unified_broker_interface.post(
             ORDER_PLACE_PATH,

@@ -6,7 +6,7 @@ A mutual fund is unlike everything else in `assets`. It is subscribed to and red
 
 What does work is holding. `mutual_funds` is one of UBI's cash segments, so a fund is reported in the account's holdings exactly as a share is, and `MutualFund` carries the same six holdings members `tradingmachine.assets.equities.Equity` does. The user chose on 2026-09-20 to give it the full surface, including `add_to_holdings`, `reduce_holdings` and `liquidate_holdings`, rather than the read-only version the old project used, so that no class in this family is an exception a caller has to remember.
 
-Those three methods send ordinary `cnc` orders, which is what UBI accepts for this segment. Whether a broker will treat such an order as a subscription is a question for the broker, and the practical obstacle comes first: with no quote there is no price to send a market order against, so a limit price is the only sensible form. Nothing here checks that, in keeping with the rule that orders reach UBI as given.
+Those three methods send ordinary `cnc` orders, which is what UBI accepts for this segment. Whether a broker will treat such an order as a subscription is a question for the broker, and the practical obstacle comes first: with no quote there is no price to send a market order against, so a limit price is the only sensible form. Nothing here checks that, in keeping with the rule that orders reach UBI as given. A market order is sent to the broker as a real market order rather than as the marketable limit UBI would otherwise make of it, because a marketable limit needs a quote and would always be refused with HTTP 409.
 
 Typical usage example:
 
@@ -314,7 +314,7 @@ class MutualFund(instruments.TradeableInstrument):
     ) -> dict:
         """Buys more units of this scheme to keep.
 
-        The order is sent as `cnc`, which is what UBI accepts for this segment. Give a price: a mutual fund has no quote, so there is nothing for a market order to be priced against, and leaving price as None sends one anyway rather than second-guessing UBI.
+        The order is sent as `cnc`, which is what UBI accepts for this segment. Give a price: a mutual fund has no quote, so there is nothing for a market order to be priced against, and leaving price as None sends one anyway rather than second-guessing UBI. A market order is sent to the broker as a real market order rather than as the marketable limit UBI would otherwise make of it, because a marketable limit needs a quote and would always be refused with HTTP 409.
 
         Args:
             quantity: The int number of units to buy.
@@ -377,6 +377,7 @@ class MutualFund(instruments.TradeableInstrument):
                 validity=validity,
                 after_market=after_market,
                 tag=tag,
+                as_marketable_limit=False,
             )
         return self.buy_at_limit_price(
             price=price,
@@ -608,6 +609,7 @@ class MutualFund(instruments.TradeableInstrument):
                 validity=validity,
                 after_market=after_market,
                 tag=tag,
+                as_marketable_limit=False,
             )
         return self.sell_at_limit_price(
             price=price,

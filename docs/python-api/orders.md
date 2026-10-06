@@ -25,7 +25,7 @@ The table below lists the fifteen members this page documents.
 | <span class="member method">method</span> | [`parent_orders`](#parent_orders) | Today's broker orders that one parent placed. |
 | <span class="member method">method</span> | [`parent_trades`](#parent_trades) | Today's trades in the broker orders that one parent placed. |
 
-Placing an order through a named price, such as "buy at the best bid", has its own page, [Price wrappers](price-wrappers.md). Changing a position without saying which side you are on is on [Positions](positions.md), and the fifty-three order types UBI builds out of ordinary orders are on [Synthetic orders](synthetic-orders.md). All of them end in `place_order`.
+Placing an order through a named price, such as "buy at the best bid", has its own page, [Price wrappers](price-wrappers.md). Changing a position without saying which side you are on is on [Positions](positions.md), and the fifty-four order types UBI builds out of ordinary orders are on [Synthetic orders](synthetic-orders.md). All of them end in `place_order`.
 
 ## Glossary of plain strings
 
@@ -99,9 +99,11 @@ This method places one order in this instrument. You never name a broker: UBI ch
 
 An answer with an `outcome` of `accepted` means the broker took the order, not that the order survived. The exchange can still refuse it a moment later, which is what happens to an ordinary order sent while the market is closed, so read its real fate from [`orders`](#orders). To queue an order for the next session, pass `after_market=True`.
 
-The last three parameters describe something for UBI to work out instead of stating it. A `price_reference` names a price, such as "the second best offer", which UBI reads from the live quote and rounds to the tick when it sends the order. A `quantity_reference` names a quantity, such as "the whole position", which UBI reads from the account's positions. A `synthetic` object turns the order into one of UBI's fifty-three synthetic order types.
+The last three parameters describe something for UBI to work out instead of stating it. A `price_reference` names a price, such as "the second best offer", which UBI reads from the live quote and rounds to the tick when it sends the order. A `quantity_reference` names a quantity, such as "the whole position", which UBI reads from the account's positions. A `synthetic` object turns the order into one of UBI's fifty-four synthetic order types.
 
 A plain `limit` order with a price of its own, `day` validity and no `synthetic` object is held by UBI's order engine rather than sent, until the other side of the book reaches its price. The answer then has an `outcome` of `armed`, a `parent_id` and no `order_id`, and the order is found in [`parents`](#parents) rather than in `orders`. Pass `synthetic={"type": "simple"}` to send a limit order at once, which an instrument with no live quote needs, because its held order would never be sent.
+
+A plain `market` order that is not after-market is not sent as a market order either. The engine runs it as a `marketable_limit`, a `limit` two ticks past the other side's best price that follows that price until it fills and is cancelled after 30 seconds, and refuses it with HTTP 409 when nobody is on the other side of the book or the quote is missing or stale. `synthetic={"type": "simple"}` sends a real market order. [Order engine](../architecture/order-engine.md#market-orders-are-sent-as-marketable-limits) explains it.
 
 #### Parameters
 
@@ -246,7 +248,7 @@ A `dict`, which is UBI's answer unchanged. The table below lists its keys; which
 | `BadRequestError` | A field is invalid, the price fields do not fit the order type, or a synthetic order's own settings are wrong. |
 | `LossLockoutError` | The day's loss is past UBI's daily loss limit. |
 | `NotFoundError` | No broker has a mapping for this instrument today. |
-| `ConflictError` | A `quantity_reference` asked to reduce or close a position that is not held, a reduce-only order would not reduce the position, or the engine read the order too late or had already started it before a restart. |
+| `ConflictError` | A `quantity_reference` asked to reduce or close a position that is not held, a market order run as a marketable limit found nobody on the other side of the book or no fresh quote, a reduce-only order would not reduce the position, or the engine read the order too late or had already started it before a restart. |
 | `OrderRejectedError` | The broker refused the order. Its answer is in the exception's `detail`, not in its message. |
 | `RateLimitError` | The broker's daily order cap has no room for this order. |
 | `ServiceUnavailableError` | No broker could take the order, the order engine is not running, or a `price_reference` could not be resolved, for example because the book is empty. |
@@ -364,7 +366,7 @@ A `dict` with `broker`, `order_id`, `instrument_id`, `status_before_modify`, `ou
 
 This method cancels one order that is still waiting in the market. Like `modify_order`, it finds the order by id across every broker's order book, does not check which instrument it belongs to, and cannot see an order placed in the last few seconds.
 
-An order that is a leg of one of UBI's synthetic orders is cancelled through the order engine, so the order type knows about it, but the synthetic order itself carries on. [`cancel_parent`](#cancel_parent) stops a synthetic order, and it is also how an order the engine is still holding is cancelled, because such an order has no broker order id.
+An order that is a leg of one of UBI's synthetic orders is cancelled through the order engine, so the order type knows about it, but the synthetic order itself carries on. [`cancel_parent`](#cancel_parent) stops a synthetic order, and it is also how an order the engine is still holding is cancelled, because such an order has no broker order id. Since 2026-10-05 a leg cancelled this way stays cancelled: a bracket's stop is not placed again, and the leg's unfilled quantity comes off what its part trades, so a later fill of the entry is protected for the smaller quantity only.
 
 #### Parameters
 

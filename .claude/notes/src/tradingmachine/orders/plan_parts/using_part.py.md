@@ -28,3 +28,7 @@ A ladder's copies each get their rung's price and share, and a timed execution's
 
 - The join is never resized, so it cannot be a `then` join's child.
 - Giving every piece an exit means naming a preset that expands to a `then` join, such as `bracket` or `cover`. A slot-value preset such as `trailing_stop` would instead turn each piece itself into a protecting order rather than following it with one.
+
+## Two new refusals for each_piece (2026-10-06)
+
+UBI's commit `b507de0` of 2026-10-05 refuses a `quantity` in `each_piece` with `using_piece_quantity`, because UBI used to split it as though it were the whole order's quantity rather than give it to each piece, and a preset naming a type kept whole, such as a `grid`, with `using_piece_kept_whole`, because such a type placed its orders at once and ignored its piece's turn and price. Since UBI's commit `0ec2a34`, a problem inside a piece is reported at `each_piece` or `order`, whichever holds the setting, with `part` naming the piece as it runs, rather than at a path such as `root.pieces.0`.

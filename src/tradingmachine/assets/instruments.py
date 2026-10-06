@@ -1772,6 +1772,8 @@ class TradeableInstrument(Instrument):
 
         Every order goes through UBI's order engine, which is the only way UBI places orders. A plain `limit` order with a price of its own, `day` validity, no `synthetic` object and `after_market` False is not sent to a broker straight away: the engine holds it as a `virtual_limit` order and sends it only once the other side of the book reaches its price, answering HTTP 202 with an outcome of `armed`, a `parent_id` and no `order_id`. Such a held order is changed with `modify_order(parent_id=...)` and cancelled with `cancel_parent`, and it never appears in `orders` until it has been sent. Pass `synthetic={"type": "simple"}` to send a limit order at once, which matters for an instrument that has no live quote, because the engine would hold its order for the whole day without ever sending it.
 
+        A plain `market` order with no `synthetic` object and `after_market` False is not sent as a market order either. The engine runs it as a `marketable_limit` order: a `limit` two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. Such an order is refused with HTTP 409, and nothing is sent, when nobody is on the other side of the book, no live quote has arrived or the quote is marked stale. Pass `synthetic={"type": "simple"}` to send a real market order, which an instrument with no live quote needs.
+
         Args:
             transaction_type: The str side of the order, `buy` or `sell`. UBI overrides it for a quantity reference that reduces or closes a position.
             order_type: The str kind of order, `market`, `limit`, `sl` or `sl-m`.
@@ -1795,7 +1797,7 @@ class TradeableInstrument(Instrument):
             BadRequestError: A field is invalid, the price fields do not fit the order type, or a synthetic order's own fields are wrong.
             LossLockoutError: The day's loss is past UBI's daily loss limit.
             NotFoundError: No broker has a mapping for this instrument.
-            ConflictError: A quantity reference asked to reduce or close a position that is not held, a reduce-only order would not reduce the position, or the engine read the order too late or had already started it before a restart.
+            ConflictError: A quantity reference asked to reduce or close a position that is not held, a market order sent as a marketable limit found nobody on the other side of the book or no fresh quote, a reduce-only order would not reduce the position, or the engine read the order too late or had already started it before a restart.
             OrderRejectedError: The broker refused the order, and the detail holds its answer.
             RateLimitError: The broker's daily order cap has no room for this order.
             ServiceUnavailableError: No broker could take the order, the order engine is not running, or a price reference could not be resolved.
@@ -3416,10 +3418,13 @@ class TradeableInstrument(Instrument):
         validity: str | None = None,
         after_market: bool = False,
         tag: str | None = None,
+        as_marketable_limit: bool = True,
     ) -> dict:
         """Buys at whatever price the market is asking.
 
         A market order takes the best price on offer and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
+
+        UBI's order engine does not send this to a broker as a market order. It sends a `limit` two ticks past the best offer, moves it after that price on every tick until it fills, and cancels whatever has not filled 30 seconds after it was placed, so the order cannot fill far from the price that was showing. UBI refuses the order with HTTP 409, and sends nothing, when nobody is offering, no live quote has arrived or the quote is marked stale. An after-market order is always sent as a market order. Pass `as_marketable_limit=False` to send a real market order at once, which an instrument with no live quote needs, and use `tradingmachine.orders.marketable_limit.MarketableLimitOrder` to choose a different buffer or time. Some brokers refuse a market order sent through an API outright: on 2026-10-06 Flattrade answered `ALGO_CHK: MKT Order type not allowed for API order`, which raises `OrderRejectedError`.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -3427,13 +3432,15 @@ class TradeableInstrument(Instrument):
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
+            as_marketable_limit: A bool that is True to let UBI's order engine send the order as a limit that follows the other side of the book for up to 30 seconds, and False to send a market order to a broker at once.
 
         Returns:
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
             BadRequestError: A field is invalid.
-            OrderRejectedError: The broker refused the order.
+            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is offering, no live quote has arrived or the quote is marked stale.
+            OrderRejectedError: The broker refused the order, which some brokers do for every real market order sent through an API.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
 
         Examples:
@@ -3609,7 +3616,104 @@ class TradeableInstrument(Instrument):
                     raise SystemExit(f"The position is {quantity}, not {start}.")
                 print("The intraday position is back at", start)
             ```
+
+            Try the same round trip with a real market order, which UBI sends to the broker at once rather than as a limit following the book, and report the broker's refusal when it does not accept market orders from an API:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                try:
+                    opening = idea.buy_at_market_price(
+                        quantity=1,
+                        product="mis",
+                        as_marketable_limit=False,
+                    )
+                except exceptions.OrderRejectedError as error:
+                    print("The broker refused a real market order:", error)
+                    opening = None
+                if opening is not None:
+                    answers.append(opening)
+                    print("Opened:", opening["outcome"], opening["broker"])
+                    time.sleep(3)
+                    orders = idea.orders
+                    mine = orders[orders["order_id"] == opening["order_id"]]
+                    print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
+        synthetic = None
+        if not as_marketable_limit:
+            synthetic = {
+                "type": "simple",
+            }
         return self.place_order(
             transaction_type="buy",
             order_type="market",
@@ -3618,6 +3722,7 @@ class TradeableInstrument(Instrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            synthetic=synthetic,
         )
 
     def sell_at_market_price(
@@ -3627,10 +3732,13 @@ class TradeableInstrument(Instrument):
         validity: str | None = None,
         after_market: bool = False,
         tag: str | None = None,
+        as_marketable_limit: bool = True,
     ) -> dict:
         """Sells at whatever price the market is bidding.
 
         A market order takes the best price being bid and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
+
+        UBI's order engine does not send this to a broker as a market order. It sends a `limit` two ticks past the best bid, moves it after that price on every tick until it fills, and cancels whatever has not filled 30 seconds after it was placed, so the order cannot fill far from the price that was showing. UBI refuses the order with HTTP 409, and sends nothing, when nobody is bidding, no live quote has arrived or the quote is marked stale. An after-market order is always sent as a market order. Pass `as_marketable_limit=False` to send a real market order at once, which an instrument with no live quote needs, and use `tradingmachine.orders.marketable_limit.MarketableLimitOrder` to choose a different buffer or time. Some brokers refuse a market order sent through an API outright: on 2026-10-06 Flattrade answered `ALGO_CHK: MKT Order type not allowed for API order`, which raises `OrderRejectedError`.
 
         Args:
             quantity: The int quantity in underlying units, not lots.
@@ -3638,13 +3746,15 @@ class TradeableInstrument(Instrument):
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             after_market: A bool that is True to send the order as an after-market order.
             tag: A str of up to twenty letters and digits to label the order with, or None.
+            as_marketable_limit: A bool that is True to let UBI's order engine send the order as a limit that follows the other side of the book for up to 30 seconds, and False to send a market order to a broker at once.
 
         Returns:
             The dict `place_order` returns, holding `broker`, `order_id`, `outcome` and the rest.
 
         Raises:
             BadRequestError: A field is invalid.
-            OrderRejectedError: The broker refused the order.
+            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is bidding, no live quote has arrived or the quote is marked stale.
+            OrderRejectedError: The broker refused the order, which some brokers do for every real market order sent through an API.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
 
         Examples:
@@ -3820,7 +3930,104 @@ class TradeableInstrument(Instrument):
                     raise SystemExit(f"The position is {quantity}, not {start}.")
                 print("The intraday position is back at", start)
             ```
+
+            Try the same round trip with a real market order, which UBI sends to the broker at once rather than as a limit following the book, and report the broker's refusal when it does not accept market orders from an API:
+
+            ```python
+            import time
+
+            from tradingmachine.assets import equities
+            from tradingmachine.unified_broker_interface import exceptions
+
+            idea = equities.Equity(exchange="nse", symbol="IDEA")
+            start = 0
+            positions = idea.net_positions
+            if positions is not None:
+                intraday = positions[positions["product"] == "intraday"]
+                start = intraday["quantity"].sum()
+            answers = []
+            try:
+                try:
+                    opening = idea.sell_at_market_price(
+                        quantity=1,
+                        product="mis",
+                        as_marketable_limit=False,
+                    )
+                except exceptions.OrderRejectedError as error:
+                    print("The broker refused a real market order:", error)
+                    opening = None
+                if opening is not None:
+                    answers.append(opening)
+                    print("Opened:", opening["outcome"], opening["broker"])
+                    time.sleep(3)
+                    orders = idea.orders
+                    mine = orders[orders["order_id"] == opening["order_id"]]
+                    print(mine[["status", "filled_quantity", "average_price"]])
+            finally:
+                for answer in answers:
+                    for attempt in range(3):
+                        try:
+                            cancelled = idea.cancel_parent(answer["parent_id"])
+                        except exceptions.ConflictError:
+                            print("The order had already finished.")
+                            break
+                        except exceptions.UnifiedBrokerInterfaceError as error:
+                            print("Cancelling failed, trying again:", error)
+                            time.sleep(2)
+                            continue
+                        if cancelled["state"] == "cancelled":
+                            print("Cancelled what was still waiting.")
+                            break
+                        time.sleep(2)
+                quantity = None
+                for attempt in range(6):
+                    time.sleep(5)
+                    try:
+                        quantity = 0
+                        positions = idea.net_positions
+                        if positions is not None:
+                            intraday = positions[positions["product"] == "intraday"]
+                            quantity = intraday["quantity"].sum()
+                        if quantity == start:
+                            break
+                        difference = int(quantity - start)
+                        if difference > 0:
+                            price = round(idea.last_price * 0.99, 2)
+                        else:
+                            price = round(idea.last_price * 1.01, 2)
+                        if (difference > 0) == (quantity > 0):
+                            idea.reduce_position(
+                                quantity=abs(difference),
+                                product="mis",
+                                price=price,
+                            )
+                        elif difference > 0:
+                            idea.sell_at_limit_price(
+                                price=price,
+                                quantity=difference,
+                                product="mis",
+                                hold=False,
+                            )
+                        else:
+                            idea.buy_at_limit_price(
+                                price=price,
+                                quantity=-difference,
+                                product="mis",
+                                hold=False,
+                            )
+                    except exceptions.UnifiedBrokerInterfaceError as error:
+                        quantity = None
+                        print("Closing failed, trying again:", error)
+                if quantity != start:
+                    raise SystemExit(f"The position is {quantity}, not {start}.")
+                print("The intraday position is back at", start)
+            ```
         """
+        synthetic = None
+        if not as_marketable_limit:
+            synthetic = {
+                "type": "simple",
+            }
         return self.place_order(
             transaction_type="sell",
             order_type="market",
@@ -3829,6 +4036,7 @@ class TradeableInstrument(Instrument):
             validity=validity,
             after_market=after_market,
             tag=tag,
+            synthetic=synthetic,
         )
 
     def buy_at_limit_price(

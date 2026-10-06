@@ -1,6 +1,6 @@
 """The `parent_fill` quantity of a plan: what a `then` join's first plan has filled, scaled by a ratio.
 
-It is only for an order that is a `then` join's child, which UBI checks as `parent_fill_needs_then`. The child is resized at every fill of the first plan to `ratio` times what has filled, and with `whole_lots` the result is rounded to whole lots of the child's own instrument, so a size under one lot waits for more fills. This is how a hedge on another instrument follows an entry.
+It is only for an order that is a `then` join's child, which UBI checks as `parent_fill_needs_then`. The child is resized at every fill of the first plan to `ratio` times what has filled, and with `whole_lots` the result is rounded to whole lots of the child's own instrument, so a size under one lot waits for more fills and is cancelled once the first plan has finished. An order sized this way that names an instrument the first plan trades is refused with HTTP 400, because it would only trade back what was filled. This is how a hedge on another instrument follows an entry.
 
 Typical usage example:
 
@@ -36,7 +36,7 @@ class ParentFillQuantity(plan_part.PlanPart):
 
         Args:
             ratio: The float ratio above zero, such as 0.5 for half of what filled, or None for UBI's default of 1.
-            whole_lots: A bool that is True to round to whole lots of the order's own instrument, waiting for more fills while the size is under one lot.
+            whole_lots: A bool that is True to round to whole lots of the order's own instrument, waiting for more fills while the size is under one lot and cancelling the order once the first plan has finished.
 
         Raises:
             Nothing.

@@ -3,7 +3,7 @@
 Everything else in the library describes one instrument. An asset basket describes a group of them: a portfolio, a watchlist, an index, or what an exchange traded fund or a mutual fund holds. Every basket reads what it needs about all its members in one list request to UBI, and every basket can be analysed exactly like an instrument, from moving averages to the Sharpe ratio.
 
 !!! danger "Two members place real orders"
-    `Portfolio.place_orders` and `Portfolio.rebalance` send one real market order per instrument, in one request, with real money. The orders are placed in parallel and not as one unit, so some can be accepted while others are refused. Run them with `dry_run=True` first and read the table they return.
+    `Portfolio.place_orders` and `Portfolio.rebalance` send one real order per instrument, in one request, with real money. UBI sends each market order as a limit that follows the other side of the book and is cancelled after 30 seconds, so a member with an empty book or no fresh quote gets HTTP 409 in its row and nothing is sent for it; pass `as_marketable_limit=False` to send real market orders. The orders are placed in parallel and not as one unit, so some can be accepted while others are refused. Run them with `dry_run=True` first and read the table they return.
 
 ## The classes
 

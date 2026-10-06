@@ -1,6 +1,6 @@
 """The `using` join of a plan: an order split into the pieces its execution would send, each piece run as a whole plan of its own.
 
-The `order` must be an `OrderPart` with exactly one execution whose pieces are known in advance, `ladder`, `twap` or `front_loaded`, and a timed execution must give `over_minutes` rather than `until`. UBI makes one copy of the order per piece, writes `each_piece`'s presets and slot values onto it, and gives each copy its piece's share: a ladder's copies their rung's price, and a timed execution's copies their slice's turn. So `each_piece` naming the `bracket` preset gives every rung of a ladder its own bracket. `each_piece` takes no execution, a slot given in both is refused, though presets are joined, and with a ladder neither side takes a pricing. A using join is never resized, so it cannot be a `then` join's child.
+The `order` must be an `OrderPart` with exactly one execution whose pieces are known in advance, `ladder`, `twap` or `front_loaded`, and a timed execution must give `over_minutes` rather than `until`. UBI makes one copy of the order per piece, writes `each_piece`'s presets and slot values onto it, and gives each copy its piece's share: a ladder's copies their rung's price, and a timed execution's copies their slice's turn. So `each_piece` naming the `bracket` preset gives every rung of a ladder its own bracket. `each_piece` takes no execution, a slot given in both is refused, though presets are joined, a `quantity` in `each_piece` is refused with the rule `using_piece_quantity` because it would be split rather than given to each piece, a preset naming a type kept whole, such as a `grid`, is refused with the rule `using_piece_kept_whole` because it would ignore its piece's turn and price, and with a ladder neither side takes a pricing. A using join is never resized, so it cannot be a `then` join's child.
 
 Typical usage example:
 
@@ -38,7 +38,7 @@ class UsingPart(plan_part.PlanPart):
 
         Args:
             order: The plan_part.PlanPart to split, which must be an `OrderPart` with exactly one execution, a `LadderExecution`, a `TwapExecution` or a `FrontLoadedExecution`, and no `inner_execution`.
-            each_piece: The plan_part.PlanPart `OrderPart` holding the presets and slot values every piece is given; it takes no execution and must not repeat a slot `order` gives, though its presets are added after the order's.
+            each_piece: The plan_part.PlanPart `OrderPart` holding the presets and slot values every piece is given; it takes no execution and no `quantity`, names no type kept whole, and must not repeat a slot `order` gives, though its presets are added after the order's.
 
         Raises:
             Nothing.

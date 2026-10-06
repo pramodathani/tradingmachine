@@ -9,3 +9,7 @@ It checks none of its settings before sending, following the rule that UBI holds
 UBI reads `then` as an order body without a quantity and lays it over the whole template (`body.update(described)` in `oto.py`), then sets the quantity to what the first order filled and drops the tag. So the class does not take a `then` dict; it takes the six fields a second order sensibly changes as `then_transaction_type`, `then_order_type`, `then_price`, `then_trigger_price`, `then_product` and `then_validity`, and builds the dict itself. The side and the order type are required, which is a choice made here rather than UBI's rule: a `then` that changed neither would repeat the first order, which is never what an OTO is for.
 
 Because the template is laid underneath, a template `price` is carried into a `then_order_type` of `market` and UBI refuses the market order that carries a price. UBI validates the child order before it sends the first one, so a dry run shows the refusal without placing anything. The docstring says so.
+
+## UBI's fixes of 2026-10-05, recorded on 2026-10-06
+
+UBI's commit `15380c1` made a refused order in a Then join's child cancel the rest of the first plan and end the parent `failed` rather than `completed`, which applies to the second order of a one-triggers-other order, so the docstrings now say so.

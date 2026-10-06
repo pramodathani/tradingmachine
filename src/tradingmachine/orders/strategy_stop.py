@@ -1,6 +1,6 @@
 """The `strategy_stop` synthetic order type: a basket whose every leg is closed when the whole strategy's profit or loss crosses a line.
 
-It places its candidates the way a basket does, then watches their combined profit and loss and closes every leg when it falls to `loss_limit` or rises to `profit_target`. Give at least one of the two. UBI never resolves references for this type. The first candidate's instrument anchors the request.
+It places its candidates the way a basket does, then marks every leg to its last traded price on each tick and closes every leg when the total falls to `loss_limit` or below or rises to `profit_target` or above. Give at least one of the two. A quote marked stale marks nothing, so the stop waits for a live one. When the stop acts, the basket's orders still resting are cancelled, and whatever they fill before the cancel lands is closed too, so the parent completes only once nothing of the basket rests and every close has finished. A close the broker refuses is not sent again, and the parent ends `failed`, because that leg is left open. UBI never resolves references for this type. The first candidate's instrument anchors the request.
 
 Typical usage example:
 
@@ -26,15 +26,15 @@ from tradingmachine.orders import synthetic_order
 class StrategyStopOrder(synthetic_order.SyntheticOrder):
     """A basket whose every leg is closed when the whole strategy's profit or loss crosses a line.
 
-    It places its candidates the way a basket does, then watches their combined profit and loss and closes every leg when it falls to `loss_limit` or rises to `profit_target`. Give at least one of the two. UBI never resolves references for this type. The first candidate's instrument anchors the request.
+    It places its candidates the way a basket does, then marks every leg to its last traded price on each tick and closes every leg when the total falls to `loss_limit` or below or rises to `profit_target` or above. Give at least one of the two. A quote marked stale marks nothing, so the stop waits for a live one. When the stop acts, the basket's orders still resting are cancelled, and whatever they fill before the cancel lands is closed too, so the parent completes only once nothing of the basket rests and every close has finished. A close the broker refuses is not sent again, and the parent ends `failed`, because that leg is left open. UBI never resolves references for this type. The first candidate's instrument anchors the request.
 
     The order template's attributes are described on `SyntheticOrder`, where `instrument` is the first candidate's.
 
     Attributes:
         candidates: The list of order_candidate.OrderCandidate, one per instrument.
         hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs.
-        loss_limit: The float loss in rupees for the whole strategy at which every leg is closed, below zero, or None.
-        profit_target: The float profit in rupees for the whole strategy at which every leg is closed, above zero, or None.
+        loss_limit: The float loss in rupees for the whole strategy at or below which every leg is closed, below zero, or None.
+        profit_target: The float profit in rupees for the whole strategy at or above which every leg is closed, above zero, or None.
     """
 
     SYNTHETIC_TYPE = "strategy_stop"
@@ -77,8 +77,8 @@ class StrategyStopOrder(synthetic_order.SyntheticOrder):
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
-            loss_limit: The float loss in rupees for the whole strategy at which every leg is closed, below zero, or None.
-            profit_target: The float profit in rupees for the whole strategy at which every leg is closed, above zero, or None.
+            loss_limit: The float loss in rupees for the whole strategy at or below which every leg is closed, below zero, or None.
+            profit_target: The float profit in rupees for the whole strategy at or above which every leg is closed, above zero, or None.
             hedge_benefit: A bool that is True to have UBI price options and futures on one underlying and expiry together, as a hedged whole, when it checks that the broker can afford the legs, rather than adding every leg's margin up.
 
         Raises:

@@ -2,7 +2,7 @@
 
 A plan combines the existing synthetic order types and their building blocks in one order. Its orders can wait for a trigger, protect or close a position, be priced and capped, be sent in pieces over time, end on their own and trade other instruments, set either by presets named after the existing types or by slot values, and they are joined with `ThenPart`, `EitherPart`, `TogetherPart`, `SequencePart`, `RepeatPart` and `UsingPart`. The parts live in `tradingmachine.orders.plan_parts`, and the order template, the instrument, side, quantity, product and validity, is the same as every other type's.
 
-UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the path of the part it is in. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`. UBI holds each order that would rest at the broker at a fixed limit price in its virtual order book until the other side of the book reaches it, while UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` switch is on and the plan does not say otherwise; follow-on orders in a Then join's child, such as exits, and orders on the `protect` side rest at the broker unless their own `OrderPart` asks to be held. When a plan is refused after some of its orders have reached a broker, the refused order is listed in the answer's `legs` with its reason and the others stay watched.
+UBI checks the whole plan before recording or sending anything and refuses a plan with any problem with HTTP 400, listing every problem with the `path` where the caller wrote the value it is about, its `rule` and a `message`. A problem inside something UBI builds from what the caller wrote, a preset that stands for a join such as a `bracket`, a repeat's copies or a using's pieces, also gives `part`, the part as it runs: a bad stop price in a bracket preset is reported at `root.presets.0` with a `part` such as `root.each_fill.children.0`, and the message may still name the setting the preset becomes, such as `trigger_price` for the bracket's `stop_price`. A dry run makes the checks placing makes, so it can be refused with HTTP 409 and the rule `protect_needs_position`, or with HTTP 400 for a price off the tick, just as placing would. A plan that places nothing at once answers HTTP 202 with an `outcome` of `armed`. UBI holds each order that would rest at the broker at a fixed limit price in its virtual order book until the other side of the book reaches it, while UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` switch is on and the plan does not say otherwise; follow-on orders in a Then join's child, such as exits, and orders on the `protect` side rest at the broker unless their own `OrderPart` asks to be held. When a plan is refused after some of its orders have reached a broker, the refused order is listed in the answer's `legs` with its reason and the others stay watched.
 
 Typical usage example:
 
@@ -36,6 +36,8 @@ class PlanOrder(synthetic_order.SyntheticOrder):
     """An order described as a tree of parts, which can combine the other synthetic order types.
 
     A plan combines the existing synthetic order types and their building blocks in one order. Its orders can wait for a trigger, protect or close a position, be priced and capped, be sent in pieces over time, end on their own and trade other instruments, and they are joined with `ThenPart`, `EitherPart`, `TogetherPart`, `SequencePart`, `RepeatPart` and `UsingPart` from `tradingmachine.orders.plan_parts`. An order inside a join is sized by the join, and only the plan's main order carries the template's `tag`.
+
+    A plan that traded but whose order meant to follow the trade was refused, such as a hedge, a spread's second leg or a strategy stop's close, ends `failed` rather than `completed`, because a position may be left without it, and the parent's message names the part.
 
     After `place()`, each part of the plan is named by its path, such as `root.first` for a bracket's entry or `root.each_fill.children.0` for its stop. `parts` lists them, and `cancel_part` and `modify_part` act on one part while the rest of the plan carries on.
 
@@ -89,7 +91,7 @@ class PlanOrder(synthetic_order.SyntheticOrder):
             closes_position: A bool that is True when every order this plan sends closes a position, so it may use the share of a broker's daily order cap kept for exits.
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order of the plan that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to follow UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_HOLD_LIMITS` switch. An `OrderPart`'s own `hold_limits` decides for that order.
-            dry_run: A bool that is True to have UBI build the first broker request and return it, with the plan as it would run, without recording or sending anything.
+            dry_run: A bool that is True to have UBI build the first broker request and return it, with the plan as it would run, without recording or sending anything. UBI makes the checks placing makes, so a dry run is refused with HTTP 409 or 400 wherever placing would be, and in the plan each order shows `own_values`, the values it gives over the template's such as another `instrument_id` or `transaction_type`, its own side, and where its quantity comes from.
 
         Raises:
             Nothing.
@@ -192,7 +194,9 @@ class PlanOrder(synthetic_order.SyntheticOrder):
     def parts(self) -> pd.DataFrame | None:
         """The parts of the placed plan as UBI's order engine holds them now, one row per part, read from UBI on every access.
 
-        Each row has the part's `path`, such as `root.each_fill.children.0`, and the fields of UBI's record for it: `state`, which is `pending`, `waiting`, `working` or `done`, and, when UBI has set them, `reason`, `target`, `memory`, `fired_at` and others. The rows are sorted by path.
+        Each row has the part's `path`, such as `root.each_fill.children.0`, and the fields of UBI's record for it: `state`, which is `pending`, `waiting`, `working` or `done`, and, when UBI has set them, `reason`, `target`, `memory`, `fired_at` and others. A done part's `reason` is `filled`, `partly_filled`, `refused` or `cancelled`, or `expired` when a lifetime or a pre-open ended it, `closed` when a lifetime's end closed what it traded, and `nothing_held` when a close found nothing to close. The rows are sorted by path.
+
+        The parent ends once every part is done: `failed` when something traded but an order meant to follow it was refused, `completed` when anything traded, `rejected` when a broker refused an order and nothing traded, and `cancelled` otherwise. A parent cancelled whole with `cancel()` ends `cancelled` with every part marked done.
 
         Raises:
             ValueError: The order has not been placed, so there is no parent to read.
@@ -281,6 +285,8 @@ class PlanOrder(synthetic_order.SyntheticOrder):
         """Cancels one part of the placed plan, leaving the rest of it running.
 
         A part whose turn has not come is never sent, a part waiting on its trigger is ended at once, and a part that has sent orders sends no more pieces and has each of its resting orders cancelled. The plan then reacts as it does to that part finishing, so a bracket whose entry is cancelled before it fills drops its exits.
+
+        Cancelling one of the plan's broker orders by its `order_id` through `TradeableInstrument.cancel_order` instead cancels that order alone, and the plan does not send it again: for an order sent whole, its unfilled quantity comes off what its part trades, so a later fill of the entry is still protected for the new quantity only, and a bracket's stop cancelled this way stays cancelled.
 
         Args:
             part: The str path of the part, such as `root.each_fill.children.0`, as `parts` lists it.

@@ -11,3 +11,7 @@ The class has no instrument argument of its own. UBI's route runs `PlaceOrderReq
 ## `hedge_benefit`, added on 2026-10-02
 
 UBI added the optional boolean `hedge_benefit` to `basket` on 2026-09-30, in its commit `38de0f3`, when the lowest-cost broker selector began passing over brokers that cannot afford an order. With it, UBI prices options and futures on one underlying and expiry together as a hedged whole when it checks that a broker can afford the basket, so a hedged position such as an iron condor is not refused for margin it would never need. Without it, every leg's margin is added up. The class sends the field only when it is True, as the base class does for `reduce_only`, so UBI's default applies otherwise.
+
+## UBI's fixes of 2026-10-05, recorded on 2026-10-06
+
+UBI's commit `15380c1` changed what happens when a leg is refused after another leg has already gone to a broker. A refusal with HTTP 503, such as a contract size the brokers disagree on, used to escape, so the answer said nothing was sent, the parent was stored `rejected` and the live leg was left with nobody watching it. Any refusal beside live orders now ends only the refused leg, and the answer is HTTP 207 with the placed legs still watched.

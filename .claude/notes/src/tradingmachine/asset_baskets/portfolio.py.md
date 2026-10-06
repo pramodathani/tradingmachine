@@ -21,3 +21,7 @@ The saved rule is that order logic belongs in UBI. Rebalancing to target weights
 ## Not yet tested with real orders
 
 The dry run of `place_orders` for a five-member portfolio built by `Index.to_portfolio` returned an entry per order with an `intent_id` and the broker's request. The real-order test the plan calls for, one unit each of two cheap shares during market hours, has not been run, because the work was done after the market closed.
+
+## Marketable limits, added on 2026-10-06
+
+The list orders `_send_orders` builds are plain market bodies, which UBI began running as `marketable_limit` orders on 2026-10-06. A member whose book has an empty other side, or no fresh quote, now gets HTTP 409 in its row with nothing sent, and a member that has not filled within 30 seconds is left part filled, so a rebalance can end part done. `place_orders` and `rebalance` gained `as_marketable_limit`, True by default to follow UBI; False adds `synthetic={"type": "simple"}` to every body, which UBI's list route passes through to the engine like the single route. The basket's own `basket` synthetic type was still not used, for the reasons above.

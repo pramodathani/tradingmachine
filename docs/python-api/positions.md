@@ -212,7 +212,7 @@ The same exceptions as [`net_positions`](#net_positions).
 
 ## Changing a position
 
-The four members below place orders. `price` is optional on all of them: given, it sends a limit order at that price, and left out, it sends a market order, which is what closing a position usually means.
+The four members below place orders. `price` is optional on all of them: given, it sends a limit order at that price, and left out, it sends a market order, which is what closing a position usually means. The three members that close a position send that market order with `synthetic={"type": "simple"}`, so the broker receives a real market order. `add_to_position` sends it through `buy_at_market_price` or `sell_at_market_price`, which UBI runs as a limit following the other side of the book for 30 seconds, refused with HTTP 409 when that side is empty.
 
 ### add_to_position
 
@@ -220,7 +220,7 @@ The four members below place orders. `price` is optional on all of them: given, 
 
 This method makes an existing position bigger, or opens a new one. It reads the positions, and the direction follows the one you hold: a long position is added to by buying and a short one by selling. `transaction_type` is needed only when nothing is held yet, and then `product` is needed too, because neither can be read from a position that does not exist. A `transaction_type` that contradicts the position held raises `PositionError` and points you at `reduce_position`, rather than silently reducing the position.
 
-It sends a plain market or limit order through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price) and its three siblings. A limit order sent this way is held by UBI's order engine until the book reaches its price, as [Price wrappers](price-wrappers.md#market-and-limit) explains.
+It sends a plain market or limit order through [`buy_at_market_price`](price-wrappers.md#buy_at_market_price) and its three siblings. A limit order sent this way is held by UBI's order engine until the book reaches its price, and a market order is sent as a `marketable_limit`, as [Price wrappers](price-wrappers.md#market-and-limit) explains.
 
 #### Parameters
 

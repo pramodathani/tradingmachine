@@ -11,3 +11,7 @@ The class has no instrument argument of its own. UBI's route runs `PlaceOrderReq
 ## `hedge_benefit`, added on 2026-10-02
 
 UBI's `strategy_stop` places its candidates the way a `basket` does and inherits the basket's optional `hedge_benefit`, which prices options and futures on one underlying and expiry together when UBI checks that the broker can afford the legs. The reasoning is in the note for `basket.py`. The class sends the field only when it is True.
+
+## UBI's fixes of 2026-10-05, recorded on 2026-10-06
+
+UBI's commit `864e07e` fixed three faults the docstrings now account for. The stop acted on a quote marked stale; stale quotes now mark nothing. It sized each close to what had filled at the moment it acted and cancelled the rest of the basket only after a close filled, so a leg that filled later stayed open while the parent read `completed`; it now cancels the basket's resting orders at once and closes whatever fills before the cancel lands. A refused close is not sent again and ends the parent `failed`. UBI's documentation also changed "below" and "above" to "to ... or below" and "to ... or above", which the `loss_limit` and `profit_target` arguments now repeat.

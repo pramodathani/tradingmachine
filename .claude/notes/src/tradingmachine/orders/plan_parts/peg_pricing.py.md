@@ -20,3 +20,7 @@ Every key is optional, and an empty `{"peg": {}}` is a valid peg to the own touc
 - `within_body_price` reads the *template's* limit price, the `price` of the `PlanOrder`, not a `FixedPricing` in the same order, because an order holds only one pricing setter and a second is refused with `two_setters`. The example `one_shot_bid_within_a_limit.py` therefore builds a `PlanOrder` (without placing it) so the template's price is real.
 - `follows: false` with `within_body_price` is how UBI's `accumulation` preset prices each purchase.
 - A pegged order may sit inside a `TwapExecution` and similar executions, and UBI moves every piece still resting.
+
+## on_empty_book, added on 2026-10-06
+
+UBI's commit `165a2ad` gave the peg the setting `on_empty_book`, `wait` by default or `refuse`. With `refuse`, a peg that cannot be priced when it is first sent, because nobody is on the side its reference reads, no live quote has arrived or the quote is marked stale, ends its part as refused, and a plan with nothing else placed answers HTTP 409. UBI built it for its `marketable_limit` preset. The attribute is sent only when it is not None, like `reference` and `follows`, and its value is not checked here because UBI refuses any other value with HTTP 400.

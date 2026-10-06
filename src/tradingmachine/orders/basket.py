@@ -1,6 +1,6 @@
 """The `basket` synthetic order type: orders on several instruments placed in one request, each reported on its own.
 
-Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and the same instrument may not appear twice.
+Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and a leg UBI refuses after another was placed, even for a reason that might pass later such as a contract size the brokers disagree on, answers HTTP 207 with the placed legs still watched. The same instrument may not appear twice.
 
 Typical usage example:
 
@@ -25,7 +25,7 @@ from tradingmachine.orders import synthetic_order
 class BasketOrder(synthetic_order.SyntheticOrder):
     """Orders on several instruments placed in one request, each reported on its own.
 
-    Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and the same instrument may not appear twice.
+    Each candidate is one order on its own instrument, and the template's fields are the defaults each candidate may override. UBI places every candidate and does nothing afterwards. It never resolves price or quantity references for a basket, so give real numbers. The first candidate's instrument anchors the request, and a dry run prepares only that first candidate. A refused leg does not stop the legs after it, and a leg UBI refuses after another was placed, even for a reason that might pass later such as a contract size the brokers disagree on, answers HTTP 207 with the placed legs still watched. The same instrument may not appear twice.
 
     The order template's attributes are described on `SyntheticOrder`, where `instrument` is the first candidate's.
 

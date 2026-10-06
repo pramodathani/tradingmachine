@@ -1,6 +1,6 @@
 """The `position` quantity of a plan: the size of the position held when the order fires, read at that moment.
 
-An order with this quantity closes a position rather than trading a number named in advance, so its side must be `close`, and a `close` side needs this quantity. UBI first cancels every order resting on the instruments being closed, unless `cancel_resting_first` is False, so a stop or target left live cannot reopen the position, and then sends each broker's share to the broker that holds it, as a limit two ticks past the other side's touch. Such an order therefore takes no pricing or execution of its own. Nothing held ends the plan `completed` without an order.
+An order with this quantity closes a position rather than trading a number named in advance, so its side must be `close`, and a `close` side needs this quantity. UBI first cancels every order resting on the instruments being closed, unless `cancel_resting_first` is False, so a stop or target left live cannot reopen the position, and then sends each broker's share to the broker that holds it, as a limit two ticks past the other side's touch. Such an order therefore takes no pricing or execution of its own. Nothing held ends the part with the reason `nothing_held` and the plan `completed` without an order.
 
 Typical usage example:
 

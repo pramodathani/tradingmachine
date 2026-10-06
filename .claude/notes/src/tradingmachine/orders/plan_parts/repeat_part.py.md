@@ -26,3 +26,7 @@ Exactly one of `every_minutes` and `every_trading_day_at` must be given; both or
 - A repeat join cannot be a `then` join's child (`join_not_sized`).
 
 `until` is typed as a `PlanPart` because conditions are `PlanPart` objects in this library, but only a condition, such as `PriceCrosses`, `TimeAt` or `AccountCondition`, is accepted by UBI there.
+
+## A repeat's child must be a plain order (2026-10-06)
+
+UBI's commit `b507de0` of 2026-10-05 added the rule `repeat_needs_order`. Before it, a repeat whose child named a preset that stands for a join, such as a `bracket`, crashed UBI's plan reader and answered HTTP 503 with a `parent_id` for a parent that was never stored, and a child naming a type kept whole, such as a `grid`, ignored the schedule and placed every copy at once. Both are now refused when the plan is read. Since UBI's commit `0ec2a34` of the same day, a problem in a copy is reported at the repeat's `child`, where the caller wrote it, with `part` naming the copy as it runs, rather than at a path such as `root.children.0` that the caller never wrote.
