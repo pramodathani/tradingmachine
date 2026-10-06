@@ -225,7 +225,7 @@ A `quantity_reference` describes a quantity instead of stating it, and UBI's eng
 
 ## Synthetic order types
 
-A `synthetic` dict makes an order one of the fifty-three order types UBI's engine runs. Its `type` names the kind. The classes in `tradingmachine.orders` build the dict, and their module names spell out UBI's abbreviations; the table below maps each type to its class.
+A `synthetic` dict makes an order one of the fifty-four order types UBI's engine runs. Its `type` names the kind. The classes in `tradingmachine.orders` build the dict, and their module names spell out UBI's abbreviations; the table below maps each type to its class.
 
 | `type` | Class | `type` | Class |
 |---|---|---|---|
@@ -255,7 +255,7 @@ A `synthetic` dict makes an order one of the fifty-three order types UBI's engin
 | `stepped_stop` | `SteppedStopOrder` | `close_on_trigger` | `CloseOnTriggerOrder` |
 | `stop_and_reverse` | `StopAndReverseOrder` | `attached_hedge` | `AttachedHedgeOrder` |
 | `scale_with_profit_taker` | `ScaleWithProfitTakerOrder` | `two_sided_quote` | `TwoSidedQuoteOrder` |
-| `account_conditional` | `AccountConditionalOrder` | | |
+| `account_conditional` | `AccountConditionalOrder` | `marketable_limit` | `MarketableLimitOrder` |
 
 Note that `vwap` is both a price reference kind and a synthetic type, and the two mean different things: the first prices one order at the day's average, and the second works an order over time. [Synthetic orders](synthetic-orders.md) documents each class.
 

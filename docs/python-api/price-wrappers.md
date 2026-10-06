@@ -11,8 +11,8 @@ Every member on this page carries the <span class="member writes">places orders<
 
 | Member | Side | Where the price comes from | What it sends | Character |
 |---|---|---|---|---|
-| [`buy_at_market_price`](#buy_at_market_price) | buy | the market decides | `market`, no reference | fills now, price unknown |
-| [`sell_at_market_price`](#sell_at_market_price) | sell | the market decides | `market`, no reference | fills now, price unknown |
+| [`buy_at_market_price`](#buy_at_market_price) | buy | the best offer, followed for 30 seconds | `market`, which UBI runs as a `marketable_limit` | fills now, at most two ticks past the offer |
+| [`sell_at_market_price`](#sell_at_market_price) | sell | the best bid, followed for 30 seconds | `market`, which UBI runs as a `marketable_limit` | fills now, at most two ticks past the bid |
 | [`buy_at_limit_price`](#buy_at_limit_price) | buy | the `price` you give | `limit` with `price` | your price or better |
 | [`sell_at_limit_price`](#sell_at_limit_price) | sell | the `price` you give | `limit` with `price` | your price or better |
 | [`buy_at_best_bid_price`](#buy_at_best_bid_price) | buy | the best bid | `limit` with `{"kind": "bid_level", "level": 1}` | patient, joins the queue |
@@ -152,7 +152,7 @@ The wrappers have no `dry_run` argument. To preview one, send the same order thr
 
 ## Common parameters
 
-Every wrapper takes the same five parameters, in the same positions, so you can switch from one to another by changing only its name. The two limit wrappers put `price` first and add `hold` at the end, and the two marketable wrappers add `buffer_percent` at the end.
+Every wrapper takes the same five parameters, in the same positions, so you can switch from one to another by changing only its name. The two limit wrappers put `price` first and add `hold` at the end, the two market wrappers add `as_marketable_limit` at the end, and the two marketable wrappers add `buffer_percent` at the end.
 
 | Name | Type | Required | Default | Description |
 |---|---|:---:|---|---|
@@ -163,6 +163,7 @@ Every wrapper takes the same five parameters, in the same positions, so you can 
 | `after_market` | `bool` | no | `False` | `True` sends an after-market order. |
 | `tag` | `str` or `None` | no | `None` | A label of up to twenty letters and digits. |
 | `hold` | `bool` | no | `True` | For the limit pair only: `True` lets UBI's order engine hold a `day` order until the other side of the book reaches the price, and `False` sends it to a broker at once. |
+| `as_marketable_limit` | `bool` | no | `True` | For the market pair only: `True` lets UBI's order engine send the order as a limit that follows the other side of the book for up to 30 seconds, and `False` sends a real market order to a broker at once. |
 | `buffer_percent` | `float` or `None` | no | `None` | For the marketable pair only: how far past the best price to set the cap, such as `0.5` for half a per cent. A negative number moves it the other way. |
 
 Anything beyond these, such as a disclosed quantity, a stop, or one of the offsets below, is a reason to call `place_order` directly.
@@ -249,7 +250,9 @@ The table below shows how each wrapper would fare against that book, by UBI's ru
 | the `second` to `fifth` `..._offer_price` wrappers | Refused with 503, because there is only one offer. |
 | `buy_at_last_price`, `sell_at_last_price` | Priced at 1226.0. |
 | `buy_at_volume_weighted_average_price`, `sell_at_volume_weighted_average_price` | Priced at 1220.4 for a buy and 1220.5 for a sell, after rounding 1220.44 to the 0.1 tick towards the patient side. |
-| `buy_at_market_price`, `sell_at_market_price`, the limit pair | Not affected, because they send no reference. |
+| `buy_at_market_price` | Sent as a limit two ticks above 1226.0, because UBI runs it as a `marketable_limit`. |
+| `sell_at_market_price` | Refused with 409 rather than 503, because nobody is bidding and the `marketable_limit` it runs as refuses an empty side. `as_marketable_limit=False` sends a real market order instead. |
+| the limit pair | Not affected, because they send no reference. |
 
 !!! tip "Ask for a shallower level, or state the price"
     When a 503 names the book's depth, ask for a shallower level or a kind that needs less of the book, such as `last`. When the market is closed, a limit order with `after_market=True` is the order that will survive until the next session, because UBI sends an after-market order to the broker at once rather than holding it in its engine.
@@ -259,6 +262,8 @@ The table below shows how each wrapper would fare against that book, by UBI's ru
 These four send a plain order with no reference. They are the ones the position and holdings methods use.
 
 UBI's order engine holds a `day` limit order from the two limit wrappers rather than resting it at a broker, and sends it only once the other side of the book reaches the price, so an order that never fills costs no order messages. Until then the answer has an `outcome` of `armed` and a `parent_id` instead of an `order_id`, the order is in [`parents`](orders.md#parents) rather than in `orders`, and it is changed with [`modify_order(parent_id=...)`](orders.md#modify_order) and cancelled with [`cancel_parent`](orders.md#cancel_parent). Pass `hold=False` to send the order to a broker at once, which an instrument with no live quote needs, because the engine would otherwise hold its order all day without sending it. The holdings methods of `MutualFund` and `FixedIncome` always pass it; [Order engine](../architecture/order-engine.md#when-to-send-a-limit-order-at-once) lists when else to.
+
+The engine does not pass a market order from the two market wrappers straight to a broker either. Since 2026-10-06 it runs it as a `marketable_limit` order, a `limit` two ticks past the other side's best price that follows that price until it fills, and cancels whatever has not filled after 30 seconds. An order that cannot be priced, because the other side of the book is empty or the quote is missing or stale, raises `ConflictError` with nothing sent. Pass `as_marketable_limit=False` for a real market order, which the holdings methods of `MutualFund` and `FixedIncome` also always do, and use [`MarketableLimitOrder`](synthetic-orders.md) to choose a different buffer or time.
 
 The example below buys ten shares at market for an intraday position, and places a limit sell of the same ten at 1250 rupees.
 
@@ -271,19 +276,23 @@ The example below buys ten shares at market for an intraday position, and places
 
 ### buy_at_market_price
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `buy_at_market_price(quantity, product, validity=None, after_market=False, tag=None)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `buy_at_market_price(quantity, product, validity=None, after_market=False, tag=None, as_marketable_limit=True)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
 
 Buys at whatever price the market is asking. A market order takes the best price on offer and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
 
-It sends a `market` order with no price and no reference, and UBI's engine sends it at once.
+It sends a `market` order with no price and no reference. Since 2026-10-06 UBI's order engine does not pass that to a broker as a market order. It runs it as a [`marketable_limit`](synthetic-orders.md) order instead: a `limit` two ticks past the best offer, moved after the offer on every tick until it fills, with whatever has not filled cancelled 30 seconds after it was placed. So the order cannot fill far from the price that was showing, but it can end part filled, and `orders` shows what happened.
+
+UBI refuses the order with HTTP 409, which raises `ConflictError`, and sends nothing, when nobody is offering, no live quote has arrived or the quote is marked stale. An after-market order is always sent as a market order. `as_marketable_limit=False` sends `synthetic={"type": "simple"}`, which makes the broker receive a real market order at once; an instrument with no live quote, such as a mutual fund or a cash bond, needs it. Some brokers refuse a market order sent through an API outright: on 2026-10-06 Flattrade answered `ALGO_CHK: MKT Order type not allowed for API order`, which raises `OrderRejectedError`.
 
 ### sell_at_market_price
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `sell_at_market_price(quantity, product, validity=None, after_market=False, tag=None)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `sell_at_market_price(quantity, product, validity=None, after_market=False, tag=None, as_marketable_limit=True)`<span class="route"><span class="method post">POST</span> `/api/orders/place`</span></div>
 
 Sells at whatever price the market is bidding. A market order takes the best price being bid and fills straight away while the market is open. The price is therefore not known before the order is sent, and in a thin book it can be a good deal worse than the last traded price.
 
-It sends a `market` order with no price and no reference, and UBI's engine sends it at once.
+It sends a `market` order with no price and no reference. Since 2026-10-06 UBI's order engine does not pass that to a broker as a market order. It runs it as a [`marketable_limit`](synthetic-orders.md) order instead: a `limit` two ticks past the best bid, moved after the bid on every tick until it fills, with whatever has not filled cancelled 30 seconds after it was placed. So the order cannot fill far from the price that was showing, but it can end part filled, and `orders` shows what happened.
+
+UBI refuses the order with HTTP 409, which raises `ConflictError`, and sends nothing, when nobody is bidding, no live quote has arrived or the quote is marked stale. An after-market order is always sent as a market order. `as_marketable_limit=False` sends `synthetic={"type": "simple"}`, which makes the broker receive a real market order at once; an instrument with no live quote, such as a mutual fund or a cash bond, needs it. Some brokers refuse a market order sent through an API outright: on 2026-10-06 Flattrade answered `ALGO_CHK: MKT Order type not allowed for API order`, which raises `OrderRejectedError`.
 
 ### buy_at_limit_price
 
@@ -408,6 +417,8 @@ It sends a `limit` order with no price and `price_reference={"kind": "last"}`.
 ## Marketable limits
 
 A marketable limit is what a market order has become in India. Brokers convert an API market order into a limit order with price protection, and some refuse market orders outright, so these two state the cap themselves: the order fills at once up to the price on the other side of the book and never beyond it. `buffer_percent` moves the cap further to reach deeper into the book, and `validity="ioc"` cancels whatever cannot fill at once.
+
+UBI now does something similar with every plain market order, as [`buy_at_market_price`](#buy_at_market_price) describes, but the two differ. A marketable limit from this pair is priced once, when it is sent, and then rests or is cancelled as its validity says. A market order run as a `marketable_limit` is priced in ticks rather than per cent, follows the other side of the book until it fills, and is cancelled after 30 seconds.
 
 The example below buys up to 100 units at no more than half a per cent above the best offer, and cancels the rest.
 

@@ -74,7 +74,8 @@ UBI decides which orders are held by the rule in the table below.
 | `limit` with `after_market=True` | No, sent at once, because the broker queues it for the next session |
 | `limit` with `synthetic={"type": "simple"}`, which `hold=False` sends | No, sent at once |
 | `limit` with `ioc` validity | No, sent at once |
-| `market`, `sl`, `sl-m`, or a `limit` priced only by a `price_reference` | No, sent at once |
+| `market` | No, but sent as a marketable limit, as [the next section](#market-orders-are-sent-as-marketable-limits) describes |
+| `sl`, `sl-m`, or a `limit` priced only by a `price_reference` | No, sent at once |
 | Any order naming another `synthetic` type | Run as that type |
 
 A held order changes what your program sees, in the four ways listed below.
@@ -96,6 +97,32 @@ A held order is sent only when a live quote shows the other side reaching its pr
 For any other order, pass `hold=False` to a limit wrapper, or `synthetic={"type": "simple"}` to `place_order`, whenever the order must rest at the exchange straight away.
 
 An after-market limit order needs no `hold=False`. UBI has sent every after-market order to the broker at once since 2026-09-27, because the broker queues it for the next session and no live quote would arrive to release a held one. A live test that evening placed after-market limit orders through `buy_at_limit_price`, `sell_at_limit_price`, `add_to_holdings` and `reduce_holdings`, and every one reached a broker rather than being held.
+
+## Market orders are sent as marketable limits
+
+Since 2026-10-06 the engine does not send a plain market order to a broker as a market order either. It runs it as a `marketable_limit` order: a `limit` two ticks past the other side's best price, which for a buy is the best offer, so it trades at once against what rests there but cannot fill far from the price that was showing. On every later tick the engine moves the limit after that price, through its repricing throttle, and 30 seconds after the order was placed it cancels whatever has not filled. The parent then ends `completed` with what filled, or `cancelled` when nothing did.
+
+The engine refuses such an order with HTTP 409, which the library raises as `ConflictError`, and sends nothing, when it cannot be priced as it arrives. The table below lists the four cases and UBI's messages.
+
+| Book when the order arrives | UBI's `status_message` |
+|---|---|
+| A buy, and nobody is offering | `nobody is offering this instrument, so the BUY could not be priced and nothing was sent` |
+| A sell, and nobody is bidding | `nobody is bidding for this instrument, so the SELL could not be priced and nothing was sent` |
+| No live quote yet | `no live quote has arrived for this instrument, so the <side> could not be priced and nothing was sent` |
+| The quote is marked stale | `the live quote for this instrument is marked stale, so the <side> could not be priced and nothing was sent` |
+
+Three kinds of market order are still sent as market orders. An after-market order is one, because no live book exists to price it from. An order that names any `synthetic` type is another, `simple` included, which is how `reduce_position`, `liquidate_position`, `liquidate_all_positions` and `Account.flatten` keep their closing orders as real market orders. The third is every market order while UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MARKET_AS_LIMIT` switch is off; it is on by default.
+
+The table below lists the members that ask for a real market order on purpose.
+
+| Member | How it asks | Why |
+|---|---|---|
+| `buy_at_market_price`, `sell_at_market_price` | `as_marketable_limit=False` | Your choice, such as for an instrument nobody quotes |
+| `Portfolio.place_orders`, `Portfolio.rebalance` | `as_marketable_limit=False` | Your choice, for every member at once |
+| `MutualFund` and `FixedIncome` holdings methods without a price | always | Nothing quotes them, so a marketable limit would always be refused |
+| `reduce_position`, `liquidate_position`, `liquidate_all_positions` without a price | always, through `synthetic={"type": "simple"}` | They already named a type, so UBI leaves them alone |
+
+Each move of the resting limit is a modification, which counts against the broker's daily order messages like a placement. UBI allows each order one move a second by default, so one order can send about thirty modifications before it is cancelled. To choose a different buffer or time for one order, use [`MarketableLimitOrder`](../python-api/synthetic-orders.md). A dry run still shows the request as a market order, and adds the plan it would run as.
 
 ## Parents
 
