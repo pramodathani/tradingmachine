@@ -1,6 +1,6 @@
 """The `marketable` pricing rule of a plan: a limit a few ticks past the other side of the book.
 
-UBI reads the opposite touch when it sends the order, the best offer for a buy and the best bid for a sell, and sets the limit `buffer_ticks` past it, so the order trades at once like a market order but cannot fill far from the book. With no book to price against, the order waits for the next tick.
+UBI reads the opposite touch when it sends the order, the best offer for a buy and the best bid for a sell, and sets the limit `buffer_ticks` past it, so the order trades at once like a market order but cannot fill far from the book. With no book to price against, or a quote marked stale, the order waits for the next tick, even an order sent only when a fill arrives, such as a hedge.
 
 Typical usage example:
 

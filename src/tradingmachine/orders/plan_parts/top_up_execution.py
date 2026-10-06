@@ -1,6 +1,6 @@
 """The `top_up` execution of a plan: a new broker order for whatever a join's growing target is missing, never a resized one.
 
-It is meant for an order sized by a join, such as the second order of a `ThenPart` under `each_fill` that grows with every fill of the first. Each time the target grows, one new broker order is sent for the quantity neither traded nor resting, so every broker order keeps the price it was given and its place in the queue; this is how UBI's `attached_hedge` and `legged_spread` presets grow their second leg. A target that shrinks cuts resting orders, newest first. A cancelled order's unfilled part is sent again, and a rejection stops it.
+It is meant for an order sized by a join, such as the second order of a `ThenPart` under `each_fill` that grows with every fill of the first. Each time the target grows, including after earlier orders have filled, one new broker order is sent for the quantity neither traded nor resting, so every broker order keeps the price it was given and its place in the queue; this is how UBI's `attached_hedge` and `legged_spread` presets grow their second leg. A target that shrinks cuts resting orders, newest first. A cancelled or rejected order stops it until the target next grows, so an `IOC` order the exchange cancels is not sent again at once, and a rejection stops it for good. A caller's change to the quantity of one of its orders is kept rather than modified back.
 
 It takes no settings and does not nest.
 

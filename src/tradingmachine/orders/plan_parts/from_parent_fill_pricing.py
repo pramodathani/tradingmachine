@@ -1,6 +1,6 @@
 """The `from_parent_fill` pricing rule of a plan: the second leg of a spread priced from what the first leg filled at.
 
-UBI works out the price that makes the two legs add up to `net_price`, the net debit per unit, which is positive when the spread costs money and negative for a credit. The first leg's side signs its average fill, a buy costing and a sell bringing money in, and the second leg's price is the net less that, signed by the second leg's own side. A price at or below zero cannot be sent, so the order waits. The order must be the child of a `ThenPart` whose first plan is a single order, or UBI refuses the plan with `from_parent_fill_needs_then`.
+UBI works out the price that makes the two legs add up to `net_price`, the net debit per unit, which is positive when the spread costs money and negative for a credit. The first leg's side signs its average fill, a buy costing and a sell bringing money in, and the second leg's price is the net less that, signed by the second leg's own side. Each new order of the second leg is priced so that it and the second leg's earlier orders together average the price the net needs, and is rounded to the second leg's tick in the caller's favour, down for a buy and up for a sell. A price at or below zero cannot be sent, so the order waits. The order must be the child of a `ThenPart` whose first plan is a single order, or UBI refuses the plan with `from_parent_fill_needs_then`.
 
 Typical usage example:
 

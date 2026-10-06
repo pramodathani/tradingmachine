@@ -1,6 +1,6 @@
 """The `then` join of a plan: a first plan, and a child plan started once the first one fills.
 
-With `each_fill`, the child starts on the first plan's first fill, sized to what has filled, and is resized as more fills arrive, which is how a stop or a target follows an entry. With `on_complete`, the child waits until the first plan is done. Give exactly one of the two.
+With `each_fill`, the child starts on the first plan's first fill, sized to what has filled, and is resized as more fills arrive, which is how a stop or a target follows an entry. A `protect` or `close` order in the child works against the side the first plan actually filled on, and when both sides of a two-sided entry filled and the later side filled more, UBI cancels the exits resting on the old side and sends them again on the new side, priced from the fills on the side now held. An exit that has finished is sent again only once its target grows past what it had when it finished, so an exit the exchange cancels is not simply sent again. With `on_complete`, the child waits until the first plan is done. Give exactly one of the two.
 
 Typical usage example:
 
