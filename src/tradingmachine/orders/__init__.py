@@ -32,6 +32,7 @@ The module names spell out the abbreviations UBI uses for the type names:
 | `post_only` | `post_only` | `PostOnlyOrder` |
 | `discretionary` | `discretionary` | `DiscretionaryOrder` |
 | `virtual_limit` | `virtual_limit` | `VirtualLimitOrder` |
+| `marketable_limit` | `marketable_limit` | `MarketableLimitOrder` |
 | `market_if_touched` | `market_if_touched` | `MarketIfTouchedOrder` |
 | `limit_if_touched` | `limit_if_touched` | `LimitIfTouchedOrder` |
 | `cross_instrument` | `cross_instrument` | `CrossInstrumentOrder` |
