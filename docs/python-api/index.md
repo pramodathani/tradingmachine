@@ -51,7 +51,7 @@ The chart below counts the members documented on each page of this tab, which sh
 }
 ```
 
-Three pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 53 order classes in `tradingmachine.orders`, [Instruments](instruments.md) documents the 27 instrument classes, and [Asset baskets](asset-baskets.md) documents the five kinds of basket in `tradingmachine.asset_baskets` and the classes that store them. The fourteen classes of candle analysis, 209 methods from indicators to the performance measures, have their own [Analysis](../analysis/index.md) tab, and every instrument and every basket inherits them.
+Three pages hold classes rather than members. [Synthetic orders](synthetic-orders.md) documents the 54 order classes in `tradingmachine.orders`, [Instruments](instruments.md) documents the 27 instrument classes, and [Asset baskets](asset-baskets.md) documents the five kinds of basket in `tradingmachine.asset_baskets` and the classes that store them. The fourteen classes of candle analysis, 209 methods from indicators to the performance measures, have their own [Analysis](../analysis/index.md) tab, and every instrument and every basket inherits them.
 
 ## Instruments
 
@@ -152,7 +152,7 @@ These members place, change and cancel orders in one instrument, read that instr
 
 ## Price wrappers
 
-Each wrapper is `place_order` with the price source written into its name, so `buy_at_best_bid_price(quantity=1, product="cnc")` joins the queue at the best bid. Apart from the market and limit pairs, UBI works out the price itself when it sends the order. The twelve wrappers below name a single price.
+Each wrapper is `place_order` with the price source written into its name, so `buy_at_best_bid_price(quantity=1, product="cnc")` joins the queue at the best bid. Apart from the market and limit pairs, UBI works out the price itself when it sends the order. The sixteen wrappers below are the market and limit pairs and the twelve that name a single price.
 
 | Kind | Member | Description |
 |---|---|---|
@@ -173,9 +173,9 @@ Each wrapper is `place_order` with the price source written into its name, so `b
 | <span class="member writes">places orders</span> | [`buy_at_last_price`](price-wrappers.md#buy_at_last_price) | Buys with a limit order at the price the instrument last traded at. |
 | <span class="member writes">places orders</span> | [`sell_at_last_price`](price-wrappers.md#sell_at_last_price) | Sells with a limit order at the price the instrument last traded at. |
 
-The other twenty reach deeper into the order book, from the second to the fifth price on each side. They are listed in the collapsed table below.
+The other sixteen reach deeper into the order book, from the second to the fifth price on each side. They are listed in the collapsed table below.
 
-??? note "The twenty depth-level wrappers"
+??? note "The sixteen depth-level wrappers"
 
     | Kind | Member | Description |
     |---|---|---|

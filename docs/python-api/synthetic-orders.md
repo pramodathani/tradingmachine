@@ -200,7 +200,7 @@ The table below lists the template fields every class accepts. A class may make 
 | `order_type` | `str` | yes | | `market`, `limit`, `sl` or `sl-m`. |
 | `quantity` | `int` or `None` | yes | | The quantity in units, or `None` when a `quantity_reference` supplies it. |
 | `price` | `float` or `None` | no | `None` | The template's limit price in rupees. |
-| `trigger_price` | `float` or `None` | no | `None` | The template's own trigger price. In seven classes this argument means something else; see [The trigger level](#the-trigger-level). |
+| `trigger_price` | `float` or `None` | no | `None` | The template's own trigger price. In nine classes this argument means something else; see [The trigger level](#the-trigger-level). |
 | `validity` | `str` or `None` | no | `None` | `day` or `ioc`. |
 | `disclosed_quantity` | `int` or `None` | no | `None` | The part of each order to show on the exchange. |
 | `after_market` | `bool` | no | `False` | `True` sends after-market orders. |
@@ -426,7 +426,7 @@ Six of the nine also take `trigger_on` and `hold_seconds`, which choose the pric
 | `double_last` | The last traded price | The second tick in a row that reaches the level |
 | `held` | The last traded price | The first tick at least `hold_seconds` after the level was first reached, if every tick in between reached it too |
 
-`AccountConditionalOrder` is filed with the price triggers because it waits in the same way, but it watches the account rather than a price, so it takes no `trigger_price` at all.
+`AccountConditionalOrder` is filed with the price triggers because it waits in the same way, but it watches the account rather than a price, so it has no watched level of its own, and a `trigger_price` it is given is only the template's ordinary trigger price.
 
 ## Orders on several instruments
 
