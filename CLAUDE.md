@@ -89,7 +89,7 @@ The sibling project `../unified_broker_interface` exposes REST APIs for trading 
 
 `UnifiedBrokerInterface` reads UBI's api key and secret from this project's MongoDB, from the `settings` document `{"broker_name": "unified_broker_interface", "api_key": ..., "api_secret": ...}`, which must match the same document in UBI's own MongoDB. It was seeded by hand and is not created by any code.
 
-UBI holds one access token for the whole application, and it expires after a day by default. Every `connect` replaces it, which logs out any other client using UBI, including UBI's REST API test page. The client reconnects and retries once when a request gets HTTP 401. See `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md`.
+UBI holds one access token for the whole application, shared by every client, and it expires after a day by default. A `connect` returns the token already in force when it was issued at or after the most recent 07:00 and has not expired, so other clients keep working; only the first `connect` after 07:00 on a token issued before then mints a new one, and a `disconnect` revokes the token for everyone. A replaced or revoked token logs out UBI's REST API test page, and never call `disconnect` against the live UBI. The client reconnects and retries once when a request gets HTTP 401. See `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md`.
 
 Every order UBI places goes through its order engine, `bin/unified/orders/order_engine`, since UBI removed direct placement on 2026-09-27. When the engine is not running, `POST /api/orders/place` answers HTTP 503 and nothing is placed. `UNIFIED_BROKER_INTERFACE_API_ORDER_PLACEMENT` no longer exists in UBI.
 

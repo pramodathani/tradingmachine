@@ -10,7 +10,7 @@ Each example runs in a fresh interpreter from the project root, a block through 
 
 ## Why everything runs one at a time
 
-UBI holds a single access token for the whole application, and every `connect` replaces it, which logs out every other client. Each example is a new process with a new client, so two running at once keep logging each other out, and the client retries only once on HTTP 401. The runner therefore takes an exclusive `fcntl.flock` on `tradingmachine-examples.lock` in the system temporary directory around every run. The lock is shared by every copy of the script, which is what let ten agents write and run examples in parallel on 2026-09-29 without breaking each other's sessions.
+The lock was added when every `connect` was believed to replace UBI's single access token. UBI's rule is narrower: a connect returns the token in force unless it was issued before the most recent 07:00 or has expired, and a disconnect revokes it, so examples running at once only disturb each other when one of them crosses 07:00 or disconnects. The lock is kept because an example that disconnects, or two runs straddling 07:00, would still make another run's single retry on HTTP 401 fail. The runner therefore takes an exclusive `fcntl.flock` on `tradingmachine-examples.lock` in the system temporary directory around every run. The lock is shared by every copy of the script, which is what let ten agents write and run examples in parallel on 2026-09-29 without breaking each other's sessions.
 
 ## Why some examples are held back
 

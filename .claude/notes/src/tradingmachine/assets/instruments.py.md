@@ -52,7 +52,7 @@ The user fixed this inside UBI in a separate session on 2026-09-14. UBI's mappin
 
 ## Shared client
 
-UBI holds one access token for the whole application, and every connect replaces it (see `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md`). If each instrument created its own `UnifiedBrokerInterface`, the instruments would keep logging each other out, and each would pay a reconnect on its next call. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
+UBI holds one access token for the whole application (see `.claude/notes/src/tradingmachine/unified_broker_interface/client.py.md` for when it changes). If each instrument created its own `UnifiedBrokerInterface`, each would hold its own copy of the token, and after the daily 07:00 renewal or a disconnect each would pay its own failed request and reconnect. Instruments therefore share one client, created on first use by `shared_unified_broker_interface`. It is stored on `Instrument` by name rather than through `cls`; assigning through `cls` would give each subclass its own attribute and its own client. A caller can still pass its own client.
 
 ## No caching and no batching
 
