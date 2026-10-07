@@ -81,3 +81,7 @@ The client also carried a `placement_mode` attribute from 2026-09-26, recording 
 ## The message falls back to `status_message`, since 2026-09-26
 
 `_raise_for_failure` takes the exception's message from the body's `error` field. UBI's order engine does not use that field for its 504, "the engine did not answer in time": it answers with an order-shaped body whose explanation is in `status_message`, so the first dry runs against the engine on 2026-09-26 raised `OrderOutcomeUnknownError` with only "UBI returned HTTP 504". The method now falls back to `status_message` when there is no `error`, and to the generic text only when there is neither.
+
+## The message names the brokers UBI passed over, since 2026-10-07
+
+When UBI cannot find a broker for an order it answers 503 with `"error": "no broker can take this order"` and a `skipped` list giving each broker it passed over and why, such as `needs about 185,671.65 of margin but has 49,173.74 free`. On 2026-10-07 a program's exit from a bought NIFTY call was refused this way and the traceback showed only "no broker can take this order", so the cause had to be worked out from UBI's code. `_skipped_text` now appends each `broker: reason` to the message in parentheses. The whole body is still on the exception's `detail` for a caller that wants the list itself.

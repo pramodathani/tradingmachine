@@ -649,13 +649,38 @@ class UnifiedBrokerInterface:
             return None
 
     @staticmethod
+    def _skipped_text(response_body: Any) -> str:
+        """Describes the brokers a refusal says UBI passed over, and why.
+
+        Args:
+            response_body: The parsed JSON body of the response, of any JSON type, or None.
+
+        Returns:
+            The str `broker: reason` for each entry of the body's `skipped` list, joined with `; `, or an empty str when there is no such list.
+
+        Raises:
+            Nothing.
+        """
+        if not isinstance(response_body, dict):
+            return ""
+        skipped = response_body.get("skipped")
+        if not isinstance(skipped, list):
+            return ""
+        parts = []
+        for entry in skipped:
+            if not isinstance(entry, dict):
+                continue
+            parts.append(f"{entry.get('broker')}: {entry.get('reason')}")
+        return "; ".join(parts)
+
+    @staticmethod
     def _raise_for_failure(
         response: requests.Response,
         response_body: Any,
     ) -> None:
         """Raises the exception class that matches a failed response's status code.
 
-        The message is the body's `error` field, or its `status_message` when there is no `error`, which is how UBI's order engine explains a 504, or a generic message naming the status code.
+        The message is the body's `error` field, or its `status_message` when there is no `error`, which is how UBI's order engine explains a 504, or a generic message naming the status code. When the body lists the brokers UBI passed over in `skipped`, each broker's reason is added to the message, so a refusal such as `no broker can take this order` says why.
 
         Args:
             response: The failed requests.Response.
@@ -671,6 +696,9 @@ class UnifiedBrokerInterface:
                 message = response_body.get("status_message")
         if not message:
             message = f"UBI returned HTTP {response.status_code}"
+        skipped_text = UnifiedBrokerInterface._skipped_text(response_body)
+        if skipped_text:
+            message = f"{message} ({skipped_text})"
         exception_class = exceptions.EXCEPTION_FOR_STATUS_CODE.get(
             response.status_code,
             exceptions.ServerError,
