@@ -74,7 +74,7 @@ UBI holds a single access token for the whole application, not one per client. T
 
 So a token held by this library can be refused at any moment, either because it expired or because someone else's `connect` replaced it. The client does not check `token_expires_at` before a request. It sends the request, and on a 401 it throws the token away, connects again and retries exactly once.
 
-That is also why every instrument shares one client through [`Instrument.shared_unified_broker_interface`](instruments.md#shared_unified_broker_interface). Two clients in one process would each hold a token and could keep replacing each other's.
+That is also why every instrument shares one client through [`Instrument.shared_unified_broker_interface`](instruments.md#shared_unified_broker_interface). One shared client holds one copy of the token, so after a renewal or a disconnect only one request fails and only one reconnect is made.
 
 ### The retry on 401
 

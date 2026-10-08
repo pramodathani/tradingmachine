@@ -290,7 +290,7 @@ class Instrument(
     ) -> client.UnifiedBrokerInterface:
         """Returns the one client all instruments share, creating it on first use.
 
-        UBI holds a single access token, so separate clients would keep replacing each other's token. The client is stored on `Instrument` itself rather than on cls, so subclasses share the same one. It is public so that code outside the instruments, such as `tradingmachine.accounts.account.Account`, can share it too.
+        UBI holds a single access token, so one shared client keeps one cached copy of it and one place that reconnects after HTTP 401. The client is stored on `Instrument` itself rather than on cls, so subclasses share the same one. It is public so that code outside the instruments, such as `tradingmachine.accounts.account.Account`, can share it too.
 
         Returns:
             The shared client.UnifiedBrokerInterface.

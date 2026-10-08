@@ -90,12 +90,12 @@ class UnifiedBrokerInterface:
             )
 
     def connect(self) -> str:
-        """Exchanges the api key and secret for a new access token.
+        """Exchanges the api key and secret for UBI's shared access token.
 
-        The new token replaces the one in force on the server, which ends any other client's session.
+        UBI returns the token already in force when it was issued at or after the most recent 07:00 and has not expired, so other clients keep working. Otherwise UBI mints a new token, and any other client still holding the old one gets HTTP 401 until it connects again.
 
         Returns:
-            The new access token as a str.
+            The access token as a str.
 
         Raises:
             AuthenticationError: The server refused the api key or secret.

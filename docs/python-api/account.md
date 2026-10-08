@@ -18,7 +18,7 @@ The table below lists the class and its members.
 
 <div class="endpoint" markdown><span class="member class">class</span> `Account(unified_broker_interface=None)`</div>
 
-An `Account` holds nothing but the client it sends requests through, so constructing one sends no request. By default it takes the same client every instrument uses, from [`Instrument.shared_unified_broker_interface()`](instruments.md#shared_unified_broker_interface). That matters, because UBI holds a single access token for the whole application and every `connect` replaces it: an `Account` with a client of its own would log every instrument out on its first request.
+An `Account` holds nothing but the client it sends requests through, so constructing one sends no request. By default it takes the same client every instrument uses, from [`Instrument.shared_unified_broker_interface()`](instruments.md#shared_unified_broker_interface). Sharing it means one cached token and one place that reconnects after HTTP 401, whose rules [One token for everyone](client.md#one-token-for-everyone) describes. A caller may still pass a client of its own.
 
 #### Parameters
 

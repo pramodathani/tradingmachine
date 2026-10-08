@@ -286,7 +286,7 @@ A family class refuses anything else. Its constructor takes only the identity fi
 
 ## One shared client
 
-Every instrument, synthetic order and `Account` in a process sends its requests through one `UnifiedBrokerInterface`, which `Instrument.shared_unified_broker_interface()` creates on first use. UBI holds a single access token for the whole application and every connect replaces it, so two clients would keep logging each other out and each would pay a reconnect on its next call.
+Every instrument, synthetic order and `Account` in a process sends its requests through one `UnifiedBrokerInterface`, which `Instrument.shared_unified_broker_interface()` creates on first use. UBI holds a single access token for the whole application and usually hands the same one to every `connect`, but the first `connect` after 07:00 on an older token mints a new one, after which every other client pays a reconnect on its next call. One shared client keeps one cached token and one place that reconnects; [One token for everyone](../python-api/client.md#one-token-for-everyone) has the rules.
 
 The client is stored on `Instrument` by name rather than through `cls`. Assigning through `cls` would give each subclass its own attribute and therefore its own client, which is exactly what the sharing is meant to prevent. A caller can still pass a client of its own to any constructor, but then it owns the token clash that follows. [The UBI client](../python-api/client.md) documents the client's own members.
 

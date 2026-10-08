@@ -330,7 +330,7 @@ The captured output below is the raw dictionary of public attributes, with `carr
 
 <div class="endpoint" markdown><span class="member function">classmethod</span> `Instrument.shared_unified_broker_interface()`</div>
 
-This class method returns the one UBI client that every instrument, and the [account](account.md), sends its requests through, creating it the first time it is asked. UBI holds a single access token for the whole application, so separate clients would keep replacing each other's token; sharing one client avoids that. The client is stored on `Instrument` itself, so every subclass shares the same one.
+This class method returns the one UBI client that every instrument, and the [account](account.md), sends its requests through, creating it the first time it is asked. UBI holds a single access token for the whole application, so sharing one client keeps one cached copy of it and one place that reconnects after HTTP 401; [One token for everyone](client.md#one-token-for-everyone) has the rules. The client is stored on `Instrument` itself, so every subclass shares the same one.
 
 #### Parameters
 

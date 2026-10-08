@@ -134,7 +134,7 @@ print(infosys.last_price)
 ```
 
 > [!NOTE]
-> UBI holds one access token for the whole application, so every `connect` replaces the one in force and ends any other client's session, including UBI's own REST API test page in a browser tab. If a long-running script suddenly starts seeing 401s, something else connected.
+> UBI holds one access token for the whole application, and every client shares it. A `connect` returns the token already in force when it was issued at or after the most recent 07:00 and has not expired, so other clients keep working; only the first `connect` after 07:00 on a token issued before then mints a new one, and a `disconnect` revokes the token for everyone. A client still holding a replaced or revoked token gets HTTP 401; this library reconnects and retries once, but UBI's own REST API test page in a browser tab stays logged out. If a long-running script keeps seeing 401s, something else disconnected. [One token for everyone](https://pramodathani.github.io/tradingmachine/python-api/client/#one-token-for-everyone) has the full rules.
 
 ## What is where
 

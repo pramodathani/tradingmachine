@@ -4,7 +4,7 @@
 
 ## The shared client
 
-`Account()` takes the client from `Instrument.shared_unified_broker_interface()`, which was made public for this. UBI holds one access token and every `connect` replaces it, so an `Account` with a client of its own would log every instrument out on its first request. A caller may still pass a client, as the instruments allow.
+`Account()` takes the client from `Instrument.shared_unified_broker_interface()`, which was made public for this. Sharing it keeps one cached access token and one place that reconnects after HTTP 401, as the instruments do. A caller may still pass a client, as the instruments allow.
 
 ## `confirm` is typed by the caller
 
