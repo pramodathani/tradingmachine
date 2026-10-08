@@ -407,7 +407,7 @@ A `dict` with `broker`, `order_id`, `status_before_cancel`, `outcome`, `status_m
 
 ## cancel_open_orders
 
-<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_open_orders()`<span class="route"><span class="method get">GET</span> `/api/orders/parents` and `/api/orders/details`, then <span class="method delete">DELETE</span> `/api/orders/parents` per parent and one <span class="method delete">DELETE</span> `/api/orders/cancel` for the rest</span></div>
+<div class="endpoint" markdown><span class="member writes">places orders</span> `cancel_open_orders()`<span class="route"><span class="method get">GET</span> `/api/orders/parents` and `/api/orders/details`, then <span class="method delete">DELETE</span> `/api/orders/cancel` with a `parent_id` per parent and one <span class="method delete">DELETE</span> `/api/orders/cancel` for the rest</span></div>
 
 This method cancels every order in this instrument that is still waiting, whether it rests at a broker or is held in UBI's order engine. The numbered steps below are what it does.
 

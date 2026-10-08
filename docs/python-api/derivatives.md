@@ -183,7 +183,7 @@ The members in this section are on `Derivative`, so every futures and option cla
 
 <div class="endpoint" markdown>attribute `underlying_segment`</div>
 
-This attribute is the exchange-prefixed segment of the underlying, such as `nse_equities` for a share future or `nse_equity_indices` for an index option. It is set when the contract is built and never changes. With an `underlying` given, it is that object's own segment, such as `mcx_commodity_futures` for an option given its future. Without one, it is worked out from the contract's own segment through a fixed table, because the rule is not a simple rename: `equity_futures` maps to `equities`, but `fixed_income_futures` maps to `fixed_income`.
+This attribute is the exchange-prefixed segment of the underlying, such as `nse_equities` for a share future or `nse_equity_indices` for an index option. It is set when the contract is built and never changes. With an `underlying` given, it is that object's own segment, such as `mcx_commodity_futures` for an option given its future. Without one, it is worked out from the contract's own segment through a fixed table, because the rule is not a simple rename: `equity_futures` maps to `equities`, but `fixed_income_futures` maps to nothing, because a bond's cash underlying has no price in UBI, and `fixed_income_options` maps to `fixed_income_futures`.
 
 It is a `str`.
 
