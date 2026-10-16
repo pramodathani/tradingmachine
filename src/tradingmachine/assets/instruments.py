@@ -359,7 +359,7 @@ class Instrument(
     ) -> pd.DataFrame | None:
         """Finds instruments in one segment whose name contains a term.
 
-        UBI ranks an exact match first, then names starting with the term, then names containing it. This is the right way to look for a security by name, and the wrong way to look for a contract: UBI returns at most 200 rows in expiry order and offers no way to page past them, so for a segment with many expiries every row comes from the oldest one. Use `_contracts_for` for a future or an option.
+        UBI ranks an exact match first, then names starting with the term, then names containing it. This is the right way to look for a security by name, and the wrong way to look for a contract: UBI returns at most 200 rows in expiry order and offers no way to page past them, so for a segment with many expiries every row comes from the oldest one. Use `contracts_in_segment` for a future or an option.
 
         Args:
             exchange: The str exchange to search, such as `nse`.
@@ -423,18 +423,18 @@ class Instrument(
         return cls._identity_frame(rows)
 
     @classmethod
-    def _contracts_for(
+    def contracts_in_segment(
         cls,
         exchange: str,
         segment: str,
-        underlying_symbol: str | None,
-        expiry_date: datetime.date | str | None,
-        include_expired: bool,
-        unified_broker_interface: client.UnifiedBrokerInterface | None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ) -> pd.DataFrame | None:
         """Finds the contracts in one segment, narrowed by underlying and expiry.
 
-        The whole segment is fetched and narrowed here, because UBI's search route cannot reach a live expiry and its master route takes no filters.
+        The whole segment is fetched and narrowed here, because UBI's search route cannot reach a live expiry and its master route takes no filters. Unlike the `contracts` and `chain` class methods of each futures and option class, it takes the segment as an argument, so code that is told a segment at run time, such as the separate `tradingmachine_mcp` server, can list contracts in any of them.
 
         Args:
             exchange: The str exchange, such as `nse`.
@@ -451,6 +451,40 @@ class Instrument(
             BadRequestError: The exchange or segment is not one UBI knows.
             ValueError: expiry_date is a str that is not a valid ISO date.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the live Nifty index futures, soonest first:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            futures = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_futures",
+                underlying_symbol="NIFTY",
+            )
+            print(futures[["symbol", "underlying_symbol", "expiry_date"]])
+            ```
+
+            Count the Nifty option contracts of the nearest expiry, which is its option chain:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            futures = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_futures",
+                underlying_symbol="NIFTY",
+            )
+            nearest = futures["expiry_date"].iloc[0]
+            chain = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_options",
+                underlying_symbol="NIFTY",
+                expiry_date=nearest,
+            )
+            print(nearest, len(chain))
+            ```
         """
         frame = cls._master_catalogue(
             exchange,
@@ -513,7 +547,7 @@ class Instrument(
             BadRequestError: The exchange or segment is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        frame = cls._contracts_for(
+        frame = cls.contracts_in_segment(
             exchange,
             segment,
             underlying_symbol,
@@ -12044,7 +12078,7 @@ class Derivative(TradeableInstrument):
             UnderlyingError: No live future on the same underlying expires on or after the contract.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        frame = self._contracts_for(
+        frame = self.contracts_in_segment(
             self.exchange,
             self.underlying_segment,
             self.underlying_symbol,
@@ -12880,7 +12914,7 @@ class Futures(Derivative):
             raise exceptions.FuturesError(
                 f"{cls.__name__} names no segment, so call contracts on a family class such as EquityFutures"
             )
-        return cls._contracts_for(
+        return cls.contracts_in_segment(
             exchange,
             cls.SEGMENT,
             underlying_symbol,
@@ -13387,7 +13421,7 @@ class Option(Derivative):
             raise exceptions.OptionError(
                 f"{cls.__name__} names no segment, so call chain on a family class such as EquityOption"
             )
-        return cls._contracts_for(
+        return cls.contracts_in_segment(
             exchange,
             cls.SEGMENT,
             underlying_symbol,

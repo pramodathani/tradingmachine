@@ -196,7 +196,7 @@ The chart below shows how much of each segment the master had to stream on 2026-
 
 **The cost.** Each discovery call downloads its whole segment again, with no cache. The calls return a DataFrame of identities rather than instrument objects, because a 214-contract chain as objects would mean 214 lookups; the caller builds the few contracts it wants.
 
-**In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_contracts_for`, `_expiry_dates` and `_identity_frame` on `Instrument` in `src/tradingmachine/assets/instruments.py`, `search` on each cash and index class, and the other four on the `Futures` and `Option` base classes. [Finding instruments](../python-api/discovery.md) documents the public calls.
+**In the code.** The protected helpers `_search_catalogue`, `_master_catalogue`, `_expiry_dates` and `_identity_frame` and the public `contracts_in_segment` on `Instrument` in `src/tradingmachine/assets/instruments.py`, `search` on each cash and index class, and the other four on the `Futures` and `Option` base classes. [Finding instruments](../python-api/discovery.md) documents the public calls.
 
 ## Baskets are stored here and linked to instruments
 
