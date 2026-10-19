@@ -131,6 +131,7 @@ ORDER_MODIFY_PATH = "/api/orders/modify"
 ORDER_CANCEL_PATH = "/api/orders/cancel"
 
 ORDER_PARENTS_PATH = "/api/orders/parents"
+BREAKEVEN_PATH = "/api/instruments/breakeven"
 
 POSITIONS_PATH = "/api/portfolio/positions"
 
@@ -359,7 +360,7 @@ class Instrument(
     ) -> pd.DataFrame | None:
         """Finds instruments in one segment whose name contains a term.
 
-        UBI ranks an exact match first, then names starting with the term, then names containing it. This is the right way to look for a security by name, and the wrong way to look for a contract: UBI returns at most 200 rows in expiry order and offers no way to page past them, so for a segment with many expiries every row comes from the oldest one. Use `_contracts_for` for a future or an option.
+        UBI ranks an exact match first, then names starting with the term, then names containing it. This is the right way to look for a security by name, and the wrong way to look for a contract: UBI returns at most 200 rows in expiry order and offers no way to page past them, so for a segment with many expiries every row comes from the oldest one. Use `contracts_in_segment` for a future or an option.
 
         Args:
             exchange: The str exchange to search, such as `nse`.
@@ -423,18 +424,18 @@ class Instrument(
         return cls._identity_frame(rows)
 
     @classmethod
-    def _contracts_for(
+    def contracts_in_segment(
         cls,
         exchange: str,
         segment: str,
-        underlying_symbol: str | None,
-        expiry_date: datetime.date | str | None,
-        include_expired: bool,
-        unified_broker_interface: client.UnifiedBrokerInterface | None,
+        underlying_symbol: str | None = None,
+        expiry_date: datetime.date | str | None = None,
+        include_expired: bool = False,
+        unified_broker_interface: client.UnifiedBrokerInterface | None = None,
     ) -> pd.DataFrame | None:
         """Finds the contracts in one segment, narrowed by underlying and expiry.
 
-        The whole segment is fetched and narrowed here, because UBI's search route cannot reach a live expiry and its master route takes no filters.
+        The whole segment is fetched and narrowed here, because UBI's search route cannot reach a live expiry and its master route takes no filters. Unlike the `contracts` and `chain` class methods of each futures and option class, it takes the segment as an argument, so code that is told a segment at run time, such as the separate `tradingmachine_mcp` server, can list contracts in any of them.
 
         Args:
             exchange: The str exchange, such as `nse`.
@@ -451,6 +452,40 @@ class Instrument(
             BadRequestError: The exchange or segment is not one UBI knows.
             ValueError: expiry_date is a str that is not a valid ISO date.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            List the live Nifty index futures, soonest first:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            futures = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_futures",
+                underlying_symbol="NIFTY",
+            )
+            print(futures[["symbol", "underlying_symbol", "expiry_date"]])
+            ```
+
+            Count the Nifty option contracts of the nearest expiry, which is its option chain:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            futures = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_futures",
+                underlying_symbol="NIFTY",
+            )
+            nearest = futures["expiry_date"].iloc[0]
+            chain = instruments.Instrument.contracts_in_segment(
+                "nse",
+                "equity_index_options",
+                underlying_symbol="NIFTY",
+                expiry_date=nearest,
+            )
+            print(nearest, len(chain))
+            ```
         """
         frame = cls._master_catalogue(
             exchange,
@@ -513,7 +548,7 @@ class Instrument(
             BadRequestError: The exchange or segment is not one UBI knows.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        frame = cls._contracts_for(
+        frame = cls.contracts_in_segment(
             exchange,
             segment,
             underlying_symbol,
@@ -2640,6 +2675,82 @@ class TradeableInstrument(Instrument):
             ORDER_PARENTS_PATH,
             params={
                 "parent_id": parent_id,
+            },
+        )
+
+    def breakeven_levels(
+        self,
+        entry_price: float,
+        quantity: int,
+        side: str = "buy",
+        product: str = "nrml",
+        broker: str | None = None,
+        percentile: int = 90,
+    ) -> dict:
+        """Works out where a breakeven stop for a position in this instrument should go so that it really breaks even after costs.
+
+        UBI answers three levels. The floor is the exit price at which the position makes exactly nothing after every tax, fee and brokerage. The tripwire is the trigger to give the stop, beyond the floor by how far such stops have recently slipped. The switch-on is the price the watched side, the bid for a bought position and the ask for a sold one, must reach before the stop is moved to the tripwire, so that ordinary flicker does not fire it at once. For a bought position they sit above the entry in that order, and for a sold one below it. Every price comes back as text, so that no digit is lost.
+
+        Args:
+            entry_price: The float average price the position was opened at.
+            quantity: The int size of the position in units.
+            side: The str side that opened the position, `"buy"` or `"sell"`.
+            product: The str product, `"nrml"`, `"mis"` or `"cnc"`; it decides a share's charges, delivery for `"cnc"` and intraday otherwise.
+            broker: The str broker the orders go to, or None for the one charging least brokerage.
+            percentile: The int percentile of the measured stop slips and of the flicker to allow for, from 1 to 99.
+
+        Returns:
+            A dict with `floor`, `tripwire` and `switch_on`, each a dict whose `price` and `distance_from_entry` are str, and the inputs UBI used, such as `broker`, `brokerage_per_order`, `tick_size` and `spread`. `tripwire` and `switch_on` are None when UBI has neither measured figures nor a live spread.
+
+        Raises:
+            BadRequestError: A parameter is missing or out of range.
+            ConflictError: UBI does not know the taxes and fees of this instrument's segment, or the broker's brokerage.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the three levels for a NIFTY call bought at its last price:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            contracts = instruments.Instrument.contracts_in_segment(
+                exchange="nse",
+                segment="equity_index_options",
+                underlying_symbol="NIFTY",
+            )
+            call = contracts[contracts["option_type"] == "CE"].iloc[0]
+            option = instruments.TradeableInstrument(instrument_id=call["instrument_id"])
+            entry = option.last_price
+            levels = option.breakeven_levels(entry_price=entry, quantity=65)
+            print("Entry:", entry)
+            for name in ("floor", "tripwire", "switch_on"):
+                level = levels[name]
+                if level is not None:
+                    print(name, level["price"], "+" + level["distance_from_entry"])
+            ```
+
+            Compare the floor at the cheapest broker with a broker that charges brokerage on every order:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            entry = infosys.last_price
+            for broker in (None, "zerodha"):
+                levels = infosys.breakeven_levels(entry_price=entry, quantity=1, product="mis", broker=broker)
+                print(levels["broker"], levels["brokerage_per_order"], levels["floor"]["price"])
+            ```
+        """
+        return self._unified_broker_interface.get(
+            BREAKEVEN_PATH,
+            params={
+                "instrument_id": self.instrument_id,
+                "entry_price": entry_price,
+                "quantity": quantity,
+                "side": side.upper(),
+                "product": product.upper(),
+                "broker": broker,
+                "percentile": percentile,
             },
         )
 
@@ -12044,7 +12155,7 @@ class Derivative(TradeableInstrument):
             UnderlyingError: No live future on the same underlying expires on or after the contract.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
         """
-        frame = self._contracts_for(
+        frame = self.contracts_in_segment(
             self.exchange,
             self.underlying_segment,
             self.underlying_symbol,
@@ -12880,7 +12991,7 @@ class Futures(Derivative):
             raise exceptions.FuturesError(
                 f"{cls.__name__} names no segment, so call contracts on a family class such as EquityFutures"
             )
-        return cls._contracts_for(
+        return cls.contracts_in_segment(
             exchange,
             cls.SEGMENT,
             underlying_symbol,
@@ -13387,7 +13498,7 @@ class Option(Derivative):
             raise exceptions.OptionError(
                 f"{cls.__name__} names no segment, so call chain on a family class such as EquityOption"
             )
-        return cls._contracts_for(
+        return cls.contracts_in_segment(
             exchange,
             cls.SEGMENT,
             underlying_symbol,

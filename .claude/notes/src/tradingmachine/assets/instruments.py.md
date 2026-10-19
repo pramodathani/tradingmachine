@@ -98,7 +98,7 @@ The old `bids` and `asks` filtered out zero-price levels. UBI now drops empty le
 
 ## Finding instruments, and why search is not enough
 
-`Instrument` gained four protected class methods on 2026-09-20, so that the equity classes could offer ways of finding contracts rather than only naming them: `_search_catalogue`, `_master_catalogue`, `_contracts_for` and `_expiry_dates`, with `_identity_frame` turning UBI's rows into a frame.
+`Instrument` gained four protected class methods on 2026-09-20, so that the equity classes could offer ways of finding contracts rather than only naming them: `_search_catalogue`, `_master_catalogue`, `_contracts_for` and `_expiry_dates`, with `_identity_frame` turning UBI's rows into a frame. On 2026-10-16 `_contracts_for` was renamed `contracts_in_segment` and made public, with defaults for its last four arguments, because the separate `tradingmachine_mcp` server lists contracts in whatever segment an AI agent names and had been calling the protected method across a package boundary. The method itself did not change, and the four internal callers still pass every argument by position.
 
 They sit on the base class because the mechanism is the same for every asset class, while the public calls belong to each class in its own file. That is the split the user's rules ask for: a shallow base holding what is genuinely identical, with each case's own surface visible where the case lives.
 
@@ -114,7 +114,7 @@ UBI's `/api/instruments/search` ranks an exact symbol first, then symbols starti
 | `nse_equity_index_options` | 14,826 | 0.2s |
 | `nse_equity_options` | 125,967 | 1.3s |
 
-So the rule is: `/search` for a name, `/master` for a contract. `_contracts_for` fetches the segment and narrows it here, because `/master` takes no filters of its own.
+So the rule is: `/search` for a name, `/master` for a contract. `contracts_in_segment` fetches the segment and narrows it here, because `/master` takes no filters of its own.
 
 ### Expired contracts, and what "live" means
 
@@ -593,11 +593,11 @@ A failed match raises `InstrumentError`. For the ltp route that is a 404 turned 
 
 ### Checks the constructors make
 
-`Derivative` checks the shape, then the expiry date, then the segment, so a security given to `Futures` raises `DerivativeError` rather than `FuturesError`. The expiry check exists because the master holds rows with no expiry, which is why `_contracts_for` skips them, and the bases accept `instrument_id`. `Option` also refuses a row without a strike price or option type, so every option member can rely on both.
+`Derivative` checks the shape, then the expiry date, then the segment, so a security given to `Futures` raises `DerivativeError` rather than `FuturesError`. The expiry check exists because the master holds rows with no expiry, which is why `contracts_in_segment` skips them, and the bases accept `instrument_id`. `Option` also refuses a row without a strike price or option type, so every option member can rely on both.
 
 ### Time and expiry
 
-`days_to_expiry` counts calendar days from today in India time, the same "today" `_contracts_for` uses, so a contract expiring today has 0 days and is not `expired`. `expiry_kind` calls a contract monthly when no later expiry of the same underlying in the same segment falls in the same calendar month, which makes quarterly and long-dated contracts monthly too. It and `next_expiry` each download the segment's whole master, about two and a half seconds for single-stock options, and nothing is cached, by the standing rule.
+`days_to_expiry` counts calendar days from today in India time, the same "today" `contracts_in_segment` uses, so a contract expiring today has 0 days and is not `expired`. `expiry_kind` calls a contract monthly when no later expiry of the same underlying in the same segment falls in the same calendar month, which makes quarterly and long-dated contracts monthly too. It and `next_expiry` each download the segment's whole master, about two and a half seconds for single-stock options, and nothing is cached, by the standing rule.
 
 The pricing methods measure time to 15:30 India time on the expiry date, which is `EXPIRES_AT` in UBI's `unified_broker_interface/utilities/order_engine/volatility_order.py`. After 15:30 on expiry day `expired` is still False while `implied_volatility` and `greeks` return None, rather than dividing by zero. MCX commodity options trade later into the evening, so 15:30 is an approximation for them.
 
@@ -798,3 +798,7 @@ The name was chosen over something shorter such as `follow_book` because it name
 The position-closing methods were left alone, because `_close_with_reference` already sends `synthetic={"type": "simple", "closes_position": True}` and so already sends a real market order. `add_to_position` calls the market wrappers and so gets the conversion.
 
 The third example of each market wrapper sends a real market order. On the morning of 2026-10-06 UBI chose Flattrade, which refused it with `ALGO_CHK: MKT Order type not allowed for API order`, so the example catches `OrderRejectedError` and prints the refusal rather than failing; another broker would fill it, and the example's clean-up then closes the position as the other two do.
+
+## breakeven_levels, since 2026-10-20
+
+`TradeableInstrument.breakeven_levels` wraps UBI's `GET /api/instruments/breakeven`, added the same day. It is a method, not a property, because it takes arguments. `side` and `product` are lower case like the order methods and upper-cased for the route, which expects `BUY`/`SELL` and `NRML`/`MIS`/`CNC`. Prices come back as text, as UBI sends them, so a caller converts them itself. The kaprekar call-put switch script uses it to move its stop to the tripwire once the bid reaches the switch-on. Both docstring examples passed against the live UBI on 2026-10-20 after hours.
