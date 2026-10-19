@@ -798,3 +798,7 @@ The name was chosen over something shorter such as `follow_book` because it name
 The position-closing methods were left alone, because `_close_with_reference` already sends `synthetic={"type": "simple", "closes_position": True}` and so already sends a real market order. `add_to_position` calls the market wrappers and so gets the conversion.
 
 The third example of each market wrapper sends a real market order. On the morning of 2026-10-06 UBI chose Flattrade, which refused it with `ALGO_CHK: MKT Order type not allowed for API order`, so the example catches `OrderRejectedError` and prints the refusal rather than failing; another broker would fill it, and the example's clean-up then closes the position as the other two do.
+
+## breakeven_levels, since 2026-10-20
+
+`TradeableInstrument.breakeven_levels` wraps UBI's `GET /api/instruments/breakeven`, added the same day. It is a method, not a property, because it takes arguments. `side` and `product` are lower case like the order methods and upper-cased for the route, which expects `BUY`/`SELL` and `NRML`/`MIS`/`CNC`. Prices come back as text, as UBI sends them, so a caller converts them itself. The kaprekar call-put switch script uses it to move its stop to the tripwire once the bid reaches the switch-on. Both docstring examples passed against the live UBI on 2026-10-20 after hours.
