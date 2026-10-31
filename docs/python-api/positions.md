@@ -5,7 +5,7 @@ A position is what a futures or options trade, or an intraday trade in shares, l
 !!! danger "These are real orders"
     The four members with a <span class="member writes">places orders</span> badge send market or limit orders through UBI to real brokers, with real money, and none of them takes a `dry_run` argument. `reduce_position` and `liquidate_position` also let UBI choose the side, which is the point of them, so read [`net_positions`](#net_positions) first and be sure of what you hold. To preview one, send the same body through [`place_order`](orders.md#place_order) with `dry_run=True`, as [Under the hood](#reduce_position) shows.
 
-The table below lists the eight members this page documents.
+The table below lists the nine members this page documents.
 
 | Kind | Member | Description |
 |---|---|---|
@@ -13,6 +13,7 @@ The table below lists the eight members this page documents.
 | <span class="member property">property</span> | [`day_positions`](#day_positions) | Today's own positions in this instrument, without what was carried in. |
 | <span class="member property">property</span> | [`positions_value`](#positions_value) | What this instrument's open positions are worth at the moment. |
 | <span class="member property">property</span> | [`positions_pnl`](#positions_pnl) | What this instrument's positions have made or lost. |
+| <span class="member method">method</span> | [`breakeven_levels`](#breakeven_levels) | Where a breakeven stop should go so that it really breaks even after charges and slippage. |
 | <span class="member writes">places orders</span> | [`add_to_position`](#add_to_position) | Makes an existing position bigger, or opens a new one. |
 | <span class="member writes">places orders</span> | [`reduce_position`](#reduce_position) | Makes an existing position smaller, without turning it around. |
 | <span class="member writes">places orders</span> | [`liquidate_position`](#liquidate_position) | Closes one position in this instrument completely. |
@@ -209,6 +210,65 @@ A `dict` with `realized`, `unrealized` and `total` in rupees, each rounded to tw
 #### Raises
 
 The same exceptions as [`net_positions`](#net_positions).
+
+### breakeven_levels
+
+<div class="endpoint" markdown><span class="member method">method</span> `breakeven_levels(entry_price, quantity, side="buy", product="nrml", broker=None, percentile=90, horizon_seconds=5)`<span class="route"><span class="method get">GET</span> `/api/instruments/breakeven`</span></div>
+
+This method tells you where to put a breakeven stop so that it really breaks even. A stop placed at the entry price loses money when it fires, because the exit pays taxes, fees and brokerage, and because a stop usually fills a little beyond its trigger. UBI works out three levels from the segment's charges, the broker's brokerage, how far stops in the segment have recently slipped, how much the instrument's price flickers, and its live spread. It only reads, so it places nothing.
+
+The table below describes the three levels. For a position opened by buying they sit above the entry in this order, and for one opened by selling they sit below it.
+
+| Level | What it is | What to use it for |
+|---|---|---|
+| `floor` | The exit price at which the position makes exactly nothing after every charge | The worst a breakeven exit should fill at |
+| `tripwire` | The floor moved away from the market by the slip such stops show | The trigger to give the stop |
+| `switch_on` | The tripwire moved further away by the instrument's usual flicker | The price the bid, for a bought position, or the offer, for a sold one, must reach before the stop is moved to the tripwire |
+
+#### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|:---:|---|---|
+| `entry_price` | `float` | yes | | The position's average opening price, above zero. |
+| `quantity` | `int` | yes | | The position's size in units, at least 1. |
+| `side` | `str` | no | `"buy"` | The side that opened the position, `"buy"` or `"sell"`. |
+| `product` | `str` | no | `"nrml"` | `"nrml"`, `"mis"` or `"cnc"`. It decides a share's charges, delivery for `"cnc"` and intraday otherwise; a future or an option pays the same charges whatever the product. |
+| `broker` | `str` or `None` | no | `None` | The broker the orders go to, or `None` for the one charging the least brokerage, which is the broker UBI's lowest-cost selector prefers when none is busy. |
+| `percentile` | `int` | no | `90` | Which percentile of the measured stop slips and of the flicker to allow for, from 1 to 99. |
+| `horizon_seconds` | `int` | no | `5` | How many seconds ahead the flicker is measured, from 1 to 300. |
+
+#### Example
+
+The example below asks for the levels of 65 units of a Nifty call, held in `nifty_call`, bought at 177 rupees. The output is UBI's own worked example for the 27 October 2026 22850 call, computed on the night of 19 October 2026 from the closing book, and it was not captured from this call.
+
+=== "Python"
+
+    ```python
+    levels = nifty_call.breakeven_levels(entry_price=177, quantity=65)
+    for name in ("floor", "tripwire", "switch_on"):
+        print(name, levels[name]["price"], levels[name]["distance_from_entry"])
+    ```
+
+=== "Output"
+
+    ```text
+    floor 177.45 0.45
+    tripwire 178.70 1.70
+    switch_on 179.50 2.50
+    ```
+
+#### Returns
+
+A `dict` with `floor`, `tripwire` and `switch_on`, and the inputs UBI used: `instrument_id`, `segment`, `category`, `broker`, `brokerage_per_order`, `opening_side`, `entry_price`, `quantity`, `tick_size`, `spread` and `percentile`. Every price is a `str`, so that no digit is lost to floating point, and you convert it yourself. `floor` also carries `exact_price` before rounding and `charges_checked_on`. `tripwire` and `switch_on` each carry a `source`, which is `measured` when UBI had enough measured stops or ticks and `spread` when it fell back to the spread plus two ticks; either can be `None` when UBI has neither a measurement nor a live spread.
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| `BadRequestError` | A parameter is missing or out of range. |
+| `ConflictError` | UBI does not know the taxes and fees of this instrument's segment, or the broker's brokerage. |
+| `ServiceUnavailableError` | UBI has not mapped any instruments yet, or cannot reach its instrument cache. |
+| [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI. |
 
 ## Changing a position
 
