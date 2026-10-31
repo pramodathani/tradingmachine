@@ -24,3 +24,9 @@ Every key is optional, and an empty `{"peg": {}}` is a valid peg to the own touc
 ## on_empty_book, added on 2026-10-06
 
 UBI's commit `165a2ad` gave the peg the setting `on_empty_book`, `wait` by default or `refuse`. With `refuse`, a peg that cannot be priced when it is first sent, because nobody is on the side its reference reads, no live quote has arrived or the quote is marked stale, ends its part as refused, and a plan with nothing else placed answers HTTP 409. UBI built it for its `marketable_limit` preset. The attribute is sent only when it is not None, like `reference` and `follows`, and its value is not checked here because UBI refuses any other value with HTTP 400.
+
+## maximum_cost_bps and reaches_size, added on 2026-10-31
+
+UBI's commits `63e3d68` and `102da2e` of 2026-10-07 gave the peg two more settings, which `PlanReader._read_peg` accepts beside the others. `maximum_cost_bps` must be a number above zero and is absent by default; with it, the peg's order is refused just before it is sent, as `on_empty_book: refuse` refuses it, when the pre-trade estimate of filling the whole quantity against the visible book is above that many basis points of the midpoint or the book cannot hold the quantity. `reaches_size` defaults to false and is refused with `bad_setting` unless the reference is `opposite_touch`, because only the other side of the book holds what the order would take.
+
+UBI's two switches, `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS` and `UNIFIED_BROKER_INTERFACE_API_ORDER_MARKET_REACHES_SIZE`, are applied by `PlanRouting` only to the `marketable_limit` type, never to a peg written by hand in a plan. So the general rule for booleans applies here: `reaches_size` takes `bool = False` and is sent only when True, and `maximum_cost_bps` takes `float | None = None` and is sent only when set. This differs on purpose from `MarketableLimitOrder.reaches_size`, which is `bool | None` because a switch stands behind it.

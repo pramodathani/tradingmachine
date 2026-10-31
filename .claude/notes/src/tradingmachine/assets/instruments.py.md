@@ -804,3 +804,7 @@ The third example of each market wrapper sends a real market order. On the morni
 `TradeableInstrument.breakeven_levels` wraps UBI's `GET /api/instruments/breakeven`, added the same day. It is a method, not a property, because it takes arguments. `side` and `product` are lower case like the order methods and upper-cased for the route, which expects `BUY`/`SELL` and `NRML`/`MIS`/`CNC`. Prices come back as text, as UBI sends them, so a caller converts them itself. The kaprekar call-put switch script uses it to move its stop to the tripwire once the bid reaches the switch-on. Both docstring examples passed against the live UBI on 2026-10-20 after hours.
 
 On 2026-10-31 it gained `horizon_seconds`, the last of the route's parameters, which the first version left out, and a section on the Positions page of the Python API tab. The route itself had not changed since UBI merged it on 2026-10-21. UBI clamps `horizon_seconds` to 1 to 300 and answers HTTP 400 outside that, so it is passed through unchecked like the other parameters.
+
+## Market orders refused for what crossing the spread would cost
+
+Since UBI's commit `63e3d68` of 2026-10-07, a plain market order run as a marketable limit can also be refused with HTTP 409 when UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS` is set and the pre-trade estimate of crossing the spread is above it. The switch is unset by default. The `place_order` docstring and the `ConflictError` lines of `buy_at_market_price` and `sell_at_market_price` mention it since 2026-10-31.

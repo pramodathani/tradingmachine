@@ -762,7 +762,7 @@ class Portfolio(asset_basket.AssetBasket):
 
         With `buy`, each member's quantity is bought, and a negative quantity is sold instead; with `sell`, the other way round. This buys a portfolio built by hand or by `Index.to_portfolio`, and sells one to close it. The orders are placed in parallel and not as one unit, so some can be accepted while others are refused, and each row of the answer says what happened to its order.
 
-        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row and nothing is sent for it. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
+        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row and nothing is sent for it, and so does a member whose crossing would cost more than UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS` when that is set. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
 
         Args:
             product: The str product every order is sent with, such as `cnc` for delivery or `mis` for intraday.
@@ -1092,7 +1092,7 @@ class Portfolio(asset_basket.AssetBasket):
 
         The sales and purchases are sent together and placed in parallel, so for a delivery account the purchases must be affordable without the money the sales will release.
 
-        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row, which leaves the portfolio part rebalanced, and nothing is sent for it. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
+        UBI's order engine sends each order as a `marketable_limit`: a limit two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. A member that cannot be priced, because nobody is on the other side of its book, no live quote has arrived or the quote is marked stale, gets HTTP 409 in its row, which leaves the portfolio part rebalanced, and nothing is sent for it, and so does a member whose crossing would cost more than UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS` when that is set. Pass `as_marketable_limit=False` to send real market orders, which a member with no live quote, such as a mutual fund, needs.
 
         Args:
             target: The AssetBasket whose weights to move to, such as an Index.

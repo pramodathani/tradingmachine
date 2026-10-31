@@ -111,6 +111,33 @@ The engine refuses such an order with HTTP 409, which the library raises as `Con
 | No live quote yet | `no live quote has arrived for this instrument, so the <side> could not be priced and nothing was sent` |
 | The quote is marked stale | `the live quote for this instrument is marked stale, so the <side> could not be priced and nothing was sent` |
 
+### Two guards for large market orders
+
+UBI added two settings to the marketable limit on 2026-10-07, both off by default. They can be set on one order through [`MarketableLimitOrder`](../python-api/synthetic-orders.md), or for every market order through a UBI switch.
+
+| Setting | UBI switch for every market order | What it does |
+|---|---|---|
+| `maximum_cost_bps` | `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS`, unset | Just before sending, UBI estimates what filling the whole quantity against the visible book would cost, in basis points of the midpoint, and refuses the order with HTTP 409 when that is above the maximum or the book cannot hold the order |
+| `reaches_size` | `UNIFIED_BROKER_INTERFACE_API_ORDER_MARKET_REACHES_SIZE`, off | The limit goes no nearer than the deepest visible level the unfilled quantity reaches, up to the fifth, so a large order takes those levels at once instead of filling in part and chasing the price |
+
+The cost guard adds two refusals to the table above. Both are answered with HTTP 409, which raises `ConflictError`, and nothing is sent.
+
+| Why | UBI's `status_message` |
+|---|---|
+| The estimate is above the maximum | `crossing the spread now would cost an estimated <cost> basis points, more than the maximum of <maximum>, so nothing was sent` |
+| The five visible levels do not hold the whole quantity | `the visible book holds only <visible> of the <quantity> units this <side> needs, so what crossing the spread would cost cannot be estimated and nothing was sent; ...` |
+
+The guard is cautious. The estimate walks the whole quantity through the book, while the order itself is a limit only `buffer_ticks` past the best price, so it refuses some orders that would only have rested part of their quantity. A type that sends an order in pieces, such as `TimeWeightedAveragePriceOrder`, `ParticipationOrder` or `IcebergOrder`, can work an order the book cannot hold at once.
+
+The table below is UBI's own example of `reaches_size`, for a book that offers 100 units at each price from 1000.05 to 1000.25 with a tick of 0.05.
+
+| Buy | Limit without `reaches_size` | Limit with it |
+|---|---|---|
+| 10 | 1000.15 | 1000.15 |
+| 350 | 1000.15 | 1000.20 |
+| 600 | 1000.15 | 1000.25, the last visible level |
+
+
 Three kinds of market order are still sent as market orders. An after-market order is one, because no live book exists to price it from. An order that names any `synthetic` type is another, `simple` included, which is how `reduce_position`, `liquidate_position`, `liquidate_all_positions` and `Account.flatten` keep their closing orders as real market orders. The third is every market order while UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MARKET_AS_LIMIT` switch is off; it is on by default.
 
 The table below lists the members that ask for a real market order on purpose.
@@ -122,7 +149,7 @@ The table below lists the members that ask for a real market order on purpose.
 | `MutualFund` and `FixedIncome` holdings methods without a price | always | Nothing quotes them, so a marketable limit would always be refused |
 | `reduce_position`, `liquidate_position`, `liquidate_all_positions` without a price | always, through `synthetic={"type": "simple"}` | They already named a type, so UBI leaves them alone |
 
-Each move of the resting limit is a modification, which counts against the broker's daily order messages like a placement. UBI allows each order one move a second by default, so one order can send about thirty modifications before it is cancelled. To choose a different buffer or time for one order, use [`MarketableLimitOrder`](../python-api/synthetic-orders.md). A dry run still shows the request as a market order, and adds the plan it would run as.
+Each move of the resting limit is a modification, which counts against the broker's daily order messages like a placement. UBI allows each order one move a second by default, so one order can send about thirty modifications before it is cancelled. To choose a different buffer or time for one order, or one of the two guards, use [`MarketableLimitOrder`](../python-api/synthetic-orders.md). A dry run still shows the request as a market order, and adds the plan it would run as.
 
 ## Parents
 
