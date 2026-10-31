@@ -2,7 +2,7 @@
 
 These class methods find instruments you do not already know by name: a share from part of its symbol, the expiries a futures or option underlying has, the strikes listed for one expiry, and a whole option chain. They are called on the class rather than on an object, because they run before you have an instrument to hold, and each class fills in its own segment so you never type one.
 
-The table below lists the four kinds of call. Every one of them reads UBI's instrument list and nothing else, so none of them can place an order.
+The table below lists the five kinds of call, plus one on `Instrument` itself for code that is given a segment rather than a class. Every one of them reads UBI's instrument list and nothing else, so none of them can place an order.
 
 | Kind | Member | Description |
 |---|---|---|
@@ -11,6 +11,7 @@ The table below lists the four kinds of call. Every one of them reads UBI's inst
 | <span class="member function">classmethod</span> | [`contracts`](#contracts) | The futures contracts in the segment, optionally for one underlying, as a DataFrame |
 | <span class="member function">classmethod</span> | [`strikes`](#strikes) | The strike prices listed for one underlying and one expiry, as a list of floats |
 | <span class="member function">classmethod</span> | [`chain`](#chain) | Every option for one underlying and one expiry, as a DataFrame |
+| <span class="member function">classmethod</span> | [`contracts_in_segment`](#contracts_in_segment) | The futures or options in any segment you name, as a DataFrame |
 
 Which class has which call depends on the class's shape. `search` is written on each cash and index class. The other four are defined once, `expiries` and `contracts` on the [`Futures`](instruments.md#the-derivative-base-classes) base class and `expiries`, `strikes` and `chain` on `Option`, and every futures and option class inherits them and names its own segment in a `SEGMENT` class attribute. The table below shows the split across all twenty-seven classes.
 
@@ -355,6 +356,70 @@ A pandas DataFrame of identities with the [columns above](#rows-not-objects), or
 | `ValueError` | `expiry_date` is a string that is not a valid ISO date |
 | [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
 
+## contracts_in_segment
+
+<div class="endpoint" markdown><span class="member function">classmethod</span> `Instrument.contracts_in_segment(exchange, segment, underlying_symbol=None, expiry_date=None, include_expired=False, unified_broker_interface=None)`<span class="route"><span class="method get">GET</span> `/api/instruments/master`</span></div>
+
+This class method on `Instrument` is the mechanism behind `contracts` and `chain`, with the segment as an argument instead of a class attribute. Use it when the segment is only known at run time, such as a segment name typed by a person or sent by an AI agent; when you know the kind of contract in advance, the family class's own call is shorter.
+
+#### Parameters
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `exchange` | `str` | Yes | | The exchange, such as `nse` |
+| `segment` | `str` | Yes | | The derivative segment, bare such as `equity_index_options` or prefixed such as `nse_equity_index_options` |
+| `underlying_symbol` | `str` or `None` | No | `None` | The underlying, such as `NIFTY`, or `None` for every underlying |
+| `expiry_date` | `datetime.date`, `str` or `None` | No | `None` | The expiry to keep, or `None` for every expiry |
+| `include_expired` | `bool` | No | `False` | `True` to keep contracts whose expiry has passed |
+| `unified_broker_interface` | `UnifiedBrokerInterface` or `None` | No | `None` | The client, or `None` for the shared one |
+
+#### Example
+
+The output below was captured from a local UBI on 2026-10-16. It lists the live Nifty index futures, then counts the options of the nearest expiry, which is 261 strikes with a call and a put each.
+
+=== "Python"
+
+    ```python
+    from tradingmachine.assets import instruments
+
+    futures = instruments.Instrument.contracts_in_segment(
+        "nse",
+        "equity_index_futures",
+        underlying_symbol="NIFTY",
+    )
+    print(futures[["underlying_symbol", "expiry_date"]].to_string())
+    nearest = futures["expiry_date"].iloc[0]
+    chain = instruments.Instrument.contracts_in_segment(
+        "nse",
+        "equity_index_options",
+        underlying_symbol="NIFTY",
+        expiry_date=nearest,
+    )
+    print(nearest, len(chain))
+    ```
+
+=== "Output"
+
+    ```text
+      underlying_symbol expiry_date
+    0             NIFTY  2026-10-27
+    1             NIFTY  2026-11-23
+    2             NIFTY  2026-12-29
+    2026-10-27 522
+    ```
+
+#### Returns
+
+A pandas DataFrame of identities with the [columns above](#rows-not-objects), sorted by expiry, strike price and option type, or `None` when nothing matches.
+
+#### Raises
+
+| Exception | When |
+|---|---|
+| [`BadRequestError`](errors.md#badrequesterror) | The exchange or segment is not one UBI knows |
+| `ValueError` | `expiry_date` is a string that is not a valid ISO date |
+| [`UnifiedBrokerInterfaceError`](errors.md#unifiedbrokerinterfaceerror) | Any other failure reported by, or on the way to, UBI |
+
 ## include_expired
 
 Every call except `search` takes `include_expired`, and it defaults to `False`, because the first row of an unfiltered list is almost always a dead contract. With `True`, contracts whose expiry has passed are kept, which is useful for looking back at a contract you once held. The check on 2026-09-20 showed the difference for RELIANCE share futures, and the table below reproduces it.
@@ -393,4 +458,4 @@ A discovery row is only an identity. To quote or trade it, pass its identity fie
 For an option, take the row from `chain` and pass its `exchange`, `underlying_symbol`, `expiry_date`, `strike_price` and `option_type` to the option class. [Instruments](instruments.md#named-by-underlying-expiry-strike-and-option-type) records the check that proved a row and a constructed object always share the same `instrument_id`.
 
 ??? note "Under the hood"
-    `search` sends `exchange`, `segment`, `q` and `limit` to [Search](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#search). The other four send `exchange` and `segment` to [Master](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#master), then keep the rows whose `underlying_symbol` equals the upper-cased underlying, whose expiry matches when one was given, and whose expiry is today or later in India time unless `include_expired` is `True`. The mechanism lives in protected class methods on `Instrument`. The public calls are defined on the `Futures` and `Option` base classes, which pass `cls.SEGMENT`, so each named class supplies its own segment by declaring it.
+    `search` sends `exchange`, `segment`, `q` and `limit` to [Search](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#search). The other four send `exchange` and `segment` to [Master](https://pramodathani.github.io/unified_broker_interface/rest-api/instruments/#master), then keep the rows whose `underlying_symbol` equals the upper-cased underlying, whose expiry matches when one was given, and whose expiry is today or later in India time unless `include_expired` is `True`. The mechanism lives in `Instrument.contracts_in_segment` and protected class methods beside it. The public calls are defined on the `Futures` and `Option` base classes, which pass `cls.SEGMENT`, so each named class supplies its own segment by declaring it.
