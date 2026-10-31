@@ -3449,10 +3449,10 @@ class TradeableInstrument(Instrument):
 
         A position is what a derivative or an intraday trade leaves open, as against a holding, which is a share kept in the demat account and belongs to `Equity` instead.
 
-        Reading this sends one request to UBI every time, because UBI serves the whole account's positions and has no endpoint for a single instrument. UBI merges the brokers' positions by instrument and product, so one instrument gives one row per product it is held under, and no row names a broker.
+        Reading this sends one request to UBI every time, because UBI serves the whole account's positions and has no endpoint for a single instrument. UBI merges the brokers' positions by instrument and product, so one instrument gives one row per product it is held under, and each row's `by_broker` column is a dict of each broker's signed share of the quantity.
 
         Returns:
-            A pandas.DataFrame with `instrument_id`, `symbol`, `exchange`, `segment`, `product`, `quantity`, `buy`, `sell`, `average_price`, `last_price`, `pnl`, `day_change` and `day_change_percentage`, where `quantity` is positive when long and negative when short, or None when nothing is held in this instrument.
+            A pandas.DataFrame with `instrument_id`, `symbol`, `exchange`, `segment`, `product`, `quantity`, `by_broker`, `buy`, `sell`, `average_price`, `last_price`, `pnl`, `day_change` and `day_change_percentage`, where `quantity` is positive when long and negative when short, or None when nothing is held in this instrument.
 
         Raises:
             BrokerError: No broker's positions could be read.
