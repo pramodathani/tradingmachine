@@ -131,6 +131,7 @@ ORDER_MODIFY_PATH = "/api/orders/modify"
 ORDER_CANCEL_PATH = "/api/orders/cancel"
 
 ORDER_PARENTS_PATH = "/api/orders/parents"
+BREAKEVEN_PATH = "/api/instruments/breakeven"
 
 POSITIONS_PATH = "/api/portfolio/positions"
 
@@ -2674,6 +2675,102 @@ class TradeableInstrument(Instrument):
             ORDER_PARENTS_PATH,
             params={
                 "parent_id": parent_id,
+            },
+        )
+
+    def breakeven_levels(
+        self,
+        entry_price: float,
+        quantity: int,
+        side: str = "buy",
+        product: str = "nrml",
+        broker: str | None = None,
+        percentile: int = 90,
+        horizon_seconds: int = 5,
+    ) -> dict:
+        """Works out where a breakeven stop for a position in this instrument should go so that it really breaks even after costs.
+
+        UBI answers three levels. The floor is the exit price at which the position makes exactly nothing after every tax, fee and brokerage. The tripwire is the trigger to give the stop, beyond the floor by how far such stops have recently slipped. The switch-on is the price the watched side, the bid for a bought position and the offer for a sold one, must reach before the stop is moved to the tripwire, so that ordinary flicker does not fire it at once. For a bought position they sit above the entry in that order, and for a sold one below it. Every price comes back as text, so that no digit is lost.
+
+        Args:
+            entry_price: The float average price the position was opened at.
+            quantity: The int size of the position in units.
+            side: The str side that opened the position, `"buy"` or `"sell"`.
+            product: The str product, `"nrml"`, `"mis"` or `"cnc"`; it decides a share's charges, delivery for `"cnc"` and intraday otherwise.
+            broker: The str broker the orders go to, or None for the one charging least brokerage.
+            percentile: The int percentile of the measured stop slips and of the flicker to allow for, from 1 to 99.
+            horizon_seconds: The int number of seconds ahead, from 1 to 300, over which UBI measures how far the price flickers.
+
+        Returns:
+            A dict with `floor`, `tripwire` and `switch_on`, each a dict whose `price` and `distance_from_entry` are str, and the inputs UBI used, such as `broker`, `brokerage_per_order`, `tick_size` and `spread`. `tripwire` and `switch_on` are None when UBI has neither measured figures nor a live spread.
+
+        Raises:
+            BadRequestError: A parameter is missing or out of range.
+            ConflictError: UBI does not know the taxes and fees of this instrument's segment, or the broker's brokerage.
+            ServiceUnavailableError: UBI has not mapped any instruments yet, or cannot reach its instrument cache.
+            UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
+
+        Examples:
+            Print the three levels for a NIFTY call bought at its last price:
+
+            ```python
+            from tradingmachine.assets import instruments
+
+            contracts = instruments.Instrument.contracts_in_segment(
+                exchange="nse",
+                segment="equity_index_options",
+                underlying_symbol="NIFTY",
+            )
+            call = contracts[contracts["option_type"] == "CE"].iloc[0]
+            option = instruments.TradeableInstrument(instrument_id=call["instrument_id"])
+            entry = option.last_price
+            levels = option.breakeven_levels(entry_price=entry, quantity=65)
+            print("Entry:", entry)
+            for name in ("floor", "tripwire", "switch_on"):
+                level = levels[name]
+                if level is not None:
+                    print(name, level["price"], "+" + level["distance_from_entry"])
+            ```
+
+            Compare the floor at the cheapest broker with a broker that charges brokerage on every order:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            entry = infosys.last_price
+            for broker in (None, "zerodha"):
+                levels = infosys.breakeven_levels(entry_price=entry, quantity=1, product="mis", broker=broker)
+                print(levels["broker"], levels["brokerage_per_order"], levels["floor"]["price"])
+            ```
+
+            Show how the switch-on moves when the flicker is measured over thirty seconds rather than five:
+
+            ```python
+            from tradingmachine.assets import equities
+
+            infosys = equities.Equity(exchange="nse", symbol="INFY")
+            entry = infosys.last_price
+            for horizon in (5, 30):
+                levels = infosys.breakeven_levels(entry_price=entry, quantity=1, product="mis", horizon_seconds=horizon)
+                switch_on = levels["switch_on"]
+                if switch_on is None:
+                    print(horizon, "no switch-on")
+                else:
+                    print(horizon, switch_on["price"], switch_on["source"])
+            ```
+        """
+        return self._unified_broker_interface.get(
+            BREAKEVEN_PATH,
+            params={
+                "instrument_id": self.instrument_id,
+                "entry_price": entry_price,
+                "quantity": quantity,
+                "side": side.upper(),
+                "product": product.upper(),
+                "broker": broker,
+                "percentile": percentile,
+                "horizon_seconds": horizon_seconds,
             },
         )
 

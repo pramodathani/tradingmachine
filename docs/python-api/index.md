@@ -206,6 +206,7 @@ These members act on this instrument's positions without being told which side y
 | <span class="member property">property</span> | [`day_positions`](positions.md#day_positions) | Today's own positions in this instrument, without what was carried in. |
 | <span class="member property">property</span> | [`positions_value`](positions.md#positions_value) | What this instrument's open positions are worth at the moment. |
 | <span class="member property">property</span> | [`positions_pnl`](positions.md#positions_pnl) | What this instrument's positions have made or lost. |
+| <span class="member method">method</span> | [`breakeven_levels`](positions.md#breakeven_levels) | Where a breakeven stop should go so that it really breaks even after charges and slippage. |
 | <span class="member writes">places orders</span> | [`add_to_position`](positions.md#add_to_position) | Makes an existing position bigger, or opens a new one. |
 | <span class="member writes">places orders</span> | [`reduce_position`](positions.md#reduce_position) | Makes an existing position smaller, without turning it around. |
 | <span class="member writes">places orders</span> | [`liquidate_position`](positions.md#liquidate_position) | Closes one position in this instrument completely. |
