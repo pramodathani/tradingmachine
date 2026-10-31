@@ -56,7 +56,7 @@ class OneCancelsAllOrder(synthetic_order.SyntheticOrder):
         """Initialises the candidates, the template they default to and this type's own settings.
 
         Args:
-            candidates: The list of order_candidate.OrderCandidate, from 1 to 25, each on a different instrument.
+            candidates: The list of order_candidate.OrderCandidate, from 2 to 25, each on a different instrument. UBI refuses a single candidate with HTTP 400, because there would be nothing for it to cancel.
             transaction_type: The str default side for every candidate, `buy` or `sell`.
             product: The str default product for every candidate, `cnc`, `mis` or `nrml`.
             order_type: The str default kind of order for every candidate, `market`, `limit`, `sl` or `sl-m`.
