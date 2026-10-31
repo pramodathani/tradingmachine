@@ -1807,7 +1807,7 @@ class TradeableInstrument(Instrument):
 
         Every order goes through UBI's order engine, which is the only way UBI places orders. A plain `limit` order with a price of its own, `day` validity, no `synthetic` object and `after_market` False is not sent to a broker straight away: the engine holds it as a `virtual_limit` order and sends it only once the other side of the book reaches its price, answering HTTP 202 with an outcome of `armed`, a `parent_id` and no `order_id`. Such a held order is changed with `modify_order(parent_id=...)` and cancelled with `cancel_parent`, and it never appears in `orders` until it has been sent. Pass `synthetic={"type": "simple"}` to send a limit order at once, which matters for an instrument that has no live quote, because the engine would hold its order for the whole day without ever sending it.
 
-        A plain `market` order with no `synthetic` object and `after_market` False is not sent as a market order either. The engine runs it as a `marketable_limit` order: a `limit` two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. Such an order is refused with HTTP 409, and nothing is sent, when nobody is on the other side of the book, no live quote has arrived or the quote is marked stale. Pass `synthetic={"type": "simple"}` to send a real market order, which an instrument with no live quote needs.
+        A plain `market` order with no `synthetic` object and `after_market` False is not sent as a market order either. The engine runs it as a `marketable_limit` order: a `limit` two ticks past the other side's best price, moved after that price until it fills, with whatever is left cancelled 30 seconds after it was placed. Such an order is refused with HTTP 409, and nothing is sent, when nobody is on the other side of the book, no live quote has arrived or the quote is marked stale. When UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_MAXIMUM_COST_BPS` is set, which it is not by default, it is also refused with HTTP 409 when crossing the spread would cost more than that many basis points of the midpoint, or when the five visible levels cannot hold the whole quantity. Pass `synthetic={"type": "simple"}` to send a real market order, which an instrument with no live quote needs.
 
         Args:
             transaction_type: The str side of the order, `buy` or `sell`. UBI overrides it for a quantity reference that reduces or closes a position.
@@ -3449,10 +3449,10 @@ class TradeableInstrument(Instrument):
 
         A position is what a derivative or an intraday trade leaves open, as against a holding, which is a share kept in the demat account and belongs to `Equity` instead.
 
-        Reading this sends one request to UBI every time, because UBI serves the whole account's positions and has no endpoint for a single instrument. UBI merges the brokers' positions by instrument and product, so one instrument gives one row per product it is held under, and no row names a broker.
+        Reading this sends one request to UBI every time, because UBI serves the whole account's positions and has no endpoint for a single instrument. UBI merges the brokers' positions by instrument and product, so one instrument gives one row per product it is held under, and each row's `by_broker` column is a dict of each broker's signed share of the quantity.
 
         Returns:
-            A pandas.DataFrame with `instrument_id`, `symbol`, `exchange`, `segment`, `product`, `quantity`, `buy`, `sell`, `average_price`, `last_price`, `pnl`, `day_change` and `day_change_percentage`, where `quantity` is positive when long and negative when short, or None when nothing is held in this instrument.
+            A pandas.DataFrame with `instrument_id`, `symbol`, `exchange`, `segment`, `product`, `quantity`, `by_broker`, `buy`, `sell`, `average_price`, `last_price`, `pnl`, `day_change` and `day_change_percentage`, where `quantity` is positive when long and negative when short, or None when nothing is held in this instrument.
 
         Raises:
             BrokerError: No broker's positions could be read.
@@ -3570,7 +3570,7 @@ class TradeableInstrument(Instrument):
 
         Raises:
             BadRequestError: A field is invalid.
-            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is offering, no live quote has arrived or the quote is marked stale.
+            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is offering, no live quote has arrived or the quote is marked stale, or UBI's configured maximum cost of crossing the spread would be exceeded.
             OrderRejectedError: The broker refused the order, which some brokers do for every real market order sent through an API.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
 
@@ -3884,7 +3884,7 @@ class TradeableInstrument(Instrument):
 
         Raises:
             BadRequestError: A field is invalid.
-            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is bidding, no live quote has arrived or the quote is marked stale.
+            ConflictError: The order was to be sent as a marketable limit and could not be priced, because nobody is bidding, no live quote has arrived or the quote is marked stale, or UBI's configured maximum cost of crossing the spread would be exceeded.
             OrderRejectedError: The broker refused the order, which some brokers do for every real market order sent through an API.
             UnifiedBrokerInterfaceError: Any other failure reported by, or on the way to, UBI.
 

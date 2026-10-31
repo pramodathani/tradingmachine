@@ -37,3 +37,11 @@ The docstring was rewritten to describe the new behaviour, and the answer's two 
 ## `parents` and `intent`, added on 2026-09-27
 
 `parents` lists every open parent in the account, and `intent` reads `GET /api/orders/intents/<intent_id>`, which returns the engine's answer to an order whose placement stopped waiting, for five minutes by default. Both live here rather than on an instrument because neither is tied to one instrument: an intent that timed out may be for any instrument, and the whole list of parents is what a person looks at after a flatten or a restart.
+
+## What UBI documented about flatten on 2026-10-31
+
+UBI's refresh of its REST pages on 2026-10-31 recorded three things about `POST /api/orders/flatten` that matter to a caller, and the docstring and the Account page were brought up to date with them.
+
+- The daily loss lockout refuses the closes. The engine checks the day's loss before accepting any order and a closing order is not exempt, so once the day is locked out a flatten halts and cancels but every close comes back HTTP 403 and `flat` is False. This is the one case where the kill switch cannot close positions, and it has to be done at the broker.
+- `closed[].sent` is True once the close reached the order engine and it answered or timed out, even when it refused the close without calling a broker. Only `outcome` and `http_status` say whether the close was placed.
+- A broker exclusion list that excludes every broker refuses every close with HTTP 503 `every broker is excluded from order placement`. An exclusion list that leaves any broker in does not stop a close, because a position can only be closed where it is held.

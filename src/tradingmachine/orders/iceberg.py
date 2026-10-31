@@ -30,7 +30,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
 
     Attributes:
         slice_quantity: The int size of each slice, at least 1 and smaller than the quantity.
-        randomise_percent: The float percentage by which each slice may vary either way, at or above 0 and below 100, or None to let UBI use 0.
+        randomise_percent: The int percentage by which each slice may vary either way, a whole number from 0 to 99, or None to let UBI use 0.
     """
 
     SYNTHETIC_TYPE = "iceberg"
@@ -56,7 +56,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
         reduce_only: bool = False,
         hold_limits: bool | None = None,
         dry_run: bool = False,
-        randomise_percent: float | None = None,
+        randomise_percent: int | None = None,
     ):
         """Initialises the order template and this type's own settings.
 
@@ -79,7 +79,7 @@ class IcebergOrder(synthetic_order.SyntheticOrder):
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
-            randomise_percent: The float percentage by which each slice may vary either way, at or above 0 and below 100, or None to let UBI use 0.
+            randomise_percent: The int percentage by which each slice may vary either way, a whole number from 0 to 99, or None to let UBI use 0.
 
         Raises:
             Nothing.

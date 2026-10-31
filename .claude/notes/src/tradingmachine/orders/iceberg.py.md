@@ -7,3 +7,7 @@ In the Synthetic Order Atlas that UBI's engine was designed from, it is row E1 i
 It checks none of its settings before sending, following the rule that UBI holds the order rules; UBI's engine checks each field when it builds the order and answers HTTP 400 naming the one that is wrong, and a dry run shows that without sending anything.
 
 Indian exchanges offer a disclosed quantity natively, which `place_order` already exposes as `disclosed_quantity`; this type is for brokers or segments where that is not enough.
+
+## randomise_percent is a whole number
+
+UBI reads `randomise_percent` with `_whole_number(..., 0, 99)` in its plan reader, so a fractional value is refused with HTTP 400 and 100 is out of range. Its documentation said until 2026-10-31 that the field was a number at or above 0 and below 100, and this class followed it with `float | None`. On 2026-10-31 the annotation and the docstrings were changed to `int | None` and to a whole number from 0 to 99, matching `IcebergExecution`, which already said so.

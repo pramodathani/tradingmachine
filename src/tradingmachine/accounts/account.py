@@ -60,6 +60,8 @@ class Account:
 
         A timeout does not mean nothing happened: read the orders and positions before calling it again, or a second flatten may close positions twice.
 
+        The daily loss lockout is not lifted for it. Once UBI's `UNIFIED_BROKER_INTERFACE_API_ORDER_DAILY_LOSS_LIMIT` has locked the day out, flatten still halts the parents and cancels every open order, but the order engine refuses every close with HTTP 403 and the answer has `flat` False, so the positions stay open until they are closed at the broker. A close also counts as `sent` once it reached the order engine, even when the engine refused it, so read each close's `outcome` and `http_status` rather than `sent`.
+
         Args:
             confirm: The str `FLATTEN`, typed by the caller, which UBI requires so that a stray call cannot unwind the account.
             dry_run: A bool that is True to report what would be cancelled and closed without sending anything.

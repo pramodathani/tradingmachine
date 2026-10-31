@@ -33,7 +33,7 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
     Attributes:
         trigger_level: The float level in rupees that fires the order. Above zero.
         limit_price: The float limit price in rupees of the order sent. Above zero.
-        watch_field: The str quote field watched, `last_price`, `average_price`, `previous_close`, `best_bid`, `best_offer` or `mid`, or None to let UBI use `last_price`.
+        watch_field: The str quote field watched, `last_price`, `average_price`, `previous_close`, `best_bid`, `best_offer` or `mid`. UBI has no default for it and refuses an order without it with HTTP 400.
         trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
     """
 
@@ -49,6 +49,7 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
         quantity: int | None,
         trigger_price: float,
         limit_price: float,
+        watch_field: str,
         price: float | None = None,
         validity: str | None = None,
         disclosed_quantity: int | None = None,
@@ -60,7 +61,6 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
         reduce_only: bool = False,
         hold_limits: bool | None = None,
         dry_run: bool = False,
-        watch_field: str | None = None,
         trigger_direction: str | None = None,
     ):
         """Initialises the order template and this type's own settings.
@@ -73,6 +73,7 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
             quantity: The int quantity in underlying units, not lots, or None when a quantity reference supplies it.
             trigger_price: The float level in rupees that fires the order. Above zero.
             limit_price: The float limit price in rupees of the order sent. Above zero.
+            watch_field: The str quote field watched, `last_price`, `average_price`, `previous_close`, `best_bid`, `best_offer` or `mid`. UBI has no default for it and refuses an order without it with HTTP 400.
             price: The float limit price in rupees, or None for an order type that takes no price or when a price reference supplies it.
             validity: The str validity, `day` or `ioc`, or None to let UBI use `day`.
             disclosed_quantity: The int quantity to show on the exchange, or None to disclose the whole order.
@@ -84,7 +85,6 @@ class IndicatorTriggeredOrder(synthetic_order.SyntheticOrder):
             reduce_only: A bool that is True to have UBI refuse, with HTTP 409, any leg that is not on the closing side of the net position held when it is sent or is bigger than that position.
             hold_limits: A bool that is True to have UBI hold each order that would rest at the broker at a fixed limit price until the other side of the book reaches it, False to send them as they come, or None to let UBI use the type's default.
             dry_run: A bool that is True to have UBI check the order and answer with the `plan` it would run, without recording or sending anything; the answer's `request` is the template as a broker would receive it, which for a stop is not the stop.
-            watch_field: The str quote field watched, `last_price`, `average_price`, `previous_close`, `best_bid`, `best_offer` or `mid`, or None to let UBI use `last_price`.
             trigger_direction: The str direction, `at_or_above` or `at_or_below`, or None to let a buy wait for a fall and a sell for a rise.
 
         Raises:

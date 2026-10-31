@@ -52,6 +52,9 @@ This method sends UBI's kill switch. UBI first halts every parent its order engi
 
 You have to type the confirmation word yourself. UBI refuses the request unless its body carries `confirm` set to exactly `FLATTEN`, and the library passes your word through unchecked rather than filling it in, so that one stray `flatten()` call cannot unwind the account.
 
+!!! danger "The daily loss lockout also refuses the closes"
+    UBI's order engine checks the day's loss limit before it accepts any order, and a closing order is not exempt. Once `UNIFIED_BROKER_INTERFACE_API_ORDER_DAILY_LOSS_LIMIT` has locked the day out, `flatten` still halts every parent and cancels every open order, but every close is refused with HTTP 403 and the answer has `flat` set to `False`. The positions then stay open until you close them at the broker yourself.
+
 ### Why the cancels go first
 
 The order of the two halves is the whole point. Suppose you hold a long position with a stop-loss order resting below it. If the position were closed first, the stop would still be live at the exchange, and when the price later fell to it, it would sell again and leave you short: a new trade that nobody chose. So UBI cancels first, re-reads the order books every quarter of a second until they agree the orders are gone, and only then sends the closing orders.
@@ -217,7 +220,7 @@ A real run returns the keys in the table below.
 | `halted` | `dict` | How many of the order engine's open parents were halted before anything was cancelled, under `halted_parents`, or an `error` saying why none could be, such as the engine not running; flatten carries on regardless. |
 | `cancelled` | `list` | One entry per cancel attempted, with `broker`, `order_id`, `sent`, `outcome` and `status_message`. |
 | `still_open_after_waiting` | `list` of `str` | Orders a broker still reported as live when the wait ended, written as `broker:order_id`. |
-| `closed` | `list` | One entry per position, with the position's fields plus `sent`, `outcome`, `order_id`, `http_status` and `status_message`. |
+| `closed` | `list` | One entry per position, with the position's fields plus `sent`, `outcome`, `order_id`, `http_status` and `status_message`. `sent` is `True` once the close reached UBI's order engine, even when the engine refused it without calling a broker, so `outcome` and `http_status` say what happened; it is `False` only when the close never reached the engine. |
 | `positions_still_open_after_waiting` | `list` of `str` | Positions whose close was accepted but which a broker still reported when the second wait ended, written as `broker:position_key`. |
 | `flat` | `bool` | `True` only when every cancel was sent, nothing was still open after the wait, every close was sent and accepted, and every closed position showed zero before the second wait ended. |
 | `timing_ms` | `dict` | How long UBI took, including every broker call and the wait. |

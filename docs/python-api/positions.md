@@ -89,7 +89,7 @@ UBI's order engine resolves the quantity reference when it sends the order, so `
 
 ## Reading positions
 
-UBI serves the whole account's positions and has no route for one instrument, so each property below sends one request per access and keeps this instrument's rows. UBI merges positions across brokers by instrument and product, so one instrument gives one row per product it is held under, and no row names a broker. Bind the result to a variable when you need it twice.
+UBI serves the whole account's positions and has no route for one instrument, so each property below sends one request per access and keeps this instrument's rows. UBI merges positions across brokers by instrument and product, so one instrument gives one row per product it is held under. Each row's `by_broker` column says how much of it each broker holds. Bind the result to a variable when you need it twice.
 
 ### net_positions
 
@@ -129,6 +129,7 @@ A `pandas.DataFrame` with one row per product held, or `None` when nothing is he
 | `expiry_date`, `strike_price`, `option_type` | `str`, number, `str`, or `None` | The contract, for a derivative. |
 | `product` | `str` | `delivery`, `intraday`, `carry`, `margin_trading`, `cover` or `bracket`. |
 | `quantity` | number | The net quantity in units, positive when long and negative when short. |
+| `by_broker` | `dict` | Each broker's signed share of `quantity`, by broker name, such as `{'dhan': -100.0}`. UBI uses it to tell a closing order from an opening one at the broker that holds the position. |
 | `buy`, `sell` | `dict` | Each side's `quantity`, `average_price` and `value`. |
 | `average_price` | number | The average price of the open quantity. |
 | `last_price` | number or `None` | From the live quote when there is one, otherwise the price a broker sent. |
